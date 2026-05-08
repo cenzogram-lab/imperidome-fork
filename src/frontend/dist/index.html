@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Imperidome</title>
+    <meta name="description" content="Imperidome — premium business and client management platform" />
+    <meta property="og:title" content="Imperidome" />
+    <meta property="og:description" content="Imperidome — premium business and client management platform" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <!-- PWA: Apple home screen support (admin panel only) -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="ImperiAdmin" />
+    <link rel="apple-touch-icon" href="/admin-icon-180.png" />
+    <!-- PWA: Inject admin manifest only on /admin routes -->
+    <script>
+      if (window.location.pathname.startsWith('/admin')) {
+        var link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = '/admin-manifest.json';
+        document.head.appendChild(link);
+      }
+    </script>
+    <meta name="mobile-web-app-capable" content="yes" />
+  <script type="module" crossorigin src="/assets/index-Dx5H4BOL.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-B-azmKkj.css">
+</head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

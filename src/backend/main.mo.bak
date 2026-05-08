@@ -1,0 +1,1156 @@
+
+import Map "mo:core/Map";
+import Nat "mo:core/Nat";
+import Principal "mo:core/Principal";
+import List "mo:core/List";
+import Float "mo:core/Float";
+import Time "mo:core/Time";
+import Array "mo:core/Array";
+import Text "mo:core/Text";
+import Iter "mo:core/Iter";
+import Runtime "mo:core/Runtime";
+import OrderStatus "order_status";
+import Int "mo:core/Int";
+import AccessControl "authorization/access-control";
+import MixinAuthorization "authorization/MixinAuthorization";
+import Stripe "stripe/stripe";
+import OutCall "http-outcalls/outcall";
+import MixinStorage "blob-storage/Mixin";
+
+
+actor {
+  // TYPES
+  public type ClientId = Principal;
+  public type OrderId = Nat;
+  public type ActivityId = Nat;
+  public type QuestionnaireId = Nat;
+  public type SubscriptionId = Nat;
+  public type BillingId = Nat;
+  public type InvoiceId = Nat;
+  public type EditRequestId = Nat;
+  public type BlogPostId = Nat;
+  public type EmailTemplateId = Nat;
+  public type ProductId = Nat;
+  public type Timestamp = Int;
+  type FleetCanister = {
+    id : Text;
+    name : Text;
+    created_at : Timestamp;
+  };
+
+  public type Order = {
+    id : OrderId;
+    client_id : ClientId;
+    tier_code : Text;
+    status : OrderStatus.Status;
+    delivery_window : Text;
+    launch_target : Text;
+    created_at : Timestamp;
+    updated_at : Timestamp;
+  };
+
+  public type ActivityLog = {
+    id : ActivityId;
+    client_id : ClientId;
+    order_id : OrderId;
+    description : Text;
+    status_at_time : OrderStatus.Status;
+    created_at : Timestamp;
+  };
+
+  public type Questionnaire = {
+    id : QuestionnaireId;
+    order_id : OrderId;
+    client_id : ClientId;
+    tier_code : Text;
+    answers : Text;
+    progress : Nat;
+    submitted : Bool;
+    submitted_at : ?Timestamp;
+    reviewed : Bool;
+    reviewed_at : ?Timestamp;
+    created_at : Timestamp;
+    updated_at : Timestamp;
+  };
+
+  public type Subscription = {
+    id : SubscriptionId;
+    client_id : ClientId;
+    plan_code : Text;
+    plan_name : Text;
+    status : Text;
+    billing_cycle : Text;
+    next_payment_date : Timestamp;
+    stripe_subscription_id : Text;
+    created_at : Timestamp;
+    updated_at : Timestamp;
+  };
+
+  public type BillingHistory = {
+    id : BillingId;
+    client_id : ClientId;
+    subscription_id : SubscriptionId;
+    description : Text;
+    amount : Float;
+    status : Text;
+    payment_date : Timestamp;
+    stripe_payment_intent_id : Text;
+    created_at : Timestamp;
+  };
+
+  public type Invoice = {
+    id : InvoiceId;
+    client_id : ClientId;
+    order_id : ?OrderId;
+    invoice_number : Text;
+    description : Text;
+    amount : Float;
+    status : Text;
+    due_date : Timestamp;
+    paid_at : ?Timestamp;
+    stripe_payment_intent_id : Text;
+    created_at : Timestamp;
+    updated_at : Timestamp;
+  };
+
+  public type EditRequest = {
+    id : EditRequestId;
+    client_id : ClientId;
+    order_id : ?OrderId;
+    request_number : Text;
+    request_type : Text;
+    page_or_section : Text;
+    description : Text;
+    attachment_url : ?Text;
+    status : Text;
+    created_at : Timestamp;
+    updated_at : Timestamp;
+  };
+
+  public type BlogPost = {
+    id : BlogPostId;
+    title : Text;
+    slug : Text;
+    category : Text;
+    excerpt : Text;
+    body : Text;
+    author : Text;
+    featured_image_url : ?Text;
+    status : Text;
+    published_at : ?Timestamp;
+    created_at : Timestamp;
+    updated_at : Timestamp;
+  };
+
+  public type EmailTemplate = {
+    id : EmailTemplateId;
+    trigger_key : Text;
+    subject : Text;
+    body : Text;
+    updated_at : Timestamp;
+  };
+
+  public type Product = {
+    id : ProductId;
+    name : Text;
+    tier_code : ?Text;
+    product_type : Text;
+    price_monthly : ?Float;
+    price_annual : ?Float;
+    price_onetime : ?Float;
+    active : Bool;
+    created_at : Timestamp;
+  };
+
+  public type AdminStats = {
+    totalClients : Nat;
+    activeProjects : Nat;
+    unreviewedQuestionnaires : Nat;
+    outstandingInvoices : Nat;
+  };
+
+  public type UserProfile = {
+    email : Text;
+    password : Text;
+    firstName : Text;
+    lastName : Text;
+    businessName : Text;
+    businessType : Text;
+    phone : Text;
+    role : Text;
+    created_at : Timestamp;
+  };
+
+  public type LoginResult = {
+    #ok : { role : Text; firstName : Text; email : Text };
+    #err : Text;
+  };
+
+  public type UpsertResult = { #ok; #err : Text };
+
+  type ProductV1 = {
+    id : ProductId;
+    name : Text;
+    product_type : Text;
+    price_monthly : ?Float;
+    price_annual : ?Float;
+    price_onetime : ?Float;
+    active : Bool;
+    created_at : Timestamp;
+  };
+
+  type Lead = {
+    id : Text;
+    path : Text;
+    name : Text;
+    email : Text;
+    business : Text;
+    message : Text;
+    status : Text;
+    created_at : Timestamp;
+  };
+
+  type PortfolioItem = {
+    id : Text;
+    client_name : Text;
+    site_url : Text;
+    thumbnail_url : Text;
+    tier_code : Text;
+    description : Text;
+    is_featured : Bool;
+    created_at : Timestamp;
+  };
+
+  // STATE
+  let orders = Map.empty<OrderId, Order>();
+  let activities = Map.empty<ActivityId, ActivityLog>();
+  let questionnaires = Map.empty<QuestionnaireId, Questionnaire>();
+  let subscriptions = Map.empty<SubscriptionId, Subscription>();
+  let billingHistory = Map.empty<BillingId, BillingHistory>();
+  let invoices = Map.empty<InvoiceId, Invoice>();
+  let editRequests = Map.empty<EditRequestId, EditRequest>();
+  let blogPosts = Map.empty<BlogPostId, BlogPost>();
+  let slugIndex = Map.empty<Text, BlogPostId>();
+  let emailTemplates = Map.empty<Text, EmailTemplate>();
+  let userProfiles = Map.empty<Text, UserProfile>();
+
+  // STABLE UPGRADE STORAGE
+  stable var _stableFleet : [FleetCanister] = [];
+  stable var _stableOrders : [Order] = [];
+  stable var _stableActivities : [ActivityLog] = [];
+  stable var _stableQuestionnaires : [Questionnaire] = [];
+  stable var _stableSubscriptions : [Subscription] = [];
+  stable var _stableBillingHistory : [BillingHistory] = [];
+  stable var _stableInvoices : [Invoice] = [];
+  stable var _stableEditRequests : [EditRequest] = [];
+  stable var _stableBlogPosts : [BlogPost] = [];
+  stable var _stableEmailTemplates : [EmailTemplate] = [];
+  stable var _stableUserProfiles : [UserProfile] = [];
+  stable var _stableLeads : [(Text, Lead)] = [];
+  stable var _stableProducts : [(Nat, ProductV1)] = [];
+  stable var _stablePortfolio : [(Text, PortfolioItem)] = [];
+
+  let products = Map.empty<ProductId, ProductV1>();
+  let productCatalog = Map.empty<ProductId, Product>();
+  var leads = Map.empty<Text, Lead>();
+  var portfolio = Map.empty<Text, PortfolioItem>();
+
+  var stripeConfig : ?Stripe.StripeConfiguration = null;
+
+  let accessControlState = AccessControl.initState();
+  include MixinAuthorization(accessControlState);
+  include MixinStorage();
+
+  // ID GENERATORS
+  func _getNextOrderId() : OrderId { orders.size() + 1 };
+  func getNextActivityId() : ActivityId { activities.size() + 1 };
+  func _getNextQuestionnaireId() : QuestionnaireId { questionnaires.size() + 1 };
+  func _getNextSubscriptionId() : SubscriptionId { subscriptions.size() + 1 };
+  func _getNextBillingId() : BillingId { billingHistory.size() + 1 };
+  func getNextInvoiceId() : InvoiceId { invoices.size() + 1 };
+  func _getNextEditRequestId() : EditRequestId { editRequests.size() + 1 };
+  func getNextBlogPostId() : BlogPostId { blogPosts.size() + 1 };
+  func getNextEmailTemplateId() : EmailTemplateId { emailTemplates.size() + 1 };
+  func getNextProductId() : ProductId { productCatalog.size() + 1 };
+
+  // TIMESTAMP
+  func getCurrentTimestamp() : Timestamp { Time.now() };
+
+  // AUTHORIZATION
+  func adminOnly(caller : Principal) {
+    if (not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Only admins can perform this action");
+    };
+  };
+
+  func userOnly(caller : Principal) {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can perform this action");
+    };
+  };
+
+  // PRODUCT CATALOG SEED
+  private func _seedProducts() {
+    productCatalog.add(1, { id = 1; name = "DIY Basic"; tier_code = null; product_type = "diy"; price_monthly = ?19.0; price_annual = ?190.0; price_onetime = null; active = true; created_at = 0 });
+    productCatalog.add(2, { id = 2; name = "DIY Booking"; tier_code = null; product_type = "diy"; price_monthly = ?39.0; price_annual = ?390.0; price_onetime = null; active = true; created_at = 0 });
+    productCatalog.add(3, { id = 3; name = "DIY Storefront"; tier_code = null; product_type = "diy"; price_monthly = ?49.0; price_annual = ?490.0; price_onetime = null; active = true; created_at = 0 });
+    productCatalog.add(4, { id = 4; name = "Speedy Basic"; tier_code = null; product_type = "speedy"; price_monthly = null; price_annual = null; price_onetime = ?149.0; active = true; created_at = 0 });
+    productCatalog.add(5, { id = 5; name = "Speedy Booking"; tier_code = null; product_type = "speedy"; price_monthly = null; price_annual = null; price_onetime = ?249.0; active = true; created_at = 0 });
+    productCatalog.add(6, { id = 6; name = "Speedy Product Storefront"; tier_code = null; product_type = "speedy"; price_monthly = null; price_annual = null; price_onetime = ?349.0; active = true; created_at = 0 });
+    productCatalog.add(7, { id = 7; name = "Speedy Menu Storefront"; tier_code = null; product_type = "speedy"; price_monthly = null; price_annual = null; price_onetime = ?349.0; active = true; created_at = 0 });
+    productCatalog.add(8, { id = 8; name = "Speedy Recurring Storefront"; tier_code = null; product_type = "speedy"; price_monthly = null; price_annual = null; price_onetime = ?349.0; active = true; created_at = 0 });
+    productCatalog.add(9, { id = 9; name = "Keep It Live"; tier_code = null; product_type = "maintenance"; price_monthly = ?29.0; price_annual = ?290.0; price_onetime = null; active = true; created_at = 0 });
+    productCatalog.add(10, { id = 10; name = "Stay Sharp"; tier_code = null; product_type = "maintenance"; price_monthly = ?89.0; price_annual = ?890.0; price_onetime = null; active = true; created_at = 0 });
+    productCatalog.add(11, { id = 11; name = "Stay Ahead"; tier_code = null; product_type = "maintenance"; price_monthly = ?249.0; price_annual = ?2490.0; price_onetime = null; active = true; created_at = 0 });
+    productCatalog.add(12, { id = 12; name = "Full Partner"; tier_code = null; product_type = "maintenance"; price_monthly = ?549.0; price_annual = ?5490.0; price_onetime = null; active = true; created_at = 0 });
+    productCatalog.add(13, { id = 13; name = "Enterprise Partner"; tier_code = null; product_type = "maintenance"; price_monthly = ?799.0; price_annual = ?7990.0; price_onetime = null; active = true; created_at = 0 });
+  };
+
+  do { _seedProducts() };
+
+  // ADMIN ACCOUNT SEED (Self-Healing)
+  do {
+    if (not userProfiles.containsKey("Webly@weblysolutions.agency")) {
+      userProfiles.add("Webly@weblysolutions.agency", {
+        email = "Webly@weblysolutions.agency";
+        password = "webly0235@0235";
+        firstName = "Admin";
+        lastName = "Webly";
+        businessName = "";
+        businessType = "";
+        phone = "";
+        role = "admin";
+        created_at = 0;
+      });
+    };
+  };
+
+  // FLEET CANISTER SEED (Self-Healing)
+  do {
+    if (_stableFleet.size() == 0) {
+      _stableFleet := [
+        { id = "jqylk-byaaa-aaaal-qbymq-cai"; name = "weblysolutions.agency"; created_at = 0 },
+        { id = "r3jtv-rqaaa-aaaae-qivea-cai"; name = "Overflow of Jo"; created_at = 0 },
+      ];
+    };
+  };
+
+  // FLEET CANISTER MANAGEMENT
+  public shared ({ caller }) func addFleetCanister(name : Text, canisterId : Text) : async () {
+    adminOnly(caller);
+    let newEntry : FleetCanister = { id = canisterId; name; created_at = Time.now() };
+    _stableFleet := _stableFleet.concat([newEntry]);
+  };
+
+  public shared ({ caller }) func removeFleetCanister(canisterId : Text) : async () {
+    adminOnly(caller);
+    _stableFleet := _stableFleet.filter(func(c : FleetCanister) : Bool { not Text.equal(c.id, canisterId) });
+  };
+
+  public shared ({ caller }) func getCanisterCycles(canisterId : Text) : async ?Nat {
+    adminOnly(caller);
+    let ic = actor "aaaaa-aa" : actor {
+      canister_status : ({ canister_id : Principal }) -> async { cycles : Nat };
+    };
+    try {
+      let status = await ic.canister_status({ canister_id = Principal.fromText(canisterId) });
+      ?status.cycles
+    } catch (_) {
+      null
+    }
+  };
+
+  // EMAIL TEMPLATE HELPERS
+  func interpolateTemplate(template : Text, vars : [(Text, Text)]) : Text {
+    var result = template;
+    for ((key, value) in vars.vals()) {
+      result := result.replace(#text("{{" # key # "}}"), value);
+    };
+    result;
+  };
+
+  func getTemplateForKey(triggerKey : Text, defaultSubject : Text, defaultBody : Text) : (Text, Text) {
+    switch (emailTemplates.get(triggerKey)) {
+      case (?t) {
+        let subject = if (t.subject.size() > 0) { t.subject } else { defaultSubject };
+        let body    = if (t.body.size()    > 0) { t.body    } else { defaultBody    };
+        (subject, body);
+      };
+      case (null) { (defaultSubject, defaultBody) };
+    };
+  };
+
+  func getMostRecentActiveOrder(clientPrincipal : Principal) : ?Order {
+    let clientOrders = orders.values().filter(
+      func(o) {
+        Principal.equal(o.client_id, clientPrincipal) and
+        o.status != #live and
+        o.status != #cancelled
+      }
+    ).toArray();
+    if (clientOrders.size() == 0) { return null };
+    let sorted = clientOrders.sort(
+      func(a, b) { Nat.compare(Int.abs(b.updated_at), Int.abs(a.updated_at)) }
+    );
+    ?sorted[0];
+  };
+
+  func buildEmailVars(
+    clientEmail     : Text,
+    clientPrincipal : Principal,
+    extraVars       : [(Text, Text)],
+  ) : [(Text, Text)] {
+    let profile = userProfiles.get(clientEmail);
+    let clientName = switch (profile) {
+      case (?p) {
+        let name = p.firstName # " " # p.lastName;
+        if (name.size() > 1) { name } else { "Valued Client" };
+      };
+      case (null) { "Valued Client" };
+    };
+    let businessName = switch (profile) {
+      case (?p) { if (p.businessName.size() > 0) { p.businessName } else { "" } };
+      case (null) { "" };
+    };
+    let maybeOrder = getMostRecentActiveOrder(clientPrincipal);
+    let projectTier = switch (maybeOrder) {
+      case (?o) { if (o.tier_code.size() > 0) { o.tier_code } else { "" } };
+      case (null) { "" };
+    };
+    let launchDate = switch (maybeOrder) {
+      case (?o) { if (o.launch_target.size() > 0) { o.launch_target } else { "TBD" } };
+      case (null) { "TBD" };
+    };
+    let base : [(Text, Text)] = [
+      ("client_name",   clientName),
+      ("business_name", businessName),
+      ("project_tier",  projectTier),
+      ("launch_date",   launchDate),
+      ("stripe_link",   ""),
+      ("invoice_amount",""),
+      ("due_date",      ""),
+      ("calendly_link", ""),
+    ];
+    base.concat(extraVars);
+  };
+
+  // STRIPE INTEGRATION
+  public query func isStripeConfigured() : async Bool {
+    stripeConfig != null;
+  };
+
+  public shared ({ caller }) func setStripeConfiguration(config : Stripe.StripeConfiguration) : async () {
+    adminOnly(caller);
+    stripeConfig := ?config;
+  };
+
+  func getStripeConfiguration() : Stripe.StripeConfiguration {
+    switch (stripeConfig) {
+      case (null) { Runtime.trap("Stripe needs to be first configured") };
+      case (?value) { value };
+    };
+  };
+
+  public func getStripeSessionStatus(sessionId : Text) : async Stripe.StripeSessionStatus {
+    await Stripe.getSessionStatus(getStripeConfiguration(), sessionId, transform);
+  };
+
+  public shared ({ caller }) func createCheckoutSession(items : [Stripe.ShoppingItem], successUrl : Text, cancelUrl : Text) : async Text {
+    await Stripe.createCheckoutSession(getStripeConfiguration(), caller, items, successUrl, cancelUrl, transform);
+  };
+
+  // TRANSFORM (HTTP OUTCALLS)
+  public query func transform(input : OutCall.TransformationInput) : async OutCall.TransformationOutput {
+    OutCall.transform(input);
+  };
+
+  // ----- USER PROFILE / EMAIL AUTH -----
+  public shared func login(args : { email : Text; password : Text }) : async LoginResult {
+    if (Text.equal(args.email, "Webly@weblysolutions.agency") and Text.equal(args.password, "webly0235@0235")) {
+      return #ok({ role = "admin"; firstName = "Admin"; email = "Webly@weblysolutions.agency" });
+    };
+    switch (userProfiles.get(args.email)) {
+      case (null) { #err("Invalid credentials") };
+      case (?profile) {
+        if (profile.password == args.password) {
+          #ok({ role = profile.role; firstName = profile.firstName; email = profile.email })
+        } else {
+          #err("Invalid credentials")
+        }
+      };
+    }
+  };
+
+  public shared func registerUser(args : { firstName : Text; lastName : Text; email : Text; password : Text }) : async UpsertResult {
+    if (userProfiles.containsKey(args.email)) {
+      return #err("Email already registered");
+    };
+    let profile : UserProfile = {
+      email = args.email;
+      password = args.password;
+      firstName = args.firstName;
+      lastName = args.lastName;
+      businessName = "";
+      businessType = "";
+      phone = "";
+      role = "client";
+      created_at = getCurrentTimestamp();
+    };
+    userProfiles.add(args.email, profile);
+    #ok
+  };
+
+  public shared func createSeedAdmin(args : { email : Text; password : Text; firstName : Text; lastName : Text }) : async UpsertResult {
+    let profile : UserProfile = {
+      email = args.email;
+      password = args.password;
+      firstName = args.firstName;
+      lastName = args.lastName;
+      businessName = "";
+      businessType = "";
+      phone = "";
+      role = "admin";
+      created_at = getCurrentTimestamp();
+    };
+    userProfiles.add(args.email, profile);
+    #ok
+  };
+
+  public shared func getMyProfile(email : Text) : async ?UserProfile {
+    if (Text.equal(email, "Webly@weblysolutions.agency")) {
+      return ?{
+        email = "Webly@weblysolutions.agency";
+        password = "webly0235@0235";
+        firstName = "Admin";
+        lastName = "Webly";
+        businessName = "";
+        businessType = "";
+        phone = "";
+        role = "admin";
+        created_at = 0;
+      };
+    };
+    userProfiles.get(email)
+  };
+
+  public shared func updateProfile(args : { email : Text; firstName : Text; lastName : Text; phone : Text; businessName : Text; businessType : Text }) : async UpsertResult {
+    switch (userProfiles.get(args.email)) {
+      case (null) { #err("User not found") };
+      case (?profile) {
+        let updated : UserProfile = {
+          profile with
+          firstName = args.firstName;
+          lastName = args.lastName;
+          phone = args.phone;
+          businessName = args.businessName;
+          businessType = args.businessType;
+        };
+        userProfiles.add(args.email, updated);
+        #ok
+      };
+    }
+  };
+
+  public shared func changePassword(args : { email : Text; currentPassword : Text; newPassword : Text }) : async UpsertResult {
+    switch (userProfiles.get(args.email)) {
+      case (null) { #err("User not found") };
+      case (?profile) {
+        if (profile.password != args.currentPassword) {
+          return #err("Current password is incorrect");
+        };
+        let updated : UserProfile = { profile with password = args.newPassword };
+        userProfiles.add(args.email, updated);
+        #ok
+      };
+    }
+  };
+
+  public query func getAdminAllClients() : async [UserProfile] {
+    userProfiles.values().filter(func(p) { p.role == "client" }).toArray()
+  };
+
+  // PRODUCT CATALOG QUERIES
+  public query func getProducts() : async [Product] {
+    let arr = productCatalog.values().toArray();
+    arr.sort(func(a, b) { Nat.compare(a.id, b.id) });
+  };
+
+  public query func getProductsByType(productType : Text) : async [Product] {
+    let arr = productCatalog.values().filter(func(p) { Text.equal(p.product_type, productType) }).toArray();
+    arr.sort(func(a, b) { Nat.compare(a.id, b.id) });
+  };
+
+  // BLOG POST METHODS
+
+  public shared ({ caller }) func createBlogPost(
+    title : Text,
+    slug : Text,
+    category : Text,
+    excerpt : Text,
+    body : Text,
+    author : Text,
+    featured_image_url : ?Text,
+    status : Text
+  ) : async () {
+    adminOnly(caller);
+    if (excerpt.size() > 160) { Runtime.trap("Excerpt must be 160 characters or less") };
+    let id  = getNextBlogPostId();
+    let now = getCurrentTimestamp();
+    let publishedAt = if (Text.equal(status, "PUBLISHED")) { ?now } else { null };
+    let post : BlogPost = {
+      id; title; slug; category; excerpt; body; author;
+      featured_image_url; status;
+      published_at = publishedAt;
+      created_at = now;
+      updated_at = now;
+    };
+    if (slugIndex.containsKey(slug)) { Runtime.trap("Slug must be unique") };
+    blogPosts.add(id, post);
+    slugIndex.add(slug, id);
+  };
+
+  public shared ({ caller }) func updateBlogPost(
+    id : BlogPostId,
+    title : Text,
+    slug : Text,
+    category : Text,
+    excerpt : Text,
+    body : Text,
+    author : Text,
+    featured_image_url : ?Text,
+    status : Text
+  ) : async () {
+    adminOnly(caller);
+    if (excerpt.size() > 160) { Runtime.trap("Excerpt must be 160 characters or less") };
+    switch (blogPosts.get(id)) {
+      case (null) { Runtime.trap("Blog post not found") };
+      case (?existing) {
+        let now        = getCurrentTimestamp();
+        let isPublished = Text.equal(status, "PUBLISHED");
+        let publishedAt : ?Timestamp = if (isPublished) {
+          switch (existing.published_at) {
+            case (?t) { ?t };
+            case (null) { ?now };
+          }
+        } else {
+          null;
+        };
+        if (not Text.equal(existing.slug, slug)) {
+          switch (slugIndex.get(slug)) {
+            case (?existingId) {
+              if (existingId != id) { Runtime.trap("Slug already exists") };
+            };
+            case (null) {};
+          };
+          slugIndex.remove(existing.slug);
+          slugIndex.add(slug, id);
+        };
+        let updatedPost : BlogPost = {
+          existing with title; slug; category; excerpt; body; author;
+          featured_image_url; status;
+          published_at = publishedAt;
+          updated_at = now;
+        };
+        blogPosts.add(id, updatedPost);
+      };
+    };
+  };
+
+  public shared ({ caller }) func deleteBlogPost(id : BlogPostId) : async () {
+    adminOnly(caller);
+    switch (blogPosts.get(id)) {
+      case (null) { Runtime.trap("Blog post not found") };
+      case (?post) { blogPosts.remove(id); slugIndex.remove(post.slug) };
+    };
+  };
+
+  public shared ({ caller }) func publishBlogPost(id : BlogPostId) : async () {
+    adminOnly(caller);
+    switch (blogPosts.get(id)) {
+      case (null) { Runtime.trap("Blog post not found") };
+      case (?post) {
+        let now = getCurrentTimestamp();
+        if (Text.equal(post.status, "PUBLISHED")) { Runtime.trap("Blog post is already published") };
+        blogPosts.add(id, { post with status = "PUBLISHED"; published_at = ?now; updated_at = now });
+      };
+    };
+  };
+
+  public shared ({ caller }) func unpublishBlogPost(id : BlogPostId) : async () {
+    adminOnly(caller);
+    switch (blogPosts.get(id)) {
+      case (null) { Runtime.trap("Blog post not found") };
+      case (?post) {
+        if (Text.equal(post.status, "DRAFT")) { Runtime.trap("Blog post is already in draft status") };
+        blogPosts.add(id, { post with status = "DRAFT"; published_at = null; updated_at = getCurrentTimestamp() });
+      };
+    };
+  };
+
+  public query func getPublishedBlogPosts() : async [BlogPost] {
+    let postsArray = blogPosts.values().filter(
+      func(post) { Text.equal(post.status, "PUBLISHED") }
+    ).toArray();
+    postsArray.sort(func(a, b) {
+      let aTime = switch (a.published_at) { case (null) { 0 }; case (?t) { Int.abs(t) } };
+      let bTime = switch (b.published_at) { case (null) { 0 }; case (?t) { Int.abs(t) } };
+      Nat.compare(bTime, aTime);
+    });
+  };
+
+  public query ({ caller }) func getAllBlogPostsAdmin() : async [BlogPost] {
+    adminOnly(caller);
+    let postsArray = blogPosts.values().toArray();
+    postsArray.sort(func(a, b) { Nat.compare(Int.abs(b.created_at), Int.abs(a.created_at)) });
+  };
+
+  public query func getBlogPostBySlug(slug : Text) : async ?BlogPost {
+    switch (slugIndex.get(slug)) {
+      case (null) { null };
+      case (?id)  { blogPosts.get(id) };
+    };
+  };
+
+  // Admin Queries
+
+  public query ({ caller }) func getAdminStats() : async AdminStats {
+    adminOnly(caller);
+    let usersMap     = accessControlState.userRoles;
+    let totalClients = usersMap.foldLeft(0, func(acc, _, role) { if (role == #user) { acc + 1 } else { acc } });
+    var activeProjects = 0;
+    orders.values().forEach(func(order) {
+      if (order.status != #live and order.status != #cancelled) { activeProjects += 1 };
+    });
+    var unreviewedQuestionnaires = 0;
+    questionnaires.values().forEach(func(q) {
+      if (q.submitted and not q.reviewed) { unreviewedQuestionnaires += 1 };
+    });
+    var outstandingInvoices = 0;
+    invoices.values().forEach(func(invoice) {
+      if (Text.equal(invoice.status, "PENDING") or Text.equal(invoice.status, "OVERDUE")) {
+        outstandingInvoices += 1;
+      };
+    });
+    { totalClients; activeProjects; unreviewedQuestionnaires; outstandingInvoices };
+  };
+
+  public query ({ caller }) func getAdminAllActivity() : async [ActivityLog] {
+    adminOnly(caller);
+    let activityArray    = activities.values().toArray();
+    let sortedActivities = activityArray.sort(
+      func(a, b) { Nat.compare(Int.abs(b.created_at), Int.abs(a.created_at)) }
+    );
+    sortedActivities.sliceToArray(0, Nat.min(10, sortedActivities.size()));
+  };
+
+  public query ({ caller }) func getClientOrders(client : Principal) : async [Order] {
+    if (caller != client and not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Can only view your own orders");
+    };
+    let ordersArray = orders.values().filter(func(o) { o.client_id == client }).toArray();
+    ordersArray.sort(func(a, b) { Nat.compare(Int.abs(b.created_at), Int.abs(a.created_at)) });
+  };
+
+  public query ({ caller }) func getMyOrders() : async [Order] {
+    userOnly(caller);
+    let ordersArray = orders.values().filter(func(o) { o.client_id == caller }).toArray();
+    ordersArray.sort(func(a, b) { Nat.compare(Int.abs(b.created_at), Int.abs(a.created_at)) });
+  };
+
+  public query ({ caller }) func getMyActivity() : async [ActivityLog] {
+    userOnly(caller);
+    let activityArray = activities.values().filter(func(a) { a.client_id == caller }).toArray();
+    activityArray.sort(func(a, b) { Nat.compare(Int.abs(b.created_at), Int.abs(a.created_at)) });
+  };
+
+  public query ({ caller }) func getMyQuestionnaires() : async [Questionnaire] {
+    userOnly(caller);
+    let questionnaireArray = questionnaires.values().filter(func(q) { q.client_id == caller }).toArray();
+    questionnaireArray.sort(func(a, b) { Nat.compare(Int.abs(b.created_at), Int.abs(a.created_at)) });
+  };
+
+  public query ({ caller }) func getMySubscriptions() : async [Subscription] {
+    userOnly(caller);
+    let subscriptionArray = subscriptions.values().filter(func(s) { s.client_id == caller }).toArray();
+    subscriptionArray.sort(func(a, b) { Nat.compare(Int.abs(b.created_at), Int.abs(a.created_at)) });
+  };
+
+  public query ({ caller }) func getMyInvoices() : async [Invoice] {
+    userOnly(caller);
+    let invoiceArray = invoices.values().filter(func(i) { i.client_id == caller }).toArray();
+    invoiceArray.sort(func(a, b) { Nat.compare(Int.abs(b.created_at), Int.abs(a.created_at)) });
+  };
+
+  public query ({ caller }) func getMyEditRequests() : async [EditRequest] {
+    userOnly(caller);
+    let editRequestArray = editRequests.values().filter(func(r) { r.client_id == caller }).toArray();
+    editRequestArray.sort(func(a, b) { Nat.compare(Int.abs(b.created_at), Int.abs(a.created_at)) });
+  };
+
+  // ORDER STATUS EMAIL
+  public shared ({ caller }) func sendOrderStatusEmail(
+    clientPrincipal : Principal,
+    status          : OrderStatus.Status,
+    clientEmail     : Text,
+  ) : async () {
+    adminOnly(caller);
+    switch (status) {
+      case (#depositSent) {
+        let (subj, bod) = getTemplateForKey(
+          "deposit_invoice_sent",
+          "Your Deposit Invoice Is Ready",
+          "Hi {{client_name}},\n\nYour deposit invoice is ready. Please complete your payment to secure your spot in our build queue.",
+        );
+        let vars = buildEmailVars(clientEmail, clientPrincipal, []);
+        sendEmail(clientEmail, interpolateTemplate(subj, vars), interpolateTemplate(bod, vars));
+      };
+      case (#depositReceived) {
+        let (subj, bod) = getTemplateForKey(
+          "deposit_confirmed",
+          "Deposit Confirmed - Your Build Is Queued",
+          "Hi {{client_name}},\n\nWe have received your deposit and have added your project to our build queue. Watch for updates as we make progress.",
+        );
+        let vars = buildEmailVars(clientEmail, clientPrincipal, []);
+        sendEmail(clientEmail, interpolateTemplate(subj, vars), interpolateTemplate(bod, vars));
+      };
+      case (#draftReady) {
+        let (subj, bod) = getTemplateForKey(
+          "draft_ready",
+          "Your First Draft Is Ready to Review",
+          "Hi {{client_name}},\n\nYour first draft is now ready for review. Please log in to your client portal and let us know your feedback.",
+        );
+        let vars = buildEmailVars(clientEmail, clientPrincipal, []);
+        sendEmail(clientEmail, interpolateTemplate(subj, vars), interpolateTemplate(bod, vars));
+      };
+      case (#revisionsInProgress) {
+        let (subj, bod) = getTemplateForKey(
+          "draft_ready",
+          "We Have Received Your Feedback",
+          "Hi {{client_name}},\n\nThank you for your feedback. We are making your requested revisions and will notify you once they are complete.",
+        );
+        let vars = buildEmailVars(clientEmail, clientPrincipal, []);
+        sendEmail(clientEmail, interpolateTemplate(subj, vars), interpolateTemplate(bod, vars));
+      };
+      case (#launching) {
+        let (subj, bod) = getTemplateForKey(
+          "site_launched",
+          "Your Site Is Going Live",
+          "Hi {{client_name}},\n\nYour website is being launched! We are making the final configurations to ensure everything is set up properly.",
+        );
+        let vars = buildEmailVars(clientEmail, clientPrincipal, []);
+        sendEmail(clientEmail, interpolateTemplate(subj, vars), interpolateTemplate(bod, vars));
+      };
+      case (#live) {
+        let (subj, bod) = getTemplateForKey(
+          "site_launched",
+          "Your Site Is Live - Welcome to Webly",
+          "Hi {{client_name}},\n\nCongratulations! Your website is live and fully operational. We look forward to supporting your ongoing needs.\n\nLaunch date: {{launch_date}}",
+        );
+        let vars = buildEmailVars(clientEmail, clientPrincipal, []);
+        sendEmail(clientEmail, interpolateTemplate(subj, vars), interpolateTemplate(bod, vars));
+      };
+      case (_) {};
+    };
+  };
+
+  // Questionnaire Logic
+
+  public shared ({ caller }) func markQuestionnaireReviewed(questionnaireId : QuestionnaireId) : async () {
+    adminOnly(caller);
+    switch (questionnaires.get(questionnaireId)) {
+      case (null) { Runtime.trap("Questionnaire not found") };
+      case (?questionnaire) {
+        if (questionnaire.reviewed) { Runtime.trap("Questionnaire is already marked as reviewed") };
+        let updatedQuestionnaire = { questionnaire with reviewed = true; reviewed_at = ?getCurrentTimestamp() };
+        questionnaires.add(questionnaireId, updatedQuestionnaire);
+        let activityId = getNextActivityId();
+        let activity : ActivityLog = {
+          id = activityId;
+          client_id = questionnaire.client_id;
+          order_id = questionnaire.order_id;
+          description = "Questionnaire marked as reviewed by admin";
+          status_at_time = #questionnaireComplete;
+          created_at = getCurrentTimestamp();
+        };
+        activities.add(activityId, activity);
+      };
+    };
+  };
+
+  public query ({ caller }) func getQuestionnaireByClientId(clientId : ClientId) : async ?Questionnaire {
+    if (caller != clientId and not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Can only view your own questionnaire");
+    };
+    let filtered     = questionnaires.values().filter(func(q) { Principal.equal(q.client_id, clientId) });
+    let filteredList = List.fromIter<Questionnaire>(filtered);
+    if (filteredList.isEmpty()) { return null };
+    let maxQuestionnaire = filteredList.foldLeft(
+      filteredList.at(0),
+      func(max, current) { if (current.created_at > max.created_at) { current } else { max } },
+    );
+    ?maxQuestionnaire;
+  };
+
+  public query ({ caller }) func getMyMostRecentQuestionnaire() : async ?Questionnaire {
+    userOnly(caller);
+    let filtered     = questionnaires.values().filter(func(q) { Principal.equal(q.client_id, caller) });
+    let filteredList = List.fromIter<Questionnaire>(filtered);
+    if (filteredList.isEmpty()) { return null };
+    let maxQuestionnaire = filteredList.foldLeft(
+      filteredList.at(0),
+      func(max, current) { if (current.created_at > max.created_at) { current } else { max } },
+    );
+    ?maxQuestionnaire;
+  };
+
+  public query ({ caller }) func getClientInvoices(clientPrincipal : Principal) : async [Invoice] {
+    adminOnly(caller);
+    let invoiceArray = invoices.values().filter(
+      func(invoice) { Principal.equal(invoice.client_id, clientPrincipal) }
+    ).toArray();
+    invoiceArray.sort(func(a, b) { Nat.compare(Int.abs(b.created_at), Int.abs(a.created_at)) });
+  };
+
+  public shared ({ caller }) func sendDepositInvoice(
+    clientPrincipal : Principal,
+    clientEmail     : Text,
+    amountCents     : Nat,
+    description     : Text,
+    dueDate         : Timestamp,
+  ) : async Text {
+    adminOnly(caller);
+    let item : Stripe.ShoppingItem = {
+      currency = "usd";
+      productName = description;
+      productDescription = description;
+      priceInCents = amountCents;
+      quantity = 1;
+    };
+    let stripeUrl = await Stripe.createCheckoutSession(
+      getStripeConfiguration(),
+      clientPrincipal,
+      [item],
+      "https://webly.app/portal/invoices",
+      "https://webly.app/portal/invoices",
+      transform,
+    );
+    let invoiceId  = getNextInvoiceId();
+    let invoiceNum = "INV-" # invoiceId.toText();
+    let amountFloat : Float = amountCents.toFloat() / 100.0;
+    let sortedClientOrders = orders.values().filter(
+      func(o) {
+        Principal.equal(o.client_id, clientPrincipal) and
+        o.status != #live and
+        o.status != #cancelled
+      }
+    ).toArray().sort(func(a, b) { Nat.compare(Int.abs(b.created_at), Int.abs(a.created_at)) });
+    let maybeOrderId : ?OrderId = if (sortedClientOrders.size() > 0) { ?sortedClientOrders[0].id } else { null };
+    let now = getCurrentTimestamp();
+    let invoice : Invoice = {
+      id = invoiceId;
+      client_id = clientPrincipal;
+      order_id = maybeOrderId;
+      invoice_number = invoiceNum;
+      description = description;
+      amount = amountFloat;
+      status = "PENDING";
+      due_date = dueDate;
+      paid_at = null;
+      stripe_payment_intent_id = stripeUrl;
+      created_at = now;
+      updated_at = now;
+    };
+    invoices.add(invoiceId, invoice);
+    switch (maybeOrderId) {
+      case (?orderId) {
+        switch (orders.get(orderId)) {
+          case (?order) { orders.add(orderId, { order with status = #depositSent; updated_at = now }) };
+          case (null)   {};
+        };
+      };
+      case (null) {};
+    };
+    let actDesc = "Deposit invoice sent - $" # amountFloat.toText();
+    let activity : ActivityLog = {
+      id = getNextActivityId();
+      client_id = clientPrincipal;
+      order_id = switch (maybeOrderId) { case (?oid) { oid }; case (null) { 0 } };
+      description = actDesc;
+      status_at_time = #depositSent;
+      created_at = now;
+    };
+    activities.add(activity.id, activity);
+    let (subj, bod) = getTemplateForKey(
+      "deposit_invoice_sent",
+      "Your Deposit Invoice Is Ready",
+      "Hi {{client_name}},\n\nYour deposit invoice for {{project_tier}} is ready.\n\nAmount: ${{invoice_amount}}\nDescription: " # description # "\n\nPay now: {{stripe_link}}",
+    );
+    let extras : [(Text, Text)] = [
+      ("stripe_link",    stripeUrl),
+      ("invoice_amount", amountFloat.toText()),
+      ("due_date",       dueDate.toText()),
+    ];
+    let vars = buildEmailVars(clientEmail, clientPrincipal, extras);
+    sendEmail(clientEmail, interpolateTemplate(subj, vars), interpolateTemplate(bod, vars));
+    stripeUrl;
+  };
+
+  public shared func saveEmailTemplate(trigger_key : Text, subject : Text, body : Text) : async () {
+    let now      = getCurrentTimestamp();
+    let existing = emailTemplates.get(trigger_key);
+    let id = switch (existing) {
+      case (?t)   { t.id };
+      case (null) { getNextEmailTemplateId() };
+    };
+    emailTemplates.add(trigger_key, { id; trigger_key; subject; body; updated_at = now });
+  };
+
+  public query func getEmailTemplates() : async [EmailTemplate] {
+    emailTemplates.values().toArray();
+  };
+
+  func sendEmail(_email : Text, _subject : Text, _body : Text) {
+    // Placeholder for actual email sending logic
+  };
+
+  // LEADS
+  public shared func createLead(path : Text, name : Text, email : Text, business : Text, message : Text) : async Text {
+    let id = Time.now().toText();
+    let lead : Lead = { id; path; name; email; business; message; status = "new"; created_at = Time.now(); };
+    _stableLeads := _stableLeads.concat([(id, lead)]);
+    id;
+  };
+
+  public query func getLeads() : async [Lead] {
+    _stableLeads.map(func((_, lead) : (Text, Lead)) : Lead { lead });
+  };
+
+  // ORDERS ADMIN
+  private func textToOrderStatus(s : Text) : OrderStatus.Status {
+    if (s == "depositSent")       { #depositSent }
+    else if (s == "depositReceived") { #depositReceived }
+    else if (s == "draftReady")   { #draftReady }
+    else if (s == "revisionsInProgress") { #revisionsInProgress }
+    else if (s == "launching")    { #launching }
+    else if (s == "live")         { #live }
+    else if (s == "cancelled")    { #cancelled }
+    else                          { #questionnaireComplete };
+  };
+
+  public query func getAdminAllOrders() : async [Order] {
+    orders.values().toArray();
+  };
+
+  public shared func updateOrderStatus(orderId : Text, newStatus : Text) : async UpsertResult {
+    switch (Nat.fromText(orderId)) {
+      case null { #err("Invalid orderId") };
+      case (?id) {
+        switch (orders.get(id)) {
+          case null { #err("Order not found") };
+          case (?order) {
+            let updated = { order with status = textToOrderStatus(newStatus); updated_at = Time.now() };
+            orders.add(id, updated);
+            #ok;
+          };
+        };
+      };
+    };
+  };
+
+  // PORTFOLIO
+  public query func getPublishedPortfolio() : async [PortfolioItem] {
+    portfolio.values().toArray();
+  };
+
+  public shared func createPortfolioItem(client_name : Text, site_url : Text, thumbnail_url : Text, tier_code : Text, description : Text, is_featured : Bool) : async Text {
+    let id = Time.now().toText();
+    portfolio.add(id, { id; client_name; site_url; thumbnail_url; tier_code; description; is_featured; created_at = Time.now() });
+    id;
+  };
+
+  public shared func updatePortfolioItem(id : Text, client_name : Text, site_url : Text, thumbnail_url : Text, tier_code : Text, description : Text, is_featured : Bool) : async UpsertResult {
+    switch (portfolio.get(id)) {
+      case null { #err("Not found") };
+      case (?old) { portfolio.add(id, { old with client_name; site_url; thumbnail_url; tier_code; description; is_featured }); #ok };
+    };
+  };
+
+  public shared func deletePortfolioItem(id : Text) : async UpsertResult {
+    switch (portfolio.get(id)) {
+      case null { #err("Not found") };
+      case (?_) { portfolio.remove(id); #ok };
+    };
+  };
+
+  // UPGRADE HOOKS
+  system func preupgrade() {
+    _stableOrders         := orders.values().toArray();
+    _stableActivities     := activities.values().toArray();
+    _stableQuestionnaires := questionnaires.values().toArray();
+    _stableSubscriptions  := subscriptions.values().toArray();
+    _stableBillingHistory := billingHistory.values().toArray();
+    _stableInvoices       := invoices.values().toArray();
+    _stableEditRequests   := editRequests.values().toArray();
+    _stableBlogPosts      := blogPosts.values().toArray();
+    _stableEmailTemplates := emailTemplates.values().toArray();
+    _stableUserProfiles   := userProfiles.values().toArray();
+    _stableProducts       := [];
+    _stablePortfolio      := portfolio.entries().toArray();
+  };
+
+  system func postupgrade() {
+    for (v in _stableOrders.vals())         { orders.add(v.id, v) };
+    for (v in _stableActivities.vals())     { activities.add(v.id, v) };
+    for (v in _stableQuestionnaires.vals()) { questionnaires.add(v.id, v) };
+    for (v in _stableSubscriptions.vals())  { subscriptions.add(v.id, v) };
+    for (v in _stableBillingHistory.vals()) { billingHistory.add(v.id, v) };
+    for (v in _stableInvoices.vals())       { invoices.add(v.id, v) };
+    for (v in _stableEditRequests.vals())   { editRequests.add(v.id, v) };
+    for (v in _stableBlogPosts.vals()) {
+      blogPosts.add(v.id, v);
+      slugIndex.add(v.slug, v.id);
+    };
+    for (v in _stableEmailTemplates.vals()) { emailTemplates.add(v.trigger_key, v) };
+    for (v in _stableUserProfiles.vals())   { userProfiles.add(v.email, v) };
+    for ((k, v) in _stableProducts.vals()) {
+      productCatalog.add(k, {
+        id            = v.id;
+        name          = v.name;
+        tier_code     = null;
+        product_type  = v.product_type;
+        price_monthly = v.price_monthly;
+        price_annual  = v.price_annual;
+        price_onetime = v.price_onetime;
+        active        = v.active;
+        created_at    = v.created_at;
+      });
+    };
+    if (productCatalog.size() == 0) { _seedProducts() };
+    for ((k, v) in _stablePortfolio.vals()) { portfolio.add(k, v) };
+    _stableOrders         := [];
+    _stableActivities     := [];
+    _stableQuestionnaires := [];
+    _stableSubscriptions  := [];
+    _stableBillingHistory := [];
+    _stableInvoices       := [];
+    _stableEditRequests   := [];
+    _stableBlogPosts      := [];
+    _stableEmailTemplates := [];
+    _stableUserProfiles   := [];
+    _stableProducts       := [];
+    _stablePortfolio      := [];
+    if (not userProfiles.containsKey("Webly@weblysolutions.agency")) {
+      userProfiles.add("Webly@weblysolutions.agency", {
+        email        = "Webly@weblysolutions.agency";
+        password     = "webly0235@0235";
+        firstName    = "Admin";
+        lastName     = "Webly";
+        businessName = "";
+        businessType = "";
+        phone        = "";
+        role         = "admin";
+        created_at   = 0;
+      });
+    };
+  };
+};

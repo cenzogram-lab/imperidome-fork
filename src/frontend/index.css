@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: url("/assets/fonts/PlusJakartaSans-VariableFont_wght.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    --radius: 0.375rem;
+
+    /* Webly brand tokens */
+    --navy: 0.235 0.068 255;
+    --accent-blue: 0.548 0.128 245;
+    --white: 1 0 0;
+    --off-white: 0.97 0 0;
+    --light-gray: 0.93 0 0;
+    --mid-gray: 0.6 0 0;
+    --success-green: 0.62 0.17 152;
+
+    /* Semantic tokens */
+    --background: 1 0 0;
+    --foreground: 0.235 0.068 255;
+    --card: 1 0 0;
+    --card-foreground: 0.235 0.068 255;
+    --popover: 1 0 0;
+    --popover-foreground: 0.235 0.068 255;
+    --primary: 0.548 0.128 245;
+    --primary-foreground: 1 0 0;
+    --secondary: 0.235 0.068 255;
+    --secondary-foreground: 1 0 0;
+    --muted: 0.97 0 0;
+    --muted-foreground: 0.5 0 0;
+    --accent: 0.548 0.128 245;
+    --accent-foreground: 1 0 0;
+    --destructive: 0.577 0.245 27.325;
+    --destructive-foreground: 1 0 0;
+    --border: 0.91 0 0;
+    --input: 0.91 0 0;
+    --ring: 0.548 0.128 245;
+    --chart-1: 0.646 0.222 41.116;
+    --chart-2: 0.6 0.118 184.704;
+    --chart-3: 0.398 0.07 227.392;
+    --chart-4: 0.828 0.189 84.429;
+    --chart-5: 0.769 0.188 70.08;
+    --sidebar: 0.985 0 0;
+    --sidebar-foreground: 0.235 0.068 255;
+    --sidebar-primary: 0.548 0.128 245;
+    --sidebar-primary-foreground: 1 0 0;
+    --sidebar-accent: 0.97 0 0;
+    --sidebar-accent-foreground: 0.235 0.068 255;
+    --sidebar-border: 0.91 0 0;
+    --sidebar-ring: 0.548 0.128 245;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Plus Jakarta Sans", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}

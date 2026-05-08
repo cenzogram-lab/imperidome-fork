@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="80" fill="#111111"/>
+  <!-- Outer gold ring accent -->
+  <circle cx="256" cy="256" r="192" fill="none" stroke="#b8860b" stroke-width="6" opacity="0.4"/>
+  <!-- Inner decorative ring -->
+  <circle cx="256" cy="256" r="168" fill="none" stroke="#b8860b" stroke-width="1.5" opacity="0.15"/>
+  <!-- Gold "I" monogram -->
+  <!-- Top bar -->
+  <rect x="160" y="138" width="192" height="32" rx="8" fill="#b8860b"/>
+  <!-- Vertical stem -->
+  <rect x="236" y="170" width="40" height="134" rx="6" fill="#d4a017"/>
+  <!-- Bottom bar -->
+  <rect x="160" y="304" width="192" height="32" rx="8" fill="#b8860b"/>
+  <!-- Subtle highlight on stem -->
+  <rect x="248" y="170" width="14" height="134" rx="6" fill="#f0c040" opacity="0.45"/>
+  <!-- Corner accent dots -->
+  <circle cx="176" cy="154" r="6" fill="#b8860b" opacity="0.6"/>
+  <circle cx="336" cy="154" r="6" fill="#b8860b" opacity="0.6"/>
+  <circle cx="176" cy="320" r="6" fill="#b8860b" opacity="0.6"/>
+  <circle cx="336" cy="320" r="6" fill="#b8860b" opacity="0.6"/>
+</svg>

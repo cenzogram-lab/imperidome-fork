@@ -1,0 +1,1033 @@
+type http_request_result = 
+ record {
+   body: blob;
+   headers: vec http_header;
+   status: nat;
+ };
+type http_header = 
+ record {
+   name: text;
+   value: text;
+ };
+type _ImmutableObjectStorageRefillResult = 
+ record {
+   success: opt bool;
+   topped_up_amount: opt nat;
+ };
+type _ImmutableObjectStorageRefillInformation = record {
+                                                  proposed_top_up_amount:
+                                                   opt nat;};
+type _ImmutableObjectStorageCreateCertificateResult = 
+ record {
+   blob_hash: text;
+   method: text;
+ };
+type WeeklySchedule = 
+ record {
+   friday: DaySchedule;
+   monday: DaySchedule;
+   saturday: DaySchedule;
+   sunday: DaySchedule;
+   thursday: DaySchedule;
+   tuesday: DaySchedule;
+   wednesday: DaySchedule;
+ };
+type UserRole = 
+ variant {
+   admin;
+   guest;
+   user;
+ };
+type UserProfile = 
+ record {
+   businessName: text;
+   businessType: text;
+   created_at: Timestamp;
+   email: text;
+   firstName: text;
+   lastName: text;
+   passwordHash: blob;
+   phone: text;
+   role: text;
+ };
+type UpsertResult = 
+ variant {
+   err: text;
+   ok;
+   okAlreadyAdvanced;
+ };
+type TransformationOutput = 
+ record {
+   body: blob;
+   headers: vec http_header;
+   status: nat;
+ };
+type TransformationInput = 
+ record {
+   context: blob;
+   response: http_request_result;
+ };
+type Timestamp = int;
+type SubscriptionId = nat;
+type Subscription = 
+ record {
+   billing_cycle: text;
+   client_id: ClientId;
+   created_at: Timestamp;
+   id: SubscriptionId;
+   next_payment_date: Timestamp;
+   plan_code: text;
+   plan_name: text;
+   status: text;
+   stripe_subscription_id: text;
+   updated_at: Timestamp;
+ };
+type StripeSessionStatus = 
+ variant {
+   completed: record {
+                response: text;
+                userPrincipal: opt text;
+              };
+   failed: record {error: text;};
+ };
+type StripeConfiguration = 
+ record {
+   allowedCountries: vec text;
+   secretKey: text;
+ };
+type Status = 
+ variant {
+   buildInProgress;
+   cancelled;
+   depositReceived;
+   depositSent;
+   draftReady;
+   launching;
+   live;
+   paused;
+   questionnaireComplete;
+   questionnairePending;
+   revisionsInProgress;
+ };
+type SiteLinkEntry = 
+ record {
+   sentAt: int;
+   url: text;
+ };
+type ShoppingItem = 
+ record {
+   currency: text;
+   priceInCents: nat;
+   productDescription: text;
+   productName: text;
+   quantity: nat;
+ };
+type ReviewId = text;
+type Review = 
+ record {
+   clientEmail: text;
+   clientName: text;
+   id: ReviewId;
+   jobTitle: text;
+   rating: nat;
+   reviewText: text;
+   status: text;
+   submittedAt: int;
+ };
+type ReferralStat = 
+ record {
+   code: text;
+   referrerEmail: text;
+   referrerName: text;
+   successfulConversions: nat;
+   totalClicks: nat;
+ };
+type QuestionnaireId = nat;
+type Questionnaire = 
+ record {
+   answers: text;
+   client_id: ClientId;
+   created_at: Timestamp;
+   id: QuestionnaireId;
+   order_id: OrderId;
+   progress: nat;
+   reviewed: bool;
+   reviewed_at: opt Timestamp;
+   submitted: bool;
+   submitted_at: opt Timestamp;
+   tier_code: text;
+   updated_at: Timestamp;
+ };
+type QuestionDefinition = 
+ record {
+   description: text;
+   id: text;
+   inputType: text;
+   options: vec text;
+   placeholder: text;
+   questionLabel: text;
+   required: bool;
+   sortOrder: nat;
+   tierCode: text;
+ };
+type PushSubscription = 
+ record {
+   auth: text;
+   endpoint: text;
+   p256dh: text;
+ };
+type PurchaseRequest = 
+ record {
+   amount: float64;
+   checkoutUrl: opt text;
+   clientEmail: text;
+   declineReason: opt text;
+   frequency: text;
+   id: nat;
+   productId: nat;
+   productName: text;
+   requestedAt: int;
+   respondedAt: opt int;
+   status: text;
+ };
+type ProductId = nat;
+type Product = 
+ record {
+   active: bool;
+   created_at: Timestamp;
+   description: text;
+   id: ProductId;
+   name: text;
+   price_annual: opt float64;
+   price_monthly: opt float64;
+   price_onetime: opt float64;
+   product_type: text;
+   tier_code: opt text;
+ };
+type PortfolioItem = 
+ record {
+   client_name: text;
+   created_at: Timestamp;
+   description: text;
+   id: text;
+   imageCaption: text;
+   is_featured: bool;
+   published: bool;
+   seoMetaDescription: opt text;
+   seoMetaKeywords: opt text;
+   site_url: text;
+   thumbnail_url: text;
+   tier_code: text;
+ };
+type PendingNotification = 
+ record {
+   body: text;
+   createdAt: int;
+   id: text;
+   title: text;
+   url: text;
+ };
+type OrderId = nat;
+type Order = 
+ record {
+   client_id: ClientId;
+   created_at: Timestamp;
+   delivery_window: text;
+   id: OrderId;
+   launch_target: text;
+   status: Status;
+   tier_code: text;
+   updated_at: Timestamp;
+ };
+type NotificationLogEntry = 
+ record {
+   body: text;
+   event: text;
+   id: text;
+   timestamp: int;
+   title: text;
+   url: text;
+ };
+type MarqueeLogo = 
+ record {
+   addedAt: int;
+   id: text;
+   logoLabel: text;
+   logoUrl: text;
+   order: nat;
+ };
+type LoginResult = 
+ variant {
+   err: text;
+   ok: record {
+         email: text;
+         firstName: text;
+         role: text;
+       };
+ };
+type Lead = 
+ record {
+   business: text;
+   convertedAt: opt int;
+   created_at: Timestamp;
+   email: text;
+   id: text;
+   isDraft: bool;
+   meetLink: text;
+   meetingMethod: text;
+   message: text;
+   name: text;
+   path: text;
+   rescheduleHistory: vec int;
+   rescheduleLinkSentAt: opt int;
+   rescheduleToken: text;
+   status: text;
+ };
+type InvoiceId = nat;
+type Invoice = 
+ record {
+   amount: float64;
+   client_id: ClientId;
+   created_at: Timestamp;
+   description: text;
+   due_date: Timestamp;
+   id: InvoiceId;
+   invoice_number: text;
+   order_id: opt OrderId;
+   paid_at: opt Timestamp;
+   status: text;
+   stripe_payment_intent_id: text;
+   updated_at: Timestamp;
+ };
+type GoogleSheetsConfig = 
+ record {
+   scriptUrl: text;
+   sheetId: text;
+ };
+type GoogleCalendarConfig = 
+ record {
+   calendarId: text;
+   defaultDurationMinutes: nat;
+   scriptUrl: text;
+   titleTemplate: text;
+ };
+type FleetCanister = 
+ record {
+   created_at: Timestamp;
+   id: text;
+   name: text;
+ };
+type EmailTemplateId = nat;
+type EmailTemplate = 
+ record {
+   body: text;
+   id: EmailTemplateId;
+   subject: text;
+   trigger_key: text;
+   updated_at: Timestamp;
+ };
+type EmailLog = 
+ record {
+   id: text;
+   recipientEmail: text;
+   status: text;
+   templateName: text;
+   timestamp: int;
+ };
+type EditRequestId = nat;
+type EditRequest = 
+ record {
+   attachment_url: opt text;
+   client_id: ClientId;
+   created_at: Timestamp;
+   description: text;
+   id: EditRequestId;
+   order_id: opt OrderId;
+   page_or_section: text;
+   request_number: text;
+   request_type: text;
+   status: text;
+   updated_at: Timestamp;
+ };
+type DaySchedule = 
+ record {
+   endHour: nat;
+   isOpen: bool;
+   startHour: nat;
+ };
+type DashboardMetrics = 
+ record {
+   outstandingInvoices: nat;
+   recentActivity: vec text;
+   totalActiveSubscriptions: nat;
+   totalClients: nat;
+   totalProducts: nat;
+   totalWebsites: nat;
+   unreviewedQuestionnaires: nat;
+ };
+type CrmClient = 
+ record {
+   activeServices: vec text;
+   briefStatus: opt text;
+   briefSubmittedAt: opt int;
+   completionPaymentCharged: bool;
+   created_at: int;
+   currentMilestone: nat;
+   email: text;
+   hasAccount: bool;
+   id: text;
+   milestoneUpdatedAt: opt int;
+   name: text;
+   notes: text;
+   onboardingBriefId: opt text;
+   phone: text;
+   projectStatus: text;
+   siteLinkLog: vec SiteLinkEntry;
+   source: text;
+ };
+type ClientMessage = 
+ record {
+   body: text;
+   createdAt: int;
+   id: text;
+   isRead: bool;
+   receiverEmail: text;
+   senderEmail: text;
+   senderName: text;
+ };
+type ClientId = principal;
+type ClientFileMetadata = 
+ record {
+   clientEmail: text;
+   fileLabel: text;
+   fileName: text;
+   id: text;
+   objectKey: text;
+   uploadedAt: int;
+   uploaderEmail: text;
+ };
+type Build = 
+ record {
+   addedAt: int;
+   category: text;
+   clientName: text;
+   description: text;
+   id: text;
+   siteUrl: text;
+   thumbnailUrl: text;
+ };
+type BlogPostId = nat;
+type BlogPost = 
+ record {
+   author: text;
+   body: text;
+   category: text;
+   created_at: Timestamp;
+   excerpt: text;
+   featuredImageCaption: text;
+   featured_image_url: opt text;
+   id: BlogPostId;
+   published_at: opt Timestamp;
+   seoMetaDescription: opt text;
+   seoMetaKeywords: opt text;
+   slug: text;
+   status: text;
+   title: text;
+   updated_at: Timestamp;
+ };
+type BillingId = nat;
+type BillingHistory = 
+ record {
+   amount: float64;
+   client_id: ClientId;
+   created_at: Timestamp;
+   description: text;
+   id: BillingId;
+   payment_date: Timestamp;
+   status: text;
+   stripe_payment_intent_id: text;
+   subscription_id: SubscriptionId;
+ };
+type AvailabilitySettings = 
+ record {
+   blockedDates: vec text;
+   timezone: opt text;
+   weeklySchedule: WeeklySchedule;
+ };
+type AdminStats = 
+ record {
+   activeProjects: nat;
+   outstandingInvoices: nat;
+   totalClients: nat;
+   unreviewedQuestionnaires: nat;
+ };
+type AdminNotification = 
+ record {
+   id: text;
+   message: text;
+   notifType: text;
+   read: bool;
+   timestamp: int;
+   title: text;
+ };
+type AdHocInvoice = 
+ record {
+   amount: float64;
+   clientId: text;
+   createdAt: int;
+   description: text;
+   dueDate: int;
+   id: nat;
+   invoiceNumber: text;
+   paidAt: opt int;
+   status: text;
+   stripeSessionId: text;
+   updatedAt: int;
+ };
+type ActivityLog = 
+ record {
+   client_id: ClientId;
+   created_at: Timestamp;
+   description: text;
+   id: ActivityId;
+   order_id: OrderId;
+   status_at_time: Status;
+ };
+type ActivityId = nat;
+service : {
+  _immutableObjectStorageBlobsAreLive: (hashes: vec blob) -> (vec bool) query;
+  _immutableObjectStorageBlobsToDelete: () -> (vec blob) query;
+  _immutableObjectStorageConfirmBlobDeletion: (blobs: vec blob) -> ();
+  _immutableObjectStorageCreateCertificate: (blobHash: text) ->
+   (_ImmutableObjectStorageCreateCertificateResult);
+  _immutableObjectStorageRefillCashier: (refillInformation:
+   opt _ImmutableObjectStorageRefillInformation) ->
+   (_ImmutableObjectStorageRefillResult);
+  _immutableObjectStorageUpdateGatewayPrincipals: () -> ();
+  _initializeAccessControl: () -> ();
+  addBuild: (adminEmail: text, clientName: text, siteUrl: text, description:
+   opt text, category: opt text, thumbnailUrl: opt text) ->
+   (variant {
+      err: text;
+      ok: Build;
+    });
+  addClient: (name: text, email: text, phone: text, source: text,
+   activeServices: vec text, onboardingBriefId: opt text) -> (text);
+  addFleetCanister: (adminEmail: text, name: text, canisterId: text) -> ();
+  addFleetSite: (adminEmail: text, name: text, canisterId: text) -> ();
+  addFleetSoftware: (adminEmail: text, name: text, canisterId: text) -> ();
+  addMarqueeLogo: (logoUrl: text, logoLabel: text, adminEmail: text) ->
+   (variant {
+      err: text;
+      ok: MarqueeLogo;
+    });
+  adminUpdateClientProfile: (adminEmail: text, clientId: text, firstName:
+   text, lastName: text, phone: text, businessName: text, businessType:
+   text) -> (variant {
+               err: text;
+               ok: text;
+             });
+  approvePurchaseRequest: (adminEmail: text, requestId: nat, successUrl:
+   text, cancelUrl: text) -> (variant {
+                                err: text;
+                                ok: text;
+                              });
+  approveReview: (adminEmail: text, reviewId: ReviewId) ->
+   (variant {
+      err: text;
+      ok;
+    });
+  assignCallerUserRole: (user: principal, role: UserRole) -> ();
+  assignMeetingToLead: (leadId: text, newDate: text, newTime: text,
+   meetingMethod: text, adminEmail: text) ->
+   (record {
+      meetLink: text;
+      ok: bool;
+    });
+  blockDate: (adminEmail: text, date: text) -> ();
+  changePassword: (args:
+   record {
+     currentPasswordHash: blob;
+     email: text;
+     newPasswordHash: blob;
+   }) -> (UpsertResult);
+  checkStripeSessionPaid: (sessionId: text) ->
+   (variant {
+      error: text;
+      notPaid;
+      paid;
+    });
+  clearGoogleCalendarConfig: (adminEmail: text) -> (variant {
+                                                      err: text;
+                                                      ok;
+                                                    });
+  clearGoogleSheetsConfig: (adminEmail: text) -> (variant {
+                                                    err: text;
+                                                    ok;
+                                                  });
+  clearNotificationLog: (adminEmail: text) -> (variant {
+                                                 err: text;
+                                                 ok;
+                                               });
+  clearPendingPushNotifications: (adminEmail: text) ->
+   (variant {
+      err: text;
+      ok: text;
+    });
+  convertLeadToClient: (adminEmail: text, leadId: text, name: text, email:
+   text, phone: text, source: text, activeServices: vec text,
+   onboardingBriefId: opt text) -> (text);
+  createAdHocInvoiceSession: (clientId: text, adminEmail: text, description:
+   text, amountCents: nat, successUrl: text, cancelUrl: text) ->
+   (variant {
+      err: text;
+      ok: text;
+    });
+  createBlogPost: (adminEmail: text, title: text, slug: text, category: 
+   text, excerpt: text, body: text, author: text, featured_image_url:
+   opt text, featuredImageCaption: text, status: text, seoMetaDescription:
+   opt text, seoMetaKeywords: opt text) -> (UpsertResult);
+  createCheckoutSession: (items: vec ShoppingItem, successUrl: text,
+   cancelUrl: text) -> (text);
+  createCompletionPaymentSession: (clientId: text, adminEmail: text,
+   successUrl: text, cancelUrl: text) -> (text);
+  createDraftLead: (name: text, email: text, phone: text, "service": 
+   text, adminEmail: text) -> (record {
+                                 leadId: text;
+                                 ok: bool;
+                               });
+  createEditRequest: (requestType: text, pageSection: text, description:
+   text, attachmentUrl: text) -> (UpsertResult);
+  createLead: (path: text, name: text, email: text, business: text, message:
+   text) -> (text);
+  createPortfolioItem: (adminEmail: text, client_name: text, site_url: 
+   text, thumbnail_url: text, imageCaption: text, tier_code: text,
+   description: text, is_featured: bool, seoMetaDescription: opt text,
+   seoMetaKeywords: opt text) -> (variant {
+                                    err: text;
+                                    ok: text;
+                                  });
+  createPurchaseRequest: (clientEmail: text, productId: nat, frequency:
+   text) -> (variant {
+               err: text;
+               ok: text;
+             });
+  createStripePaymentSession: (invoiceId: text, amountCents: nat, successUrl:
+   text, cancelUrl: text) -> (variant {
+                                err: text;
+                                ok: text;
+                              });
+  declinePurchaseRequest: (adminEmail: text, requestId: nat, reason:
+   opt text) -> (variant {
+                   err: text;
+                   ok: text;
+                 });
+  deleteBlogPost: (adminEmail: text, id: BlogPostId) -> ();
+  deleteBuild: (adminEmail: text, buildId: text) ->
+   (variant {
+      err: text;
+      ok: bool;
+    });
+  deleteClient: (adminEmail: text, clientId: text) ->
+   (variant {
+      err: text;
+      ok;
+    });
+  deleteClientFile: (adminEmail: text, fileId: text) ->
+   (variant {
+      err: text;
+      ok: bool;
+    });
+  deleteLead: (adminEmail: text, leadId: text) -> ();
+  deleteMarqueeLogo: (id: text, adminEmail: text) ->
+   (variant {
+      err: text;
+      ok: bool;
+    });
+  deletePortfolioItem: (adminEmail: text, id: text) -> (UpsertResult);
+  deleteQuestionnaire: (adminEmail: text, questionnaireId:
+   QuestionnaireId) -> ();
+  editBuild: (adminEmail: text, id: text, clientName: text, siteUrl: 
+   text, description: opt text, category: opt text, thumbnailUrl:
+   opt text) -> (variant {
+                   err: text;
+                   ok: Build;
+                 });
+  generateAdminOTP: (adminEmail: text) -> (text);
+  generatePartnerLink: (adminEmail: text, partnerName: text, partnerEmail:
+   text) -> (text);
+  getAdHocClientInvoices: (adminEmail: text, clientId: text) ->
+   (vec AdHocInvoice);
+  getAdminAllActivity: () -> (vec ActivityLog) query;
+  getAdminAllClients: (adminEmail: text) -> (vec UserProfile);
+  getAdminAllOrders: (adminEmail: text) -> (vec Order) query;
+  getAdminAllQuestionnaires: (adminEmail: text) -> (vec Questionnaire) query;
+  getAdminNotifications: (adminEmail: text) -> (vec AdminNotification);
+  getAdminStats: () -> (AdminStats) query;
+  getAllBlogPostsAdmin: () -> (vec BlogPost);
+  getAllPortfolioAdmin: () -> (vec PortfolioItem);
+  getAllProductsAdmin: () -> (vec Product);
+  getAllSiteText: () -> (vec record {
+                               text;
+                               text;
+                             }) query;
+  getApprovedReviews: () -> (vec Review) query;
+  getAvailability: () -> (AvailabilitySettings) query;
+  getBlogPostBySlug: (slug: text) -> (opt BlogPost) query;
+  getBuilds: (adminEmail: text) -> (vec Build);
+  getCallerUserRole: () -> (UserRole) query;
+  getCanisterCycles: (canisterId: text) -> (variant {
+                                              err: text;
+                                              ok: nat;
+                                            });
+  getCategoryVisibility: () -> (vec record {
+                                      text;
+                                      bool;
+                                    }) query;
+  getClientBriefStatus: (email: text) -> (opt text);
+  getClientByEmail: (email: text) -> (opt CrmClient);
+  getClientFileUrl: (callerEmail: text, fileId: text) ->
+   (variant {
+      err: text;
+      ok: text;
+    }) query;
+  getClientInvoices: (clientPrincipal: principal) -> (vec Invoice) query;
+  getClientMilestone: (clientId: text) -> (variant {
+                                             err: text;
+                                             ok: opt nat;
+                                           });
+  getClientOrders: (client: principal) -> (vec Order) query;
+  getClientPurchaseRequests: (clientEmail: text) ->
+   (vec PurchaseRequest) query;
+  getClients: (adminEmail: text) -> (vec CrmClient);
+  getConversionStats: (adminEmail: text, fromTs: opt int, toTs: opt int) ->
+   (record {
+      conversionRate: float64;
+      convertedLeads: nat;
+      totalLeads: nat;
+    }) query;
+  getCycles: () -> (nat) query;
+  getDashboardMetrics: () -> (DashboardMetrics) query;
+  getEmailLogs: (adminEmail: text) -> (vec EmailLog) query;
+  getEmailTemplates: () -> (vec EmailTemplate) query;
+  getFilesForClient: (callerEmail: text, clientEmail: text) ->
+   (vec ClientFileMetadata) query;
+  getFleetSites: () -> (vec FleetCanister) query;
+  getFleetSoftware: () -> (vec FleetCanister) query;
+  getGoogleCalendarConfig: (adminEmail: text) ->
+   (variant {
+      err: text;
+      ok: GoogleCalendarConfig;
+    });
+  getGoogleSheetsConfig: (adminEmail: text) ->
+   (variant {
+      err: text;
+      ok: GoogleSheetsConfig;
+    });
+  getLeads: (adminEmail: text) -> (vec Lead) query;
+  getMarqueeLogos: () -> (vec MarqueeLogo) query;
+  getMessages: (callerEmail: text, targetClientEmail: text) ->
+   (vec ClientMessage) query;
+  getMyActivity: () -> (vec ActivityLog) query;
+  getMyAdHocInvoices: () -> (vec AdHocInvoice) query;
+  getMyBillingHistory: () -> (vec BillingHistory) query;
+  getMyEditRequests: () -> (vec EditRequest) query;
+  getMyInvoices: () -> (vec Invoice) query;
+  getMyMostRecentQuestionnaire: () -> (opt Questionnaire) query;
+  getMyOrders: () -> (vec Order) query;
+  getMyProfile: (email: text) -> (opt UserProfile);
+  getMyQuestionnaires: () -> (vec Questionnaire) query;
+  getMyReferralClicks: () -> (nat);
+  getMyReferralCode: (userEmail: text) -> (opt text);
+  getMyReferralConversions: (userEmail: text) -> (nat);
+  getMyReview: (clientEmail: text) -> (opt Review) query;
+  getMySubscriptions: () -> (vec Subscription) query;
+  getNextAvailableSlot: () -> (record {
+                                 date: text;
+                                 time: text;
+                               }) query;
+  getNotificationLog: (adminEmail: text) ->
+   (variant {
+      err: text;
+      ok: vec NotificationLogEntry;
+    });
+  getOrCreateMyReferralCode: () -> (text);
+  getPendingPushNotifications: (adminEmail: text) ->
+   (variant {
+      err: text;
+      ok: vec PendingNotification;
+    });
+  getPendingReviews: (adminEmail: text) -> (vec Review) query;
+  getPortalShopProductIds: () -> (vec nat) query;
+  getPortalShopProducts: () -> (vec Product) query;
+  getProducts: () -> (vec Product) query;
+  getProductsByType: (productType: text) -> (vec Product) query;
+  getPublicAvailability: () -> (AvailabilitySettings) query;
+  getPublicBuilds: () -> (vec Build) query;
+  getPublicBuildsCount: () -> (nat) query;
+  getPublishedBlogPosts: () -> (vec BlogPost) query;
+  getPublishedPortfolio: () -> (vec PortfolioItem) query;
+  getPurchaseRequests: (adminEmail: text) ->
+   (variant {
+      err: text;
+      ok: vec PurchaseRequest;
+    });
+  getPushSubscription: (adminEmail: text) ->
+   (variant {
+      err: text;
+      ok: opt PushSubscription;
+    });
+  getQuestionDefinitions: (tierCode: text) -> (vec QuestionDefinition) query;
+  getQuestionnaireByClientId: (clientId: ClientId) ->
+   (opt Questionnaire) query;
+  getReferralStats: (adminEmail: text) -> (vec ReferralStat);
+  getRejectedReviews: (adminEmail: text) -> (vec Review) query;
+  getRescheduleHistory: (adminEmail: text, leadId: text) -> (vec int) query;
+  getRescheduleLeadByToken: (token: text) ->
+   (opt record {
+          isExpired: bool;
+          lead: Lead;
+        }) query;
+  getSiteLinkLog: (adminEmail: text, clientId: text) ->
+   (variant {
+      err: text;
+      ok: vec SiteLinkEntry;
+    }) query;
+  getSiteText: (key: text) -> (opt text) query;
+  getStripeCharges: (adminEmail: text) -> (variant {
+                                             err: text;
+                                             ok: text;
+                                           });
+  getStripeCustomers: (adminEmail: text) -> (variant {
+                                               err: text;
+                                               ok: text;
+                                             });
+  getStripeDashboardData: (adminEmail: text) ->
+   (variant {
+      err: text;
+      ok: text;
+    });
+  getStripePayouts: (adminEmail: text) -> (variant {
+                                             err: text;
+                                             ok: text;
+                                           });
+  getStripePublishableKey: () -> (text) query;
+  getStripeSessionStatus: (sessionId: text) -> (StripeSessionStatus);
+  getStripeSubscriptions: (adminEmail: text) ->
+   (variant {
+      err: text;
+      ok: text;
+    });
+  getStripeTestMode: () -> (bool) query;
+  getUnreadMessageCounts: (adminEmail: text) ->
+   (vec record {
+          text;
+          nat;
+        }) query;
+  getVapidPublicKey: () -> (text) query;
+  handleStripeWebhook: (payload: text, _signature: text) ->
+   (variant {
+      err: text;
+      ok: text;
+    });
+  helpRequest: (senderName: text, senderEmail: text, subject: text, message:
+   text, priority: text, attachmentBase64: text, attachmentMimeType: 
+   text) -> ();
+  initAdminAccount: (email: text, passwordHash: blob) -> ();
+  isCallerAdmin: () -> (bool) query;
+  isGoogleCalendarConfigured: () -> (bool) query;
+  isGoogleSheetsConfigured: () -> (bool) query;
+  isStripeConfigured: () -> (bool) query;
+  isStripeTestMode: () -> (bool) query;
+  login: (args: record {
+                  email: text;
+                  passwordHash: blob;
+                }) -> (LoginResult);
+  markAllNotificationsRead: (adminEmail: text) -> ();
+  markCompletionPaymentCharged: (clientId: text, adminEmail: text) ->
+   (variant {
+      err: text;
+      ok;
+    });
+  markInvoicePaid: (invoiceId: text, paymentIntentId: text) -> (UpsertResult);
+  markMessagesRead: (callerEmail: text, targetClientEmail: text) ->
+   (variant {
+      err: text;
+      ok: bool;
+    });
+  markNotificationRead: (adminEmail: text, id: text) -> ();
+  markQuestionnaireReviewed: (adminEmail: text, questionnaireId:
+   QuestionnaireId) -> ();
+  publishBlogPost: (adminEmail: text, id: BlogPostId) -> ();
+  publishPortfolioItem: (adminEmail: text, id: text) -> (UpsertResult);
+  registerUser: (args:
+   record {
+     email: text;
+     firstName: text;
+     lastName: text;
+     passwordHash: blob;
+   }) -> (UpsertResult);
+  rejectReview: (adminEmail: text, reviewId: ReviewId) ->
+   (variant {
+      err: text;
+      ok;
+    });
+  removeFleetCanister: (adminEmail: text, canisterId: text) -> ();
+  removeFleetSite: (adminEmail: text, canisterId: text) -> ();
+  removeFleetSoftware: (adminEmail: text, canisterId: text) -> ();
+  removePushSubscription: (adminEmail: text) ->
+   (variant {
+      err: text;
+      ok: text;
+    });
+  reorderMarqueeLogos: (orderedIds: vec text, adminEmail: text) ->
+   (variant {
+      err: text;
+      ok: bool;
+    });
+  requestPasswordReset: (email: text) -> (text);
+  rescheduleLead: (token: text, newDate: text, newTime: text, meetingMethod:
+   text) -> (record {
+               message: text;
+               ok: bool;
+             });
+  resendEmail: (adminEmail: text, clientId: text, templateKey: text) ->
+   (bool);
+  resendSiteLink: (adminEmail: text, clientId: text, url: text) ->
+   (variant {
+      err: text;
+      ok;
+    });
+  resetPasswordWithToken: (token: text, newPasswordHash: blob) -> (text);
+  saveEmailTemplate: (adminEmail: text, trigger_key: text, subject: text,
+   body: text) -> ();
+  savePushSubscription: (adminEmail: text, endpoint: text, p256dh: text,
+   auth: text) -> (variant {
+                     err: text;
+                     ok: text;
+                   });
+  sendAccountDeletionRequest: () -> ();
+  sendDepositInvoice: (clientPrincipal: principal, clientEmail: text,
+   amountCents: nat, description: text, dueDate: Timestamp) -> (text);
+  sendMessage: (callerEmail: text, targetClientEmail: text, body: text) ->
+   (variant {
+      err: text;
+      ok: ClientMessage;
+    });
+  sendOrderStatusEmail: (clientPrincipal: principal, status: Status,
+   clientEmail: text) -> ();
+  sendRescheduleLink: (adminEmail: text, leadId: text) ->
+   (record {
+      message: text;
+      success: bool;
+    });
+  sendSiteLink: (adminEmail: text, clientId: text, siteUrl: text) ->
+   (variant {
+      err: text;
+      ok: text;
+    });
+  setAvailability: (adminEmail: text, settings: AvailabilitySettings) -> ();
+  setGoogleCalendarConfig: (config: GoogleCalendarConfig, adminEmail:
+   text) -> (variant {
+               err: text;
+               ok;
+             });
+  setGoogleSheetsConfig: (config: GoogleSheetsConfig, adminEmail: text) ->
+   (variant {
+      err: text;
+      ok;
+    });
+  setStripeConfiguration: (config: StripeConfiguration, adminEmail: text) ->
+   ();
+  setStripePublishableKey: (key: text, adminEmail: text) -> ();
+  setStripeSecretKey: (key: text, adminEmail: text) -> ();
+  setStripeTestMode: (testMode: bool, adminEmail: text) -> ();
+  setStripeWebhookSecret: (secret: text, adminEmail: text) -> ();
+  setVapidKeys: (adminEmail: text, privateKey: text, publicKey: text) ->
+   (variant {
+      err: text;
+      ok: text;
+    });
+  submitCancellationRequest: (subscriptionId: text) -> (UpsertResult);
+  submitQuestionnaire: (questionnaireType: text, answers: text) -> (nat);
+  submitReview: (clientEmail: text, rating: nat, reviewText: text, jobTitle:
+   text) -> (variant {
+               err: text;
+               ok: ReviewId;
+             });
+  togglePortalShopProduct: (adminEmail: text, productId: nat) ->
+   (variant {
+      err: text;
+      ok: text;
+    });
+  toggleProductStatus: (adminEmail: text, productId: text) -> (UpsertResult);
+  trackReferralClick: (code: text) -> ();
+  trackReferralConversion: (referralCode: text, buyerEmail: text, buyerName:
+   text) -> ();
+  transform: (input: TransformationInput) -> (TransformationOutput) query;
+  unblockDate: (adminEmail: text, date: text) -> ();
+  unpublishBlogPost: (adminEmail: text, id: BlogPostId) -> ();
+  unpublishPortfolioItem: (adminEmail: text, id: text) -> (UpsertResult);
+  updateBlogPost: (adminEmail: text, id: BlogPostId, title: text, slug: 
+   text, category: text, excerpt: text, body: text, author: text,
+   featured_image_url: opt text, featuredImageCaption: text, status: 
+   text, seoMetaDescription: opt text, seoMetaKeywords: opt text) -> ();
+  updateCategoryVisibility: (adminEmail: text, category: text, active:
+   bool) -> (UpsertResult);
+  updateClientBriefStatus: (newStatus: text) -> (UpsertResult);
+  updateClientHasAccount: (clientId: text, hasAccount: bool, adminEmail:
+   text) -> (UpsertResult);
+  updateClientMilestone: (adminEmail: text, clientId: text, newMilestone:
+   nat) -> (variant {
+              err: text;
+              ok;
+            });
+  updateClientNotes: (clientId: text, notes: text, adminEmail: text) ->
+   (UpsertResult);
+  updateClientStatus: (adminEmail: text, clientId: text, newStatus: text) ->
+   (UpsertResult);
+  updateLeadStatus: (adminEmail: text, leadId: text, newStatus: text) ->
+   (UpsertResult);
+  updateMarqueeLogo: (id: text, logoUrl: text, logoLabel: text, adminEmail:
+   text) -> (variant {
+               err: text;
+               ok: MarqueeLogo;
+             });
+  updateOrderStatus: (adminEmail: text, orderId: text, newStatus: text) ->
+   (UpsertResult);
+  updatePortfolioItem: (adminEmail: text, id: text, client_name: text,
+   site_url: text, thumbnail_url: text, imageCaption: text, tier_code: 
+   text, description: text, is_featured: bool, seoMetaDescription: opt text,
+   seoMetaKeywords: opt text) -> (UpsertResult);
+  updateProductPrice: (adminEmail: text, productId: text, newPriceMonthly:
+   opt float64, newPriceAnnual: opt float64, newPriceOnetime: opt float64) ->
+   (UpsertResult);
+  updateProfile: (args:
+   record {
+     businessName: text;
+     businessType: text;
+     email: text;
+     firstName: text;
+     lastName: text;
+     phone: text;
+   }) -> (UpsertResult);
+  updateQuestionDefinitions: (adminEmail: text, tierCode: text, questions:
+   vec QuestionDefinition) -> (variant {
+                                 err: text;
+                                 ok;
+                               });
+  updateSiteText: (key: text, value: text, adminEmail: text) -> (bool);
+  uploadFileToClient: (adminEmail: text, clientEmail: text, fileData: 
+   blob, fileName: text, fileLabel: text) ->
+   (variant {
+      err: text;
+      ok: ClientFileMetadata;
+    });
+  verifyAdminOTP: (adminEmail: text, otp: text) -> (text);
+  verifyAndRecordPurchase: (sessionId: text, email: text, name: text,
+   services: vec text) -> (variant {
+                             err: text;
+                             ok: text;
+                           });
+  verifySession: (sessionToken: text) -> (bool) query;
+}

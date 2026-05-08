@@ -1,0 +1,711 @@
+// Version: 1.0.0
+type ActivityId__1050191648 = Nat;
+type ActivityLog__439802922 =
+  {
+    client_id : ClientId__894050839;
+    created_at : Timestamp__672038077;
+    description : Text;
+    id : ActivityId__1050191648;
+    order_id : OrderId__81195289;
+    status_at_time : Status__867666888
+  };
+type AdHocInvoice__939863957 =
+  {
+    amount : Float;
+    clientId : Text;
+    createdAt : Int;
+    description : Text;
+    dueDate : Int;
+    id : Nat;
+    invoiceNumber : Text;
+    paidAt : ?Int;
+    status : Text;
+    stripeSessionId : Text;
+    updatedAt : Int
+  };
+type AdminNotification__695518885 =
+  {
+    id : Text;
+    message : Text;
+    notifType : Text;
+    read : Bool;
+    timestamp : Int;
+    title : Text
+  };
+type AdminOtp__641273090 = {expiry : Int; otp : Text; used : Bool};
+type AvailabilitySettings__905216026 =
+  {
+    blockedDates : [Text];
+    timezone : ?Text;
+    weeklySchedule : WeeklySchedule__905542794
+  };
+type BillingHistory__158551636 =
+  {
+    amount : Float;
+    client_id : ClientId__894050839;
+    created_at : Timestamp__672038077;
+    description : Text;
+    id : BillingId__834551210;
+    payment_date : Timestamp__672038077;
+    status : Text;
+    stripe_payment_intent_id : Text;
+    subscription_id : SubscriptionId__825880366
+  };
+type BillingId__834551210 = Nat;
+type BlogPostId__971830642 = Nat;
+type BlogPost__543622485 =
+  {
+    author : Text;
+    body : Text;
+    category : Text;
+    created_at : Timestamp__672038077;
+    excerpt : Text;
+    featuredImageCaption : Text;
+    featured_image_url : ?Text;
+    id : BlogPostId__971830642;
+    published_at : ?Timestamp__672038077;
+    seoMetaDescription : ?Text;
+    seoMetaKeywords : ?Text;
+    slug : Text;
+    status : Text;
+    title : Text;
+    updated_at : Timestamp__672038077
+  };
+type BuildV0__866641954 =
+  {addedAt : Int; clientName : Text; id : Text; siteUrl : Text};
+type BuildV1__1037633325 =
+  {
+    addedAt : Int;
+    category : Text;
+    clientName : Text;
+    description : Text;
+    id : Text;
+    siteUrl : Text
+  };
+type Build__713870829 =
+  {
+    addedAt : Int;
+    category : Text;
+    clientName : Text;
+    description : Text;
+    id : Text;
+    siteUrl : Text;
+    thumbnailUrl : Text
+  };
+type ClientFileMetadata__846853807 =
+  {
+    clientEmail : Text;
+    fileLabel : Text;
+    fileName : Text;
+    id : Text;
+    objectKey : Text;
+    uploadedAt : Int;
+    uploaderEmail : Text
+  };
+type ClientId__894050839 = Principal;
+type ClientMessage__913388841 =
+  {
+    body : Text;
+    createdAt : Int;
+    id : Text;
+    isRead : Bool;
+    receiverEmail : Text;
+    senderEmail : Text;
+    senderName : Text
+  };
+type CrmClientV0__658242545 =
+  {
+    activeServices : [Text];
+    briefStatus : ?Text;
+    briefSubmittedAt : ?Int;
+    completionPaymentCharged : Bool;
+    created_at : Int;
+    currentMilestone : Nat;
+    email : Text;
+    hasAccount : Bool;
+    id : Text;
+    milestoneUpdatedAt : ?Int;
+    name : Text;
+    notes : Text;
+    onboardingBriefId : ?Text;
+    phone : Text;
+    projectStatus : Text;
+    source : Text
+  };
+type CrmClient__731363100 =
+  {
+    activeServices : [Text];
+    briefStatus : ?Text;
+    briefSubmittedAt : ?Int;
+    completionPaymentCharged : Bool;
+    created_at : Int;
+    currentMilestone : Nat;
+    email : Text;
+    hasAccount : Bool;
+    id : Text;
+    milestoneUpdatedAt : ?Int;
+    name : Text;
+    notes : Text;
+    onboardingBriefId : ?Text;
+    phone : Text;
+    projectStatus : Text;
+    siteLinkLog : [SiteLinkEntry__1033428396];
+    source : Text
+  };
+type Data__791452850<K, V> =
+  {var count : Nat__490723111; kvs : [var ?(K, V)]};
+type DaySchedule__841151278 = {endHour : Nat; isOpen : Bool; startHour : Nat};
+type EditRequestId__1064816119 = Nat;
+type EditRequest__842627481 =
+  {
+    attachment_url : ?Text;
+    client_id : ClientId__894050839;
+    created_at : Timestamp__672038077;
+    description : Text;
+    id : EditRequestId__1064816119;
+    order_id : ?OrderId__81195289;
+    page_or_section : Text;
+    request_number : Text;
+    request_type : Text;
+    status : Text;
+    updated_at : Timestamp__672038077
+  };
+type EmailLog__577630079 =
+  {
+    id : Text;
+    recipientEmail : Text;
+    status : Text;
+    templateName : Text;
+    timestamp : Int
+  };
+type EmailTemplateId__582221798 = Nat;
+type EmailTemplate__505785345 =
+  {
+    body : Text;
+    id : EmailTemplateId__582221798;
+    subject : Text;
+    trigger_key : Text;
+    updated_at : Timestamp__672038077
+  };
+type FleetCanister__111133031 =
+  {created_at : Timestamp__672038077; id : Text; name : Text};
+type GoogleCalendarConfig__227346125 =
+  {
+    calendarId : Text;
+    defaultDurationMinutes : Nat;
+    scriptUrl : Text;
+    titleTemplate : Text
+  };
+type GoogleSheetsConfig__719633891 = {scriptUrl : Text; sheetId : Text};
+type Internal__8484328<K, V> =
+  {children : [var ?Node__46230540<K, V>]; data : Data__791452850<K, V>};
+type InvoiceId__400649173 = Nat;
+type Invoice__772203955 =
+  {
+    amount : Float;
+    client_id : ClientId__894050839;
+    created_at : Timestamp__672038077;
+    description : Text;
+    due_date : Timestamp__672038077;
+    id : InvoiceId__400649173;
+    invoice_number : Text;
+    order_id : ?OrderId__81195289;
+    paid_at : ?Timestamp__672038077;
+    status : Text;
+    stripe_payment_intent_id : Text;
+    updated_at : Timestamp__672038077
+  };
+type LeadV0__790934471 =
+  {
+    business : Text;
+    created_at : Timestamp__672038077;
+    email : Text;
+    id : Text;
+    message : Text;
+    name : Text;
+    path : Text;
+    status : Text
+  };
+type LeadV1__18987383 =
+  {
+    business : Text;
+    created_at : Timestamp__672038077;
+    email : Text;
+    id : Text;
+    meetLink : Text;
+    meetingMethod : Text;
+    message : Text;
+    name : Text;
+    path : Text;
+    status : Text
+  };
+type LeadV2__456318520 =
+  {
+    business : Text;
+    created_at : Timestamp__672038077;
+    email : Text;
+    id : Text;
+    isDraft : Bool;
+    meetLink : Text;
+    meetingMethod : Text;
+    message : Text;
+    name : Text;
+    path : Text;
+    rescheduleToken : Text;
+    status : Text
+  };
+type LeadV3__578296522 =
+  {
+    business : Text;
+    created_at : Timestamp__672038077;
+    email : Text;
+    id : Text;
+    isDraft : Bool;
+    meetLink : Text;
+    meetingMethod : Text;
+    message : Text;
+    name : Text;
+    path : Text;
+    rescheduleLinkSentAt : ?Int;
+    rescheduleToken : Text;
+    status : Text
+  };
+type LeadV4__1065362043 =
+  {
+    business : Text;
+    created_at : Timestamp__672038077;
+    email : Text;
+    id : Text;
+    isDraft : Bool;
+    meetLink : Text;
+    meetingMethod : Text;
+    message : Text;
+    name : Text;
+    path : Text;
+    rescheduleHistory : [Int];
+    rescheduleLinkSentAt : ?Int;
+    rescheduleToken : Text;
+    status : Text
+  };
+type Lead__21276013 =
+  {
+    business : Text;
+    convertedAt : ?Int;
+    created_at : Timestamp__672038077;
+    email : Text;
+    id : Text;
+    isDraft : Bool;
+    meetLink : Text;
+    meetingMethod : Text;
+    message : Text;
+    name : Text;
+    path : Text;
+    rescheduleHistory : [Int];
+    rescheduleLinkSentAt : ?Int;
+    rescheduleToken : Text;
+    status : Text
+  };
+type Leaf__809889148<K, V> = {data : Data__791452850<K, V>};
+type Map__158565046<K, V> = Map__297112838<K, V>;
+type Map__297112838<K, V> =
+  {var root : Node__46230540<K, V>; var size : Nat__490723111};
+type Map__605269027<K, V> = Map__158565046<K, V>;
+type MarqueeLogo__75021648 =
+  {addedAt : Int; id : Text; logoLabel : Text; logoUrl : Text; order : Nat};
+type Nat__490723111 = Nat__920180692;
+type Nat__920180692 = Nat;
+type Node__46230540<K, V> =
+  {#internal : Internal__8484328<K, V>; #leaf : Leaf__809889148<K, V>};
+type NotificationLogEntry__1302302 =
+  {
+    body : Text;
+    event : Text;
+    id : Text;
+    timestamp : Int;
+    title : Text;
+    url : Text
+  };
+type OrderId__81195289 = Nat;
+type Order__762448211 =
+  {
+    client_id : ClientId__894050839;
+    created_at : Timestamp__672038077;
+    delivery_window : Text;
+    id : OrderId__81195289;
+    launch_target : Text;
+    status : Status__867666888;
+    tier_code : Text;
+    updated_at : Timestamp__672038077
+  };
+type PasswordResetToken__20946470 =
+  {email : Text; expiresAt : Int; token : Text; used : Bool};
+type PendingNotification__275886244 =
+  {body : Text; createdAt : Int; id : Text; title : Text; url : Text};
+type PortfolioItemV0__468649299 =
+  {
+    client_name : Text;
+    created_at : Timestamp__672038077;
+    description : Text;
+    id : Text;
+    imageCaption : Text;
+    is_featured : Bool;
+    published : Bool;
+    site_url : Text;
+    thumbnail_url : Text;
+    tier_code : Text
+  };
+type PortfolioItem__950518858 =
+  {
+    client_name : Text;
+    created_at : Timestamp__672038077;
+    description : Text;
+    id : Text;
+    imageCaption : Text;
+    is_featured : Bool;
+    published : Bool;
+    seoMetaDescription : ?Text;
+    seoMetaKeywords : ?Text;
+    site_url : Text;
+    thumbnail_url : Text;
+    tier_code : Text
+  };
+type ProductId__779996770 = Nat;
+type ProductV1__742818732 =
+  {
+    active : Bool;
+    created_at : Timestamp__672038077;
+    id : ProductId__779996770;
+    name : Text;
+    price_annual : ?Float;
+    price_monthly : ?Float;
+    price_onetime : ?Float;
+    product_type : Text
+  };
+type Product__853085059 =
+  {
+    active : Bool;
+    created_at : Timestamp__672038077;
+    description : Text;
+    id : ProductId__779996770;
+    name : Text;
+    price_annual : ?Float;
+    price_monthly : ?Float;
+    price_onetime : ?Float;
+    product_type : Text;
+    tier_code : ?Text
+  };
+type PurchaseRequest__152559268 =
+  {
+    amount : Float;
+    checkoutUrl : ?Text;
+    clientEmail : Text;
+    declineReason : ?Text;
+    frequency : Text;
+    id : Nat;
+    productId : Nat;
+    productName : Text;
+    requestedAt : Int;
+    respondedAt : ?Int;
+    status : Text
+  };
+type PushSubscription__1071553013 =
+  {auth : Text; endpoint : Text; p256dh : Text};
+type QuestionDefinition__638419058 =
+  {
+    description : Text;
+    id : Text;
+    inputType : Text;
+    options : [Text];
+    placeholder : Text;
+    questionLabel : Text;
+    required : Bool;
+    sortOrder : Nat;
+    tierCode : Text
+  };
+type QuestionnaireId__365725399 = Nat;
+type Questionnaire__629295770 =
+  {
+    answers : Text;
+    client_id : ClientId__894050839;
+    created_at : Timestamp__672038077;
+    id : QuestionnaireId__365725399;
+    order_id : OrderId__81195289;
+    progress : Nat;
+    reviewed : Bool;
+    reviewed_at : ?Timestamp__672038077;
+    submitted : Bool;
+    submitted_at : ?Timestamp__672038077;
+    tier_code : Text;
+    updated_at : Timestamp__672038077
+  };
+type ReviewId__768921902 = Text;
+type Review__422344017 =
+  {
+    clientEmail : Text;
+    clientName : Text;
+    id : ReviewId__768921902;
+    jobTitle : Text;
+    rating : Nat;
+    reviewText : Text;
+    status : Text;
+    submittedAt : Int
+  };
+type SiteLinkEntry__1033428396 = {sentAt : Int; url : Text};
+type Status__867666888 =
+  {
+    #buildInProgress;
+    #cancelled;
+    #depositReceived;
+    #depositSent;
+    #draftReady;
+    #launching;
+    #live;
+    #paused;
+    #questionnaireComplete;
+    #questionnairePending;
+    #revisionsInProgress
+  };
+type StripeConfiguration__96897619 =
+  {allowedCountries : [Text]; secretKey : Text};
+type SubscriptionId__825880366 = Nat;
+type Subscription__231062474 =
+  {
+    billing_cycle : Text;
+    client_id : ClientId__894050839;
+    created_at : Timestamp__672038077;
+    id : SubscriptionId__825880366;
+    next_payment_date : Timestamp__672038077;
+    plan_code : Text;
+    plan_name : Text;
+    status : Text;
+    stripe_subscription_id : Text;
+    updated_at : Timestamp__672038077
+  };
+type Timestamp__672038077 = Int;
+type UserProfile__491224006 =
+  {
+    businessName : Text;
+    businessType : Text;
+    created_at : Timestamp__672038077;
+    email : Text;
+    firstName : Text;
+    lastName : Text;
+    passwordHash : Blob;
+    phone : Text;
+    role : Text
+  };
+type UserRole__1054455867 = {#admin; #guest; #user};
+type WeeklySchedule__905542794 =
+  {
+    friday : DaySchedule__841151278;
+    monday : DaySchedule__841151278;
+    saturday : DaySchedule__841151278;
+    sunday : DaySchedule__841151278;
+    thursday : DaySchedule__841151278;
+    tuesday : DaySchedule__841151278;
+    wednesday : DaySchedule__841151278
+  };
+actor {
+  stable EMAIL_SESSION_TTL_NS : Int;
+  stable LEAD_RATE_LIMIT : Nat;
+  stable LEAD_RATE_WINDOW_NS : Int;
+  stable MAX_ADHOC_INVOICES : Nat;
+  stable MAX_CLIENTS : Nat;
+  stable MAX_EMAIL_FIRED_SESSIONS : Nat;
+  stable MAX_EMAIL_LOGS : Nat;
+  stable MAX_FLEET : Nat;
+  stable MAX_LEADS : Nat;
+  stable MAX_NOTIFICATIONS : Nat;
+  stable MAX_PASSWORD_RESET_TOKENS : Nat;
+  stable MAX_PORTFOLIO : Nat;
+  stable MAX_REFERRAL_CLICKS : Nat;
+  stable MAX_REFERRAL_CODES : Nat;
+  stable MAX_REFERRAL_CONVERTS : Nat;
+  stable MAX_REFERRAL_NAMES : Nat;
+  stable MAX_SITE_TEXT : Nat;
+  stable RESET_RATE_LIMIT : Nat;
+  stable RESET_WINDOW_NS : Int;
+  stable var SELF_CANISTER_ID : Text;
+  stable _adminEmail : Text;
+  stable _adminEmailShort : Text;
+  stable var _adminSeeded : Bool;
+  stable _knownCategories : [Text];
+  stable var _migrationAccountWipe : Bool;
+  stable var _migrationAdminElevation : Bool;
+  stable var _migrationBlogFeaturedImageCaption : Bool;
+  stable var _migrationBlogSeoFields : Bool;
+  stable var _migrationCompletionPaymentCharged : Bool;
+  stable var _migrationLeadConvertedAt : Bool;
+  stable var _migrationLeadMeetingFields : Bool;
+  stable var _migrationLeadRescheduleFields : Bool;
+  stable var _migrationLeadRescheduleHistory : Bool;
+  stable var _migrationLeadRescheduleLinkSentAt : Bool;
+  stable var _migrationPortfolioImageCaption : Bool;
+  stable var _migrationPortfolioSeoFields : Bool;
+  stable var _purchaseRequestIdCounter : Nat;
+  stable var _questionDefsSeedDone : Bool;
+  stable var _schemaVersion : Nat;
+  stable var _stableActivities : [ActivityLog__439802922];
+  stable var _stableAdHocInvoices : [AdHocInvoice__939863957];
+  stable var _stableAdminNotifications : [AdminNotification__695518885];
+  stable var _stableAdminOtps : [(Text, AdminOtp__641273090)];
+  stable var _stableAvailabilitySettings : ?AvailabilitySettings__905216026;
+  stable var _stableBillingHistory : [BillingHistory__158551636];
+  stable var _stableBlogPosts : [BlogPost__543622485];
+  stable var _stableBuilds : [BuildV0__866641954];
+  stable var _stableBuildsLatest : [Build__713870829];
+  stable var _stableBuildsNew : [BuildV1__1037633325];
+  stable var _stableCatalog : [(ProductId__779996770, Product__853085059)];
+  stable var _stableCategoryVisibility : [(Text, Bool)];
+  stable var _stableClientFiles : [ClientFileMetadata__846853807];
+  stable var _stableClientMessages : [ClientMessage__913388841];
+  stable var _stableClients : [(Text, CrmClientV0__658242545)];
+  stable var _stableClientsNew : [(Text, CrmClient__731363100)];
+  stable var _stableEditRequests : [EditRequest__842627481];
+  stable var _stableEmailFiredSessions : [(Text, Int)];
+  stable var _stableEmailFiredSessionsV1 : [Text];
+  stable var _stableEmailLogs : [EmailLog__577630079];
+  stable var _stableEmailTemplates : [EmailTemplate__505785345];
+  stable var _stableFleet : [FleetCanister__111133031];
+  stable var _stableFleetSites : [FleetCanister__111133031];
+  stable var _stableFleetSoftware : [FleetCanister__111133031];
+  stable var _stableGoogleCalendarConfig : ?GoogleCalendarConfig__227346125;
+  stable var _stableGoogleSheetsConfig : ?GoogleSheetsConfig__719633891;
+  stable var _stableInvoices : [Invoice__772203955];
+  stable var _stableLeadRateLimits : [(Principal, [Int])];
+  stable var _stableLeads : [(Text, LeadV0__790934471)];
+  stable var _stableLeadsNew : [(Text, LeadV1__18987383)];
+  stable var _stableLeadsV2 : [(Text, LeadV2__456318520)];
+  stable var _stableLeadsV3 : [(Text, LeadV3__578296522)];
+  stable var _stableLeadsV4 : [(Text, LeadV4__1065362043)];
+  stable var _stableLeadsV5 : [(Text, Lead__21276013)];
+  stable var _stableMarqueeLogos : [MarqueeLogo__75021648];
+  stable var _stableNotificationLog : [NotificationLogEntry__1302302];
+  stable var _stableOrders : [Order__762448211];
+  stable var _stablePasswordResetTokens : [PasswordResetToken__20946470];
+  stable var _stablePendingPushNotifications :
+    [PendingNotification__275886244];
+  stable var _stablePortalShopProducts : [Nat];
+  stable var _stablePortfolio : [(Text, PortfolioItemV0__468649299)];
+  stable var _stablePortfolioNew : [(Text, PortfolioItem__950518858)];
+  stable var _stableProducts : [(Nat, ProductV1__742818732)];
+  stable var _stablePurchaseRequests : [PurchaseRequest__152559268];
+  stable var _stablePushSubscription : ?PushSubscription__1071553013;
+  stable var _stableQuestionDefs : [(Text, [QuestionDefinition__638419058])];
+  stable var _stableQuestionnaires : [Questionnaire__629295770];
+  stable var _stableReferralClicks : [(Text, Nat)];
+  stable var _stableReferralCodes : [(Text, Text)];
+  stable var _stableReferralConverts : [(Text, Text)];
+  stable var _stableReferralNames : [(Text, Text)];
+  stable var _stableResetRequestTimes : [(Text, [Int])];
+  stable var _stableReviews : [(ReviewId__768921902, Review__422344017)];
+  stable var _stableSiteText : [(Text, Text)];
+  stable var _stableSubscriptions : [Subscription__231062474];
+  stable var _stableUserProfiles : [UserProfile__491224006];
+  stable var _stableVapidPrivateKey : Text;
+  stable var _stableVapidPublicKey : Text;
+  stable accessControlState :
+    {
+      var adminAssigned : Bool;
+      userRoles : Map__605269027<Principal, UserRole__1054455867>
+    };
+  stable activities :
+    {
+      var root :
+        Node__46230540<ActivityId__1050191648, ActivityLog__439802922>;
+      var size : Nat__490723111
+    };
+  stable billingHistory :
+    {
+      var root :
+        Node__46230540<BillingId__834551210, BillingHistory__158551636>;
+      var size : Nat__490723111
+    };
+  stable blogPosts :
+    {
+      var root : Node__46230540<BlogPostId__971830642, BlogPost__543622485>;
+      var size : Nat__490723111
+    };
+  stable categoryVisibility :
+    {var root : Node__46230540<Text, Bool>; var size : Nat__490723111};
+  stable var clientFiles : [ClientFileMetadata__846853807];
+  stable var clientMessages : [ClientMessage__913388841];
+  stable editRequests :
+    {
+      var root :
+        Node__46230540<EditRequestId__1064816119, EditRequest__842627481>;
+      var size : Nat__490723111
+    };
+  stable emailTemplates :
+    {
+      var root : Node__46230540<Text, EmailTemplate__505785345>;
+      var size : Nat__490723111
+    };
+  stable invoices :
+    {
+      var root : Node__46230540<InvoiceId__400649173, Invoice__772203955>;
+      var size : Nat__490723111
+    };
+  stable leadRateLimits :
+    {var root : Node__46230540<Principal, [Int]>; var size : Nat__490723111};
+  stable var leads :
+    {
+      var root : Node__46230540<Text, LeadV0__790934471>;
+      var size : Nat__490723111
+    };
+  stable marqueeLogos :
+    {
+      var root : Node__46230540<Text, MarqueeLogo__75021648>;
+      var size : Nat__490723111
+    };
+  stable orders :
+    {
+      var root : Node__46230540<OrderId__81195289, Order__762448211>;
+      var size : Nat__490723111
+    };
+  stable principalToEmail :
+    {var root : Node__46230540<Principal, Text>; var size : Nat__490723111};
+  stable productCatalog :
+    {
+      var root : Node__46230540<ProductId__779996770, Product__853085059>;
+      var size : Nat__490723111
+    };
+  stable products :
+    {
+      var root : Node__46230540<ProductId__779996770, ProductV1__742818732>;
+      var size : Nat__490723111
+    };
+  stable questionDefsMap :
+    {
+      var root : Node__46230540<Text, [QuestionDefinition__638419058]>;
+      var size : Nat__490723111
+    };
+  stable questionnaires :
+    {
+      var root :
+        Node__46230540<QuestionnaireId__365725399, Questionnaire__629295770>;
+      var size : Nat__490723111
+    };
+  stable resetRequestTimes :
+    {var root : Node__46230540<Text, [Int]>; var size : Nat__490723111};
+  stable slugIndex :
+    {
+      var root : Node__46230540<Text, BlogPostId__971830642>;
+      var size : Nat__490723111
+    };
+  stable var stripeConfig : ?StripeConfiguration__96897619;
+  stable var stripePublishableKey : Text;
+  stable var stripeTestMode : Bool;
+  stable var stripeWebhookSecret : Text;
+  stable subscriptions :
+    {
+      var root :
+        Node__46230540<SubscriptionId__825880366, Subscription__231062474>;
+      var size : Nat__490723111
+    };
+  stable userProfiles :
+    {
+      var root : Node__46230540<Text, UserProfile__491224006>;
+      var size : Nat__490723111
+    }
+};

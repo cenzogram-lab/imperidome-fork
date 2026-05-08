@@ -1,0 +1,21 @@
+{
+  "overview": "Imperidome is a production-grade SaaS platform for business and client management on the Internet Computer blockchain. It features a full Admin Panel, Client Portal, and public website with CRM, financial tools, content management, and now fully editable questionnaire forms for all 16 product types.",
+  "features": [
+    "Dynamic questionnaire editor for 16 product types",
+    "Admin can edit every question label, type, and option",
+    "Client portal renders forms from live backend definitions",
+    "8 Custom Build + 5 Speedy Site + 3 Ads/Services questionnaire types",
+    "Graceful fallback to hardcoded questions if none configured",
+    "All question definitions persisted across canister upgrades"
+  ],
+  "category": "productivity",
+  "tags": [
+    "saas",
+    "crm",
+    "admin-panel",
+    "questionnaire",
+    "client-portal",
+    "internet-computer"
+  ],
+  "last_updated": "2026-05-07T02:04:45.266Z"
+}

@@ -1,0 +1,853 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   IMPERIDOME — HYPER-REALISTIC 3D VISUAL SYSTEM
+   All changes are purely additive / visual only.
+   No text, routing, backend, or admin panel is touched.
+   ============================================================ */
+
+/* ── 0. BOX-SIZING ──────────────────────────────────────── */
+* {
+  box-sizing: border-box;
+}
+
+/* ── 1. FONT LOCK — Plus Jakarta Sans, zero fallback gaps ── */
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: url("/assets/fonts/PlusJakartaSans-VariableFont_wght.woff2")
+    format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+*,
+*::before,
+*::after {
+  font-family: "Plus Jakarta Sans", Arial, sans-serif !important;
+  color: #ffffff !important;
+}
+
+/* Explicit white baseline on every text-bearing element */
+body,
+p,
+span,
+li,
+td,
+th,
+label,
+input,
+textarea,
+select,
+button {
+  color: #ffffff !important;
+  font-family: "Plus Jakarta Sans", Arial, sans-serif !important;
+}
+
+/* Headings — white fill forced; -webkit-text-fill-color overrides any gradient-based inline WebkitTextFillColor */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  font-family: "Plus Jakarta Sans", Arial, sans-serif !important;
+}
+
+/* Anchor tags — inherit white; neon green hover overrides below are untouched */
+a {
+  color: inherit !important;
+  font-family: "Plus Jakarta Sans", Arial, sans-serif !important;
+}
+
+body {
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #0a0a0a;
+  color: #ffffff !important;
+  /* Prevent accidental full-page horizontal scroll on mobile */
+  overflow-x: hidden;
+}
+
+html {
+  /* Prevent accidental full-page horizontal scroll on mobile */
+  overflow-x: hidden;
+}
+
+/* ── 2. CSS CUSTOM PROPERTIES ───────────────────────────── */
+:root {
+  /* 5-layer neon glow */
+  --neon-glow: 0 0 2px #39ff14, 0 0 6px #39ff14, 0 0 20px rgba(57, 255, 20, 0.8),
+    0 0 50px rgba(57, 255, 20, 0.5), 0 0 100px rgba(57, 255, 20, 0.3);
+
+  /* 4-layer neon glow (+ 60 px ambient) */
+  --neon-glow-deep: 0 0 2px #39ff14, 0 0 6px #39ff14, 0 0 20px
+    rgba(57, 255, 20, 0.8), 0 0 50px rgba(57, 255, 20, 0.5), 0 0 100px
+    rgba(57, 255, 20, 0.3), 0 0 60px rgba(57, 255, 20, 0.15);
+
+  /* Glass card multi-layer shadow */
+  --glass-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
+    0 4px 6px rgba(0, 0, 0, 0.4),
+    0 10px 30px rgba(0, 0, 0, 0.6),
+    0 30px 80px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(57, 255, 20, 0.08);
+}
+
+/* ── 3. KEYFRAME ANIMATIONS ─────────────────────────────── */
+
+/* Grid pan — shifts background-position by exactly one cell for seamless loop */
+@keyframes grid-move {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 60px 60px;
+  }
+}
+
+/* Neon pulse — oscillates glow intensity */
+@keyframes neon-pulse {
+  0% {
+    box-shadow: 0 0 2px #39ff14, 0 0 6px rgba(57, 255, 20, 0.7), 0 0 18px
+      rgba(57, 255, 20, 0.45), 0 0 45px rgba(57, 255, 20, 0.3), 0 0 90px
+      rgba(57, 255, 20, 0.15);
+  }
+  100% {
+    box-shadow: var(--neon-glow-deep);
+  }
+}
+
+/* Shine sweep across cards */
+@keyframes shine-sweep {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+/* Shimmer for utility classes */
+@keyframes shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+/* Film grain shift */
+@keyframes grain-shift {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  10% {
+    transform: translate(-2%, -3%);
+  }
+  20% {
+    transform: translate(3%, 2%);
+  }
+  30% {
+    transform: translate(-1%, 4%);
+  }
+  40% {
+    transform: translate(2%, -2%);
+  }
+  50% {
+    transform: translate(-3%, 1%);
+  }
+  60% {
+    transform: translate(1%, -4%);
+  }
+  70% {
+    transform: translate(-2%, 3%);
+  }
+  80% {
+    transform: translate(3%, -1%);
+  }
+  90% {
+    transform: translate(-1%, 2%);
+  }
+}
+
+/* Chromatic aberration on intense hover */
+@keyframes chromatic-shift {
+  0% {
+    text-shadow: -1px 0 rgba(255, 0, 0, 0.3), 1px 0 rgba(0, 0, 255, 0.3);
+  }
+  50% {
+    text-shadow: 1px 0 rgba(255, 0, 0, 0.3), -1px 0 rgba(0, 0, 255, 0.3);
+  }
+  100% {
+    text-shadow: -1px 0 rgba(255, 0, 0, 0.3), 1px 0 rgba(0, 0, 255, 0.3);
+  }
+}
+
+/* Ticker scroll (pre-existing, preserved) */
+@keyframes imperidome-scroll-left {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* ── 4. TICKER (PRE-EXISTING, PRESERVED) ───────────────── */
+.imperidome-ticker-inner {
+  display: inline-flex;
+  gap: 32px;
+  white-space: nowrap;
+  color: rgba(156, 163, 175, 0.9);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  animation: imperidome-scroll-left 28s linear infinite;
+  align-items: center;
+  padding: 4px 0;
+}
+
+/* ── 5. NEON GLOW — applied to all neon-green elements ─── */
+
+/* All #39FF14 / neon-carrying elements */
+[class*="neon"],
+[class*="green-glow"],
+[class*="accent-glow"],
+.neon-glow {
+  box-shadow: var(--neon-glow) !important;
+  animation: neon-pulse 2s ease-in-out infinite alternate;
+  will-change: box-shadow;
+}
+
+/* Neon green backgrounds — buttons, badges, highlights */
+[style*="#39FF14"],
+[style*="39FF14"],
+[style*="#5EF08A"],
+[style*="5EF08A"] {
+  box-shadow: var(--neon-glow-deep);
+  transition: box-shadow 0.3s ease;
+}
+
+/* ── 6. HYPER-GLASSMORPHISM CARD SYSTEM ─────────────────── */
+
+.glass-card,
+[class*="glass-card"] {
+  position: relative;
+  overflow: hidden;
+  background: rgba(10, 10, 10, 0.75) !important;
+  backdrop-filter: blur(40px) saturate(1.8) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(1.8) !important;
+  border: 1px solid rgba(57, 255, 20, 0.15) !important;
+  box-shadow: var(--glass-shadow) !important;
+  will-change: transform;
+}
+
+/* Shine sweep pseudo-element */
+.glass-card::after,
+[class*="glass-card"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.06) 50%,
+    transparent 60%
+  );
+  background-size: 200% 100%;
+  animation: shine-sweep 4s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── 7. METALLIC 3D BUTTON SYSTEM ───────────────────────── */
+
+button,
+.btn,
+[role="button"],
+a[class*="btn"] {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1) !important;
+  will-change: transform;
+}
+
+/* Light-sweep pseudo-element on ALL buttons */
+button::before,
+.btn::before,
+[role="button"]::before,
+a[class*="btn"]::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    105deg,
+    transparent,
+    rgba(255, 255, 255, 0.25),
+    transparent
+  );
+  transition: left 0.5s ease;
+  pointer-events: none;
+  z-index: 2;
+}
+
+button:hover::before,
+.btn:hover::before,
+[role="button"]:hover::before,
+a[class*="btn"]:hover::before {
+  left: 150%;
+}
+
+button:hover,
+.btn:hover,
+[role="button"]:hover,
+a[class*="btn"]:hover {
+  transform: translateY(-2px) scale(1.03);
+  filter: brightness(1.15);
+}
+
+/* ── 8. 3D EMBOSSED TEXT DEPTH ON HEADINGS ──────────────── */
+
+h1,
+h2,
+h3,
+h4 {
+  text-shadow:
+    1px 1px 0 rgba(0, 0, 0, 0.9),
+    2px 2px 0 rgba(20, 20, 20, 0.85),
+    3px 3px 2px rgba(0, 0, 0, 0.8),
+    4px 4px 8px rgba(0, 0, 0, 0.7),
+    0 0 20px rgba(57, 255, 20, 0.12);
+}
+
+/* Neon-colored headings get stronger glow */
+h1[class*="green"],
+h2[class*="green"],
+h3[class*="green"],
+[class*="neon-text"],
+[class*="gradient-text"] {
+  text-shadow:
+    0 0 10px rgba(57, 255, 20, 0.7),
+    0 0 20px rgba(57, 255, 20, 0.5),
+    0 0 40px rgba(57, 255, 20, 0.3),
+    1px 1px 0 rgba(0, 0, 0, 0.9),
+    2px 2px 0 rgba(20, 20, 20, 0.85),
+    3px 3px 4px rgba(0, 0, 0, 0.8);
+}
+
+/* ── 9. FIXED VIGNETTE OVERLAY ──────────────────────────── */
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: radial-gradient(
+    ellipse 80% 80% at 50% 50%,
+    transparent 40%,
+    rgba(0, 0, 0, 0.4) 70%,
+    rgba(0, 0, 0, 0.75) 100%
+  );
+}
+
+/* ── 10. ANIMATED FILM GRAIN ────────────────────────────── */
+
+html::before {
+  content: "";
+  position: fixed;
+  inset: -50%;
+  width: 200%;
+  height: 200%;
+  pointer-events: none;
+  z-index: 10000;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+  animation: grain-shift 0.5s steps(1) infinite;
+  will-change: transform;
+}
+
+/* ── 11. CHROMATIC ABERRATION ON HOVER ──────────────────── */
+
+a:hover,
+button:hover [class*="card"]:hover h3 {
+  animation: chromatic-shift 0.3s ease-in-out;
+}
+
+/* ── 12. 3D POP GEOMETRY — Universal card elevation system ─
+   Applies to all public-facing containers.
+   Admin panel (/admin routes) is fully excluded via :not() guards
+   on the component level — these selectors never reach admin DOM
+   because AdminLayout renders its own isolated tree.
+   ──────────────────────────────────────────────────────────── */
+
+/* ── CSS VARIABLES for the elevation system ── */
+:root {
+  /* Base dark elevation stack */
+  --elevation-base: 0 2px 4px rgba(0, 0, 0, 0.6), 0 8px 16px rgba(0, 0, 0, 0.5),
+    0 20px 40px rgba(0, 0, 0, 0.4), 0 40px 80px rgba(0, 0, 0, 0.3);
+
+  /* Glass bevel: inset top+left white highlight */
+  --bevel-inset: inset 1px 1px 0px rgba(255, 255, 255, 0.15);
+
+  /* Combined base shadow = bevel + elevation */
+  --pop-shadow:
+    inset 1px 1px 0px rgba(255, 255, 255, 0.15),
+    0 2px 4px rgba(0, 0, 0, 0.6),
+    0 8px 16px rgba(0, 0, 0, 0.5),
+    0 20px 40px rgba(0, 0, 0, 0.4),
+    0 40px 80px rgba(0, 0, 0, 0.3);
+
+  /* Intensified hover shadow (spreads ~1.5×) */
+  --pop-shadow-hover:
+    inset 1px 1px 0px rgba(255, 255, 255, 0.2),
+    0 4px 8px rgba(0, 0, 0, 0.7),
+    0 12px 24px rgba(0, 0, 0, 0.6),
+    0 30px 60px rgba(0, 0, 0, 0.5),
+    0 60px 120px rgba(0, 0, 0, 0.35);
+}
+
+/* ── KEYFRAME: card-lift for hover micro-spring ── */
+@keyframes card-lift {
+  0% {
+    transform: scale(1) translateY(0);
+  }
+  60% {
+    transform: scale(1.022) translateY(-5px);
+  }
+  100% {
+    transform: scale(1.02) translateY(-4px);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   SECTION A — Inline-style cards (use filter:drop-shadow to pierce
+   overflow:hidden boundaries on the OUTER wrapper, and box-shadow
+   on elements that are NOT overflow:hidden)
+   ───────────────────────────────────────────────────────────────── */
+
+/*
+  PRIMARY CARD SELECTOR SET
+  Targets all known public card patterns using data-ocid and
+  class/style fingerprints. Each rule is wrapped to avoid admin.
+
+  Strategy:
+  - Containers that clip children (overflow:hidden) → use
+    filter: drop-shadow() on their PARENT, or override overflow
+    with overflow: visible where image-clipping is not needed.
+  - Containers without overflow:hidden → direct box-shadow.
+  - All containers: surface sheen + bevel via box-shadow (inset).
+*/
+
+/* ── A1. data-ocid "card" containers (products, tier, blog, builds, etc.) ── */
+[data-ocid*=".card"]:not([data-ocid*="admin"]),
+[data-ocid*="_card"]:not([data-ocid*="admin"]) {
+  background: rgba(10, 10, 10, 0.75) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  box-shadow: var(--pop-shadow) !important;
+  will-change: transform;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s
+    ease, filter 0.3s ease !important;
+}
+
+[data-ocid*=".card"]:not([data-ocid*="admin"]):hover,
+[data-ocid*="_card"]:not([data-ocid*="admin"]):hover {
+  transform: scale(1.02) translateY(-4px) !important;
+  box-shadow: var(--pop-shadow-hover) !important;
+}
+
+/* ── A2. data-ocid "panel" containers (performance, rush, intake panel, etc.) ── */
+[data-ocid*=".panel"]:not([data-ocid*="admin"]),
+[data-ocid*="_panel"]:not([data-ocid*="admin"]) {
+  background: rgba(10, 10, 10, 0.75) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  box-shadow: var(--pop-shadow) !important;
+  will-change: transform;
+}
+
+/* ── A3. Cards using inline rgba(17,19,34) background (TierCards, HowItWorks,
+         ProductsPage cardStyle, ProcessPage step cards, PerformanceSnapshot) ──
+   We target the common rounded + backdrop-filter combination.
+   Using attribute selectors on style is unreliable cross-browser, so we
+   target the Tailwind class fingerprints used by these components.       ── */
+
+/* rounded-xl with flex-col (tier cards, how-it-works) */
+.rounded-xl.flex.flex-col:not([class*="admin"]):not(nav):not(header):not(
+    footer
+  ),
+.rounded-\[12px\].flex.flex-col:not([class*="admin"]):not(nav):not(header):not(
+    footer
+  ) {
+  box-shadow: var(--pop-shadow) !important;
+  will-change: transform;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s
+    ease !important;
+}
+
+.rounded-xl.flex.flex-col:not([class*="admin"]):not(nav):not(header):not(
+    footer
+  ):hover,
+.rounded-\[12px\].flex.flex-col:not([class*="admin"]):not(nav):not(header):not(
+    footer
+  ):hover {
+  transform: scale(1.02) translateY(-4px) !important;
+  box-shadow: var(--pop-shadow-hover) !important;
+}
+
+/* rounded-2xl cards (SpeedySites, AIReceptionist, CheckoutDrawer items) */
+.rounded-2xl:not([class*="admin"]):not(nav):not(header):not(footer):not(
+    .w-full
+  ):not([class*="overflow-hidden"]),
+.rounded-3xl:not([class*="admin"]):not(nav):not(header):not(footer):not(
+    .w-full
+  ) {
+  box-shadow: var(--pop-shadow) !important;
+  will-change: transform;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s
+    ease !important;
+}
+
+.rounded-2xl:not([class*="admin"]):not(nav):not(header):not(footer):not(
+    .w-full
+  ):not([class*="overflow-hidden"]):hover,
+.rounded-3xl:not([class*="admin"]):not(nav):not(header):not(footer):not(
+    .w-full
+  ):hover {
+  transform: scale(1.02) translateY(-4px) !important;
+  box-shadow: var(--pop-shadow-hover) !important;
+}
+
+/* ── A4. feature-card class (ProductAdsPage) ── */
+.feature-card:not([class*="admin"]) {
+  background: rgba(10, 10, 10, 0.75) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  box-shadow: var(--pop-shadow) !important;
+  will-change: transform;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s
+    ease, border-color 0.2s !important;
+}
+
+.feature-card:not([class*="admin"]):hover {
+  transform: scale(1.02) translateY(-4px) !important;
+  box-shadow: var(--pop-shadow-hover) !important;
+  border-color: rgba(94, 240, 138, 0.22) !important;
+}
+
+/* ── A5. WhoWeServe cards (rounded-xl items-center justify-center) ── */
+.rounded-xl.flex.flex-col.items-center:not([class*="admin"]):not(nav):not(
+    header
+  ):not(footer) {
+  box-shadow: var(--pop-shadow) !important;
+  will-change: transform;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s
+    ease !important;
+}
+
+.rounded-xl.flex.flex-col.items-center:not([class*="admin"]):not(nav):not(
+    header
+  ):not(footer):hover {
+  transform: scale(1.02) translateY(-4px) !important;
+  box-shadow: var(--pop-shadow-hover) !important;
+}
+
+/* ── A6. article elements (OurBuilds, BlogIndex) ── */
+article[data-ocid]:not([data-ocid*="admin"]) {
+  box-shadow: var(--pop-shadow) !important;
+  will-change: transform;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s
+    ease !important;
+}
+
+article[data-ocid]:not([data-ocid*="admin"]):hover {
+  transform: scale(1.02) translateY(-4px) !important;
+  box-shadow: var(--pop-shadow-hover) !important;
+}
+
+/* ── A7. ResultsPage iframe cards — they use overflow:hidden, so we apply
+         drop-shadow on the outer container (the hovered div wrapper).
+         The outer div already has borderRadius+border, so box-shadow
+         works fine there.                                             ── */
+[data-ocid^="results.card"]:not([data-ocid*="admin"]) {
+  box-shadow:
+    inset 1px 1px 0px rgba(255, 255, 255, 0.15),
+    0 0 16px rgba(57, 255, 20, 0.15),
+    0 8px 16px rgba(0, 0, 0, 0.5),
+    0 20px 40px rgba(0, 0, 0, 0.4),
+    0 40px 80px rgba(0, 0, 0, 0.3) !important;
+  will-change: transform;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s
+    ease !important;
+}
+
+[data-ocid^="results.card"]:not([data-ocid*="admin"]):hover {
+  transform: scale(1.02) translateY(-4px) !important;
+  box-shadow:
+    inset 1px 1px 0px rgba(255, 255, 255, 0.2),
+    0 0 32px rgba(57, 255, 20, 0.4),
+    0 0 0 1px rgba(57, 255, 20, 0.3),
+    0 12px 24px rgba(0, 0, 0, 0.6),
+    0 30px 60px rgba(0, 0, 0, 0.5),
+    0 60px 120px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* ── A8. Intake form panel and service cards ── */
+[data-ocid="intake.panel"]:not([data-ocid*="admin"]),
+[data-ocid^="intake.service"]:not([data-ocid*="admin"]),
+[data-ocid="intake.selected_package.card"]:not([data-ocid*="admin"]) {
+  background: rgba(10, 10, 10, 0.75) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  box-shadow: var(--pop-shadow) !important;
+  will-change: transform;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s
+    ease !important;
+}
+
+[data-ocid^="intake.service"]:not([data-ocid*="admin"]):hover {
+  transform: scale(1.02) translateY(-4px) !important;
+  box-shadow: var(--pop-shadow-hover) !important;
+}
+
+/* ── A9. Glass card utility class (carries backdrop blur, used site-wide) ── */
+.glass-card:not([class*="admin"]) {
+  box-shadow: var(--bevel-inset), var(--glass-shadow), 0 20px 40px
+    rgba(0, 0, 0, 0.4), 0 40px 80px rgba(0, 0, 0, 0.3) !important;
+  background: rgba(10, 10, 10, 0.75) !important;
+  will-change: transform;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s
+    ease !important;
+}
+
+.glass-card:not([class*="admin"]):hover {
+  transform: scale(1.02) translateY(-4px) !important;
+  box-shadow:
+    var(--bevel-inset),
+    0 4px 8px rgba(0, 0, 0, 0.7),
+    0 12px 24px rgba(0, 0, 0, 0.6),
+    0 30px 60px rgba(0, 0, 0, 0.5),
+    0 60px 120px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* ── A10. Pricing tier cards (ProductAdsPage, SpeedySites, AIReceptionist)
+          These use rounded-3xl and bg-white/5 or gradient styles.
+          Targeted by their data-ocid pricing patterns.               ── */
+[data-ocid^="product-ads.pricing"]:not([data-ocid*="admin"]),
+[data-ocid^="speedy"]:not([data-ocid*="admin"]),
+[data-ocid^="tiers."]:not([data-ocid*="admin"]) {
+  background: rgba(10, 10, 10, 0.75) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  box-shadow: var(--pop-shadow) !important;
+  will-change: transform;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s
+    ease !important;
+}
+
+[data-ocid^="product-ads.pricing"]:not([data-ocid*="admin"]):hover,
+[data-ocid^="speedy"]:not([data-ocid*="admin"]):hover,
+[data-ocid^="tiers."]:not([data-ocid*="admin"]):hover {
+  transform: scale(1.02) translateY(-4px) !important;
+  box-shadow: var(--pop-shadow-hover) !important;
+}
+
+/* ── A11. bg-white\/5 cards (Checkout drawer items, SpeedySites, AI receptionist)
+          These are transparent dark cards with backdrop-blur.         ── */
+.bg-white\/5:not([class*="admin"]):not(nav):not(header):not(footer):not(
+    .w-full
+  ) {
+  box-shadow: var(--pop-shadow) !important;
+  will-change: transform;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s
+    ease !important;
+}
+
+/* ── A12. CheckoutDrawer item cards and summary boxes ── */
+.bg-white\/5.border.border-white\/10.rounded-xl:not([class*="admin"]),
+.bg-white\/5.border.border-white\/10.rounded-2xl:not([class*="admin"]) {
+  box-shadow: var(--pop-shadow) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  will-change: transform;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   SECTION B — HOVER PHYSICS EXCLUSIONS
+   Nav, header, footer elements must NOT get hover physics.
+   These selectors ensure the lift/scale never fires inside
+   nav/header/footer regardless of card-like structure inside them.
+   ───────────────────────────────────────────────────────────────── */
+
+nav *,
+nav *:hover,
+header *,
+header *:hover,
+footer *,
+footer *:hover,
+[class*="navbar"] *,
+[class*="navbar"] *:hover {
+  transform: none !important;
+}
+
+/* Nav/header/footer containers themselves — override any inherited
+   transform rules but preserve any existing translateZ for HUD float */
+nav:hover,
+header:hover,
+footer:hover {
+  transform: none !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   SECTION C — SURFACE SHEEN: ensure all targeted containers
+   maintain the dark translucent background + blur.
+   Applied with lower specificity so inline styles can override
+   individual exceptions without needing !important in HTML.
+   ───────────────────────────────────────────────────────────────── */
+
+/* The dark translucent surface baseline for all card containers */
+[data-ocid*=".card"]:not([data-ocid*="admin"]),
+[data-ocid*="_card"]:not([data-ocid*="admin"]),
+[data-ocid*=".panel"]:not([data-ocid*="admin"]),
+.feature-card:not([class*="admin"]),
+[data-ocid^="intake"]:not([data-ocid*="admin"]) {
+  /* Ensure backdrop-filter is never less than blur(20px) */
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+}
+
+/* ── 12. UTILITY CLASSES ────────────────────────────────── */
+
+/* Neon glow utility classes (also available as Tailwind via config) */
+.neon-sm {
+  box-shadow: 0 0 2px #39ff14, 0 0 6px rgba(57, 255, 20, 0.6), 0 0 15px
+    rgba(57, 255, 20, 0.3);
+}
+.neon-md {
+  box-shadow: 0 0 2px #39ff14, 0 0 8px #39ff14, 0 0 25px rgba(57, 255, 20, 0.7),
+    0 0 60px rgba(57, 255, 20, 0.35), 0 0 100px rgba(57, 255, 20, 0.15);
+}
+.neon-lg {
+  box-shadow: var(--neon-glow);
+}
+.neon-xl {
+  box-shadow: var(--neon-glow-deep);
+}
+
+/* Shimmer animation utility */
+.animate-shimmer {
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.08) 50%,
+    transparent 60%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+/* Neon pulse utility */
+.animate-neon-pulse {
+  animation: neon-pulse 2s ease-in-out infinite alternate;
+}
+
+/* Grain animation utility */
+.animate-grain {
+  animation: grain-shift 0.5s steps(1) infinite;
+}
+
+/* ── 13. GOD MODE OVERLAY — Universal editable element styling ── */
+
+/* Applied by GodModeOverlay.tsx to every text-containing leaf node
+   when Edit Site Text is ON. Uses outline (not border) so layout
+   is never shifted. Only shown on hover to keep the UI clean. */
+.god-mode-editable {
+  cursor: text !important;
+  outline: none;
+  transition: outline 0.1s ease, background-color 0.1s ease;
+  border-radius: 2px;
+}
+
+.god-mode-editable:hover {
+  outline: 1.5px dashed #39ff14 !important;
+  outline-offset: 2px !important;
+  background-color: rgba(57, 255, 20, 0.04) !important;
+}
+
+/* Tooltip-style cursor hint via ::after pseudo-element */
+.god-mode-editable:hover::after {
+  content: " ✏️";
+  font-size: 0.75em;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* Buttons & links in edit mode: suppress normal pointer, show text cursor */
+[data-god-editable="true"]:is(button, a) {
+  cursor: text !important;
+}
+
+/* Don't apply hover transform lift to god-mode-editable elements inside cards */
+[data-god-editable="true"]:hover {
+  transform: none !important;
+}
+
+/* Hide scrollbar on horizontal tab containers while keeping scroll functional */
+.tabs-scroll-container {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+}
+.tabs-scroll-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* Universal hidden-scrollbar utility — applies to any scrollable container
+   (sidebar nav, mobile drawer, etc.) across all viewports */
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Smooth momentum scroll for all horizontally scrollable containers (mobile) */
+[data-slot="table-container"],
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure modal/drawer/sheet internals scroll on mobile */
+[data-slot="dialog-content"],
+[data-slot="drawer-content"],
+[data-slot="sheet-content"] {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Reduced motion — respect OS preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -588,6 +588,7 @@ function SortableTH({
 export default function AdminSpreadsheetPage() {
   const { actor, isFetching } = useActor();
   const [view, setView] = useState<View>("accounting");
+  const [tabMenuOpen, setTabMenuOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -1762,6 +1763,10 @@ export default function AdminSpreadsheetPage() {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
+        @media (max-width: 767px) {
+          .spreadsheet-tab-row { display: none !important; }
+          .spreadsheet-tab-hamburger { display: flex !important; }
+        }
       `}</style>
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {/* ── Header bar ───────────────────────────────────────────────── */}
@@ -1774,8 +1779,44 @@ export default function AdminSpreadsheetPage() {
             gap: 12,
           }}
         >
-          {/* View toggle */}
+          {/* Mobile hamburger button — visible only below 768px */}
+          <button
+            type="button"
+            data-ocid="spreadsheet.tab_menu.open_button"
+            aria-label="Open view menu"
+            onClick={() => setTabMenuOpen(true)}
+            style={{
+              display: "none",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              border: "1px solid #1C1F33",
+              borderRadius: 8,
+              background: "rgba(17,19,34,0.7)",
+              color: "#5EF08A",
+              padding: "0 16px",
+              height: 44,
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+            className="spreadsheet-tab-hamburger"
+          >
+            <span style={{ fontSize: 18, lineHeight: 1 }}>☰</span>
+            <span style={{ fontSize: 13 }}>
+              {view === "accounting" && "💰 Accounting"}
+              {view === "clients" && "👤 Client List"}
+              {view === "tools" && "🔧 Tools"}
+              {view === "leads" && "📋 Leads"}
+              {view === "reviews" && "⭐ Reviews"}
+              {view === "revenue" && "📈 Revenue"}
+              {view === "gsheets" && "⚙ Google Sheets"}
+            </span>
+          </button>
+
+          {/* View toggle — hidden below 768px */}
           <div
+            className="spreadsheet-tab-row"
             style={{
               display: "flex",
               gap: 0,
@@ -3757,6 +3798,144 @@ export default function AdminSpreadsheetPage() {
           </div>
         )}
       </div>
+
+      {/* Mobile fullscreen tab menu overlay */}
+      {tabMenuOpen && (
+        <div
+          data-ocid="spreadsheet.tab_menu.dialog"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            zIndex: 9999,
+            background: "rgba(10,11,22,0.97)",
+            display: "flex",
+            flexDirection: "column",
+            overflowY: "auto",
+          }}
+        >
+          {/* Overlay header */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "20px 24px 16px",
+              borderBottom: "1px solid #1C1F33",
+              flexShrink: 0,
+            }}
+          >
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 700,
+                color: "#7A7D90",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+              }}
+            >
+              Select View
+            </span>
+            <button
+              type="button"
+              data-ocid="spreadsheet.tab_menu.close_button"
+              aria-label="Close view menu"
+              onClick={() => setTabMenuOpen(false)}
+              style={{
+                background: "rgba(28,31,51,0.8)",
+                border: "1px solid #1C1F33",
+                borderRadius: 8,
+                color: "#EEF0F8",
+                fontSize: 20,
+                fontWeight: 700,
+                lineHeight: 1,
+                width: 44,
+                height: 44,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              ✕
+            </button>
+          </div>
+          {/* Tab items */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              padding: "12px 0",
+            }}
+          >
+            {[
+              { id: "accounting" as View, label: "💰 Accounting" },
+              { id: "clients" as View, label: "👤 Client List" },
+              { id: "tools" as View, label: "🔧 Tools" },
+              { id: "leads" as View, label: "📋 Leads" },
+              { id: "reviews" as View, label: "⭐ Reviews" },
+              { id: "revenue" as View, label: "📈 Revenue" },
+              { id: "gsheets" as View, label: "⚙ Google Sheets" },
+            ].map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                data-ocid={`spreadsheet.tab_menu.${item.id}.item`}
+                onClick={() => {
+                  setView(item.id);
+                  setSearch("");
+                  setDateFrom("");
+                  setDateTo("");
+                  setNotesClearStep(false);
+                  setTabMenuOpen(false);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 16,
+                  minHeight: 52,
+                  padding: "0 24px",
+                  border: "none",
+                  borderLeft:
+                    view === item.id
+                      ? "3px solid #5EF08A"
+                      : "3px solid transparent",
+                  background:
+                    view === item.id ? "rgba(94,240,138,0.08)" : "transparent",
+                  color: view === item.id ? "#5EF08A" : "#EEF0F8",
+                  fontSize: 16,
+                  fontWeight: view === item.id ? 700 : 500,
+                  cursor: "pointer",
+                  textAlign: "left",
+                  transition: "background 0.15s, color 0.15s",
+                  width: "100%",
+                }}
+              >
+                {item.label}
+                {view === item.id && (
+                  <span
+                    style={{
+                      marginLeft: "auto",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: "#5EF08A",
+                      background: "rgba(94,240,138,0.12)",
+                      border: "1px solid rgba(94,240,138,0.3)",
+                      borderRadius: 4,
+                      padding: "2px 8px",
+                    }}
+                  >
+                    Active
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <InstructionModal
         isOpen={showExcelHelp}

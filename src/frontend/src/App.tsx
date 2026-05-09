@@ -7,6 +7,9 @@ import {
   redirect,
   useRouterState,
 } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { createActor } from "./backend";
+import type { backendInterface } from "./backend";
 import AnnouncementBanner from "./components/AnnouncementBanner";
 import CheckoutDrawer from "./components/CheckoutDrawer";
 import { FloatingGodModeToggle } from "./components/FloatingGodModeToggle";
@@ -48,6 +51,7 @@ import SaaSPlansPage from "./pages/SaaSPlansPage";
 import SpeedySitesPage from "./pages/SpeedySitesPage";
 import TermsPage from "./pages/TermsPage";
 import TheDomePage from "./pages/TheDomePage";
+import AdminAnalyticsPage from "./pages/admin/AdminAnalyticsPage";
 import AdminBlogPage from "./pages/admin/AdminBlogPage";
 import AdminBuildsPage from "./pages/admin/AdminBuildsPage";
 import AdminBulkEmailPage from "./pages/admin/AdminBulkEmailPage";
@@ -100,6 +104,43 @@ import ShowcaseSpeedySitesPage from "./pages/showcase/ShowcaseSpeedySitesPage";
 
 function HomePage() {
   useSeoMeta("home", "Imperidome — Sovereign Web Hosting");
+
+  useEffect(() => {
+    const track = async () => {
+      try {
+        let sid = sessionStorage.getItem("_vis_sid");
+        if (!sid) {
+          sid = crypto.randomUUID();
+          sessionStorage.setItem("_vis_sid", sid);
+        }
+        let countryCode: string | null = null;
+        try {
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 2000);
+          const res = await fetch("https://ipapi.co/country/", {
+            signal: ctrl.signal,
+          });
+          clearTimeout(timer);
+          const text = (await res.text()).trim();
+          if (/^[A-Z]{2}$/.test(text)) countryCode = text;
+        } catch {
+          // geolocation failed — use null
+        }
+        const { createActorWithConfig } = await import("./config");
+        const publicActor = await createActorWithConfig(createActor);
+        await (publicActor as backendInterface).recordVisit(
+          "/",
+          BigInt(Math.floor(Date.now())) * 1_000_000n,
+          sid,
+          countryCode,
+        );
+      } catch {
+        // silent
+      }
+    };
+    track();
+  }, []);
+
   return <ImperidomeHero />;
 }
 
@@ -492,6 +533,12 @@ const adminDashboardRoute = createRoute({
   component: AdminDashboardPage,
 });
 
+const adminAnalyticsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/admin/analytics",
+  component: AdminAnalyticsPage,
+});
+
 const adminClientsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/admin/clients",
@@ -755,6 +802,7 @@ const routeTree = rootRoute.addChildren([
   portalRequestsRoute,
   portalProfileRoute,
   adminDashboardRoute,
+  adminAnalyticsRoute,
   adminClientsRoute,
   adminClientDetailRoute,
   adminQuestionnairesRoute,

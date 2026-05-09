@@ -679,7 +679,9 @@ export interface backendInterface {
         totalLeads: bigint;
         conversionRate: number;
     }>;
+    getCountryBreakdown(email: string): Promise<Array<[string, bigint, number]>>;
     getCycles(): Promise<bigint>;
+    getDailyVisitorChart(email: string): Promise<Array<[string, bigint]>>;
     getDashboardMetrics(): Promise<DashboardMetrics>;
     getEmailLogs(adminEmail: string): Promise<Array<EmailLog>>;
     getEmailTemplates(): Promise<Array<EmailTemplate>>;
@@ -701,6 +703,7 @@ export interface backendInterface {
         err: string;
     }>;
     getLeads(adminEmail: string): Promise<Array<Lead>>;
+    getLiveVisitorCount(email: string): Promise<bigint>;
     getMarqueeLogos(): Promise<Array<MarqueeLogo>>;
     getMessages(callerEmail: string, targetClientEmail: string): Promise<Array<ClientMessage>>;
     getMyActivity(): Promise<Array<ActivityLog>>;
@@ -815,8 +818,19 @@ export interface backendInterface {
         err: string;
     }>;
     getStripeTestMode(): Promise<boolean>;
+    getTopPages(email: string): Promise<Array<[string, bigint, number]>>;
     getUnreadMessageCounts(adminEmail: string): Promise<Array<[string, bigint]>>;
     getVapidPublicKey(): Promise<string>;
+    getVisitorStats(email: string): Promise<{
+        todayUnique: bigint;
+        weekUnique: bigint;
+        monthUnique: bigint;
+        todaySessions: bigint;
+        allTimeUnique: bigint;
+        monthSessions: bigint;
+        weekSessions: bigint;
+        allTimeSessions: bigint;
+    }>;
     handleStripeWebhook(payload: string, _signature: string): Promise<{
         __kind__: "ok";
         ok: string;
@@ -855,6 +869,7 @@ export interface backendInterface {
     markQuestionnaireReviewed(adminEmail: string, questionnaireId: QuestionnaireId): Promise<void>;
     publishBlogPost(adminEmail: string, id: BlogPostId): Promise<void>;
     publishPortfolioItem(adminEmail: string, id: string): Promise<UpsertResult>;
+    recordVisit(pagePath: string, timestamp: bigint, sessionId: string, countryCode: string | null): Promise<boolean>;
     registerUser(args: {
         email: string;
         passwordHash: Uint8Array;

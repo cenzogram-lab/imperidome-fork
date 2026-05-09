@@ -6,7 +6,9 @@ import {
   Loader2,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { createActor } from "../backend";
 import type { backendInterface } from "../backend";
+import { createActorWithConfig } from "../config";
 import { useActor } from "../hooks/useActor";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -337,6 +339,41 @@ export default function ReschedulePage() {
   const token = window.location.pathname.split("/reschedule/")[1] ?? "";
 
   const { actor, isFetching } = useActor();
+
+  useEffect(() => {
+    const track = async () => {
+      try {
+        let sid = sessionStorage.getItem("_vis_sid");
+        if (!sid) {
+          sid = crypto.randomUUID();
+          sessionStorage.setItem("_vis_sid", sid);
+        }
+        let countryCode: string | null = null;
+        try {
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 2000);
+          const res = await fetch("https://ipapi.co/country/", {
+            signal: ctrl.signal,
+          });
+          clearTimeout(timer);
+          const text = (await res.text()).trim();
+          if (/^[A-Z]{2}$/.test(text)) countryCode = text;
+        } catch {
+          // geolocation failed — use null
+        }
+        const publicActor = await createActorWithConfig(createActor);
+        await (publicActor as backendInterface).recordVisit(
+          window.location.pathname,
+          BigInt(Math.floor(Date.now())) * 1_000_000n,
+          sid!,
+          countryCode,
+        );
+      } catch {
+        // silent
+      }
+    };
+    track();
+  }, []);
 
   type PageState =
     | "loading"

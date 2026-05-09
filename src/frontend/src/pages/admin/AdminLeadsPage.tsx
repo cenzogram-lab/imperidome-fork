@@ -4,6 +4,7 @@ import LeadCalendar from "../../components/LeadCalendar";
 import { useActor } from "../../hooks/useActor";
 import { getSession } from "../../hooks/useSession";
 import AdminLayout from "./AdminLayout";
+import FilterChipsRow from "./FilterChipsRow";
 
 function getAdminEmail(): string {
   const s = getSession();
@@ -3517,102 +3518,15 @@ export default function AdminLeadsPage() {
       {/* ── Lead Calendar ── */}
       {!loading && !error && (
         <>
-          {/* Status filter chips row */}
-          <div
-            data-ocid="leads.calendar.filter_chips"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              flexWrap: "wrap",
-              marginTop: "24px",
-              marginBottom: "0",
-              overflowX: "auto",
-              WebkitOverflowScrolling: "touch",
-              scrollbarWidth: "none" as React.CSSProperties["scrollbarWidth"],
-              paddingBottom: "4px",
-            }}
-          >
-            <span
-              style={{
-                color: "#7A7D90",
-                fontSize: "11px",
-                fontWeight: 700,
-                textTransform: "uppercase",
-                letterSpacing: "0.07em",
-                flexShrink: 0,
-              }}
-            >
-              Filter:
-            </span>
-            {/* All chip */}
-            <button
-              type="button"
-              data-ocid="leads.calendar.filter.all"
-              onClick={selectAll}
-              style={{
-                padding: "4px 12px",
-                borderRadius: "20px",
-                fontSize: "12px",
-                fontWeight: 700,
-                cursor: "pointer",
-                transition: "all 0.15s",
-                border: isAllActive
-                  ? "1.5px solid rgba(238,240,248,0.6)"
-                  : "1px solid rgba(122,125,144,0.3)",
-                background: isAllActive
-                  ? "rgba(238,240,248,0.12)"
-                  : "rgba(17,19,34,0.8)",
-                color: isAllActive ? "#EEF0F8" : "#7A7D90",
-                letterSpacing: "0.03em",
-              }}
-            >
-              All
-            </button>
-            {/* Per-status chips */}
-            {ALL_STATUS_FILTERS.map((status) => {
-              const isActive = activeFilters.has(status);
-              const colors = FILTER_CHIP_COLORS[status];
-              return (
-                <button
-                  key={status}
-                  type="button"
-                  data-ocid={`leads.calendar.filter.${status.toLowerCase()}`}
-                  onClick={() => toggleFilter(status)}
-                  style={{
-                    padding: "4px 12px",
-                    borderRadius: "20px",
-                    fontSize: "12px",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    transition: "all 0.15s",
-                    border: isActive
-                      ? `1.5px solid ${colors.border}`
-                      : "1px solid rgba(28,31,51,0.9)",
-                    background: isActive ? colors.active : colors.bg,
-                    color: isActive ? colors.text : "rgba(122,125,144,0.6)",
-                    letterSpacing: "0.03em",
-                  }}
-                >
-                  {status === "Draft" ? "⋯ " : ""}
-                  {status}
-                </button>
-              );
-            })}
-            {/* Count badge */}
-            {!isAllActive && (
-              <span
-                style={{
-                  fontSize: "11px",
-                  color: "#7A7D90",
-                  marginLeft: "4px",
-                }}
-              >
-                {calendarLeads.length} lead
-                {calendarLeads.length !== 1 ? "s" : ""} shown
-              </span>
-            )}
-          </div>
+          <FilterChipsRow
+            isAllActive={isAllActive}
+            activeFilters={activeFilters}
+            calendarLeadsCount={calendarLeads.length}
+            ALL_STATUS_FILTERS={ALL_STATUS_FILTERS}
+            FILTER_CHIP_COLORS={FILTER_CHIP_COLORS}
+            selectAll={selectAll}
+            toggleFilter={toggleFilter}
+          />
           <LeadCalendar
             leads={calendarLeads}
             draftCount={draftLeads.length}

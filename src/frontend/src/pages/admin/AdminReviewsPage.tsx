@@ -382,6 +382,7 @@ export default function AdminReviewsPage() {
   const [approvedReviews, setApprovedReviews] = useState<Review[]>([]);
   const [rejectedReviews, setRejectedReviews] = useState<Review[]>([]);
   const [activeTab, setActiveTab] = useState<ActiveTab>("pending");
+  const [tabMenuOpen, setTabMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<ActionLoading>({});
@@ -501,7 +502,15 @@ export default function AdminReviewsPage() {
 
   return (
     <AdminLayout pageTitle="Reviews">
-      <style>{"@keyframes spin { to { transform: rotate(360deg); } }"}</style>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .reviews-tabs-desktop { display: flex; }
+        .reviews-hamburger-btn { display: none; }
+        @media (max-width: 767px) {
+          .reviews-tabs-desktop { display: none !important; }
+          .reviews-hamburger-btn { display: flex !important; }
+        }
+      `}</style>
 
       {/* Page header */}
       <div style={{ marginBottom: 20 }}>
@@ -520,8 +529,11 @@ export default function AdminReviewsPage() {
         </p>
       </div>
 
-      {/* Tab bar — horizontally scrollable on mobile */}
+      {/* Tab bar — desktop: horizontal row; mobile: hamburger menu */}
+
+      {/* Desktop tab row (hidden below 768px) */}
       <div
+        className="reviews-tabs-desktop"
         style={{
           overflowX: "auto",
           WebkitOverflowScrolling:
@@ -589,6 +601,187 @@ export default function AdminReviewsPage() {
           })}
         </div>
       </div>
+
+      {/* Mobile hamburger trigger (hidden above 768px) */}
+      <div
+        className="reviews-hamburger-btn"
+        style={{
+          display: "none",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 20,
+          borderBottom: "1px solid #1C1F33",
+          paddingBottom: 12,
+        }}
+      >
+        <span style={{ color: "#EEF0F8", fontSize: 14, fontWeight: 700 }}>
+          {tabs.find((t) => t.key === activeTab)?.label ?? "Reviews"}
+          {(() => {
+            const t = tabs.find((tab) => tab.key === activeTab);
+            return t?.count !== undefined && t.count > 0 ? (
+              <span
+                style={{
+                  marginLeft: 8,
+                  background: "rgba(94,240,138,0.2)",
+                  color: "#5EF08A",
+                  borderRadius: 12,
+                  padding: "1px 8px",
+                  fontSize: 11,
+                  fontWeight: 700,
+                }}
+              >
+                {t.count}
+              </span>
+            ) : null;
+          })()}
+        </span>
+        <button
+          type="button"
+          data-ocid="admin_reviews.tabs_hamburger_button"
+          onClick={() => setTabMenuOpen(true)}
+          aria-label="Open tab menu"
+          style={{
+            background: "rgba(255,255,255,0.06)",
+            border: "1px solid #2A2D42",
+            borderRadius: 8,
+            padding: "8px 12px",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            color: "#EEF0F8",
+          }}
+        >
+          <span style={{ fontSize: 18, lineHeight: 1 }}>☰</span>
+        </button>
+      </div>
+
+      {/* Fullscreen overlay — mobile tab menu */}
+      {tabMenuOpen && (
+        <div
+          data-ocid="admin_reviews.tabs_mobile_overlay"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            zIndex: 9999,
+            background: "rgba(10,11,22,0.98)",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {/* Overlay header */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "20px 24px 16px",
+              borderBottom: "1px solid #1C1F33",
+            }}
+          >
+            <span style={{ color: "#EEF0F8", fontSize: 16, fontWeight: 700 }}>
+              Select View
+            </span>
+            <button
+              type="button"
+              data-ocid="admin_reviews.tabs_mobile_close_button"
+              onClick={() => setTabMenuOpen(false)}
+              aria-label="Close tab menu"
+              style={{
+                background: "rgba(255,255,255,0.08)",
+                border: "1px solid #2A2D42",
+                borderRadius: 8,
+                width: 40,
+                height: 40,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                color: "#EEF0F8",
+                fontSize: 18,
+                flexShrink: 0,
+              }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Tab list */}
+          <div
+            style={{
+              flex: 1,
+              overflowY: "auto",
+              padding: "12px 16px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+            }}
+          >
+            {tabs.map((tab) => {
+              const isActive = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  data-ocid={`admin_reviews.${tab.key}.mobile_tab`}
+                  onClick={() => {
+                    setActiveTab(tab.key);
+                    setTabMenuOpen(false);
+                  }}
+                  style={{
+                    background: isActive
+                      ? "rgba(94,240,138,0.1)"
+                      : "rgba(255,255,255,0.03)",
+                    border: isActive
+                      ? "1px solid rgba(94,240,138,0.35)"
+                      : "1px solid #1C1F33",
+                    borderRadius: 10,
+                    padding: "0 20px",
+                    minHeight: 52,
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    cursor: "pointer",
+                    color: isActive ? "#5EF08A" : "#C8CAD8",
+                    fontSize: 15,
+                    fontWeight: isActive ? 700 : 500,
+                    transition: "background 0.15s, border-color 0.15s",
+                  }}
+                >
+                  <span>{tab.label}</span>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    {tab.count !== undefined && tab.count > 0 && (
+                      <span
+                        style={{
+                          background: isActive
+                            ? "rgba(94,240,138,0.2)"
+                            : "rgba(239,68,68,0.18)",
+                          color: isActive ? "#5EF08A" : "#f87171",
+                          borderRadius: 12,
+                          padding: "2px 10px",
+                          fontSize: 12,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {tab.count}
+                      </span>
+                    )}
+                    {isActive && (
+                      <span style={{ color: "#5EF08A", fontSize: 16 }}>✓</span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Content card */}
       <div

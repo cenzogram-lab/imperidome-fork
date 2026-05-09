@@ -696,7 +696,12 @@ export interface _SERVICE {
       'conversionRate' : number,
     }
   >,
+  'getCountryBreakdown' : ActorMethod<
+    [string],
+    Array<[string, bigint, number]>
+  >,
   'getCycles' : ActorMethod<[], bigint>,
+  'getDailyVisitorChart' : ActorMethod<[string], Array<[string, bigint]>>,
   'getDashboardMetrics' : ActorMethod<[], DashboardMetrics>,
   'getEmailLogs' : ActorMethod<[string], Array<EmailLog>>,
   'getEmailTemplates' : ActorMethod<[], Array<EmailTemplate>>,
@@ -717,6 +722,7 @@ export interface _SERVICE {
       { 'err' : string }
   >,
   'getLeads' : ActorMethod<[string], Array<Lead>>,
+  'getLiveVisitorCount' : ActorMethod<[string], bigint>,
   'getMarqueeLogos' : ActorMethod<[], Array<MarqueeLogo>>,
   'getMessages' : ActorMethod<[string, string], Array<ClientMessage>>,
   'getMyActivity' : ActorMethod<[], Array<ActivityLog>>,
@@ -811,8 +817,22 @@ export interface _SERVICE {
       { 'err' : string }
   >,
   'getStripeTestMode' : ActorMethod<[], boolean>,
+  'getTopPages' : ActorMethod<[string], Array<[string, bigint, number]>>,
   'getUnreadMessageCounts' : ActorMethod<[string], Array<[string, bigint]>>,
   'getVapidPublicKey' : ActorMethod<[], string>,
+  'getVisitorStats' : ActorMethod<
+    [string],
+    {
+      'todayUnique' : bigint,
+      'weekUnique' : bigint,
+      'monthUnique' : bigint,
+      'todaySessions' : bigint,
+      'allTimeUnique' : bigint,
+      'monthSessions' : bigint,
+      'weekSessions' : bigint,
+      'allTimeSessions' : bigint,
+    }
+  >,
   'handleStripeWebhook' : ActorMethod<
     [string, string],
     { 'ok' : string } |
@@ -851,6 +871,7 @@ export interface _SERVICE {
   >,
   'publishBlogPost' : ActorMethod<[string, BlogPostId], undefined>,
   'publishPortfolioItem' : ActorMethod<[string, string], UpsertResult>,
+  'recordVisit' : ActorMethod<[string, bigint, string, [] | [string]], boolean>,
   'registerUser' : ActorMethod<
     [
       {

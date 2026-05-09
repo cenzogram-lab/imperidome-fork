@@ -792,7 +792,17 @@ export const idlService = IDL.Service({
       ],
       ['query'],
     ),
+  'getCountryBreakdown' : IDL.Func(
+      [IDL.Text],
+      [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat, IDL.Float64))],
+      ['query'],
+    ),
   'getCycles' : IDL.Func([], [IDL.Nat], ['query']),
+  'getDailyVisitorChart' : IDL.Func(
+      [IDL.Text],
+      [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat))],
+      ['query'],
+    ),
   'getDashboardMetrics' : IDL.Func([], [DashboardMetrics], ['query']),
   'getEmailLogs' : IDL.Func([IDL.Text], [IDL.Vec(EmailLog)], ['query']),
   'getEmailTemplates' : IDL.Func([], [IDL.Vec(EmailTemplate)], ['query']),
@@ -814,6 +824,7 @@ export const idlService = IDL.Service({
       [],
     ),
   'getLeads' : IDL.Func([IDL.Text], [IDL.Vec(Lead)], ['query']),
+  'getLiveVisitorCount' : IDL.Func([IDL.Text], [IDL.Nat], ['query']),
   'getMarqueeLogos' : IDL.Func([], [IDL.Vec(MarqueeLogo)], ['query']),
   'getMessages' : IDL.Func(
       [IDL.Text, IDL.Text],
@@ -930,12 +941,33 @@ export const idlService = IDL.Service({
       [],
     ),
   'getStripeTestMode' : IDL.Func([], [IDL.Bool], ['query']),
+  'getTopPages' : IDL.Func(
+      [IDL.Text],
+      [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat, IDL.Float64))],
+      ['query'],
+    ),
   'getUnreadMessageCounts' : IDL.Func(
       [IDL.Text],
       [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat))],
       ['query'],
     ),
   'getVapidPublicKey' : IDL.Func([], [IDL.Text], ['query']),
+  'getVisitorStats' : IDL.Func(
+      [IDL.Text],
+      [
+        IDL.Record({
+          'todayUnique' : IDL.Nat,
+          'weekUnique' : IDL.Nat,
+          'monthUnique' : IDL.Nat,
+          'todaySessions' : IDL.Nat,
+          'allTimeUnique' : IDL.Nat,
+          'monthSessions' : IDL.Nat,
+          'weekSessions' : IDL.Nat,
+          'allTimeSessions' : IDL.Nat,
+        }),
+      ],
+      ['query'],
+    ),
   'handleStripeWebhook' : IDL.Func(
       [IDL.Text, IDL.Text],
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
@@ -973,6 +1005,11 @@ export const idlService = IDL.Service({
   'markQuestionnaireReviewed' : IDL.Func([IDL.Text, QuestionnaireId], [], []),
   'publishBlogPost' : IDL.Func([IDL.Text, BlogPostId], [], []),
   'publishPortfolioItem' : IDL.Func([IDL.Text, IDL.Text], [UpsertResult], []),
+  'recordVisit' : IDL.Func(
+      [IDL.Text, IDL.Int, IDL.Text, IDL.Opt(IDL.Text)],
+      [IDL.Bool],
+      [],
+    ),
   'registerUser' : IDL.Func(
       [
         IDL.Record({
@@ -1999,7 +2036,17 @@ export const idlFactory = ({ IDL }) => {
         ],
         ['query'],
       ),
+    'getCountryBreakdown' : IDL.Func(
+        [IDL.Text],
+        [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat, IDL.Float64))],
+        ['query'],
+      ),
     'getCycles' : IDL.Func([], [IDL.Nat], ['query']),
+    'getDailyVisitorChart' : IDL.Func(
+        [IDL.Text],
+        [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat))],
+        ['query'],
+      ),
     'getDashboardMetrics' : IDL.Func([], [DashboardMetrics], ['query']),
     'getEmailLogs' : IDL.Func([IDL.Text], [IDL.Vec(EmailLog)], ['query']),
     'getEmailTemplates' : IDL.Func([], [IDL.Vec(EmailTemplate)], ['query']),
@@ -2021,6 +2068,7 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'getLeads' : IDL.Func([IDL.Text], [IDL.Vec(Lead)], ['query']),
+    'getLiveVisitorCount' : IDL.Func([IDL.Text], [IDL.Nat], ['query']),
     'getMarqueeLogos' : IDL.Func([], [IDL.Vec(MarqueeLogo)], ['query']),
     'getMessages' : IDL.Func(
         [IDL.Text, IDL.Text],
@@ -2147,12 +2195,33 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'getStripeTestMode' : IDL.Func([], [IDL.Bool], ['query']),
+    'getTopPages' : IDL.Func(
+        [IDL.Text],
+        [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat, IDL.Float64))],
+        ['query'],
+      ),
     'getUnreadMessageCounts' : IDL.Func(
         [IDL.Text],
         [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat))],
         ['query'],
       ),
     'getVapidPublicKey' : IDL.Func([], [IDL.Text], ['query']),
+    'getVisitorStats' : IDL.Func(
+        [IDL.Text],
+        [
+          IDL.Record({
+            'todayUnique' : IDL.Nat,
+            'weekUnique' : IDL.Nat,
+            'monthUnique' : IDL.Nat,
+            'todaySessions' : IDL.Nat,
+            'allTimeUnique' : IDL.Nat,
+            'monthSessions' : IDL.Nat,
+            'weekSessions' : IDL.Nat,
+            'allTimeSessions' : IDL.Nat,
+          }),
+        ],
+        ['query'],
+      ),
     'handleStripeWebhook' : IDL.Func(
         [IDL.Text, IDL.Text],
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
@@ -2195,6 +2264,11 @@ export const idlFactory = ({ IDL }) => {
     'markQuestionnaireReviewed' : IDL.Func([IDL.Text, QuestionnaireId], [], []),
     'publishBlogPost' : IDL.Func([IDL.Text, BlogPostId], [], []),
     'publishPortfolioItem' : IDL.Func([IDL.Text, IDL.Text], [UpsertResult], []),
+    'recordVisit' : IDL.Func(
+        [IDL.Text, IDL.Int, IDL.Text, IDL.Opt(IDL.Text)],
+        [IDL.Bool],
+        [],
+      ),
     'registerUser' : IDL.Func(
         [
           IDL.Record({

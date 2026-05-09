@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
+  BarChart2,
   Bell,
   BookOpen,
   CalendarCheck,
@@ -380,6 +381,12 @@ export default function AdminLayout({
           icon: <LayoutDashboard size={16} />,
           path: "/admin/dashboard",
           ocid: "admin.nav.dashboard.link",
+        },
+        {
+          label: "Analytics",
+          icon: <BarChart2 size={16} />,
+          path: "/admin/analytics",
+          ocid: "admin.nav.analytics.link",
         },
       ],
     },

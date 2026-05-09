@@ -1,6 +1,9 @@
 import { motion } from "motion/react";
 import { useEffect, useRef } from "react";
+import { createActor } from "../backend";
+import type { backendInterface } from "../backend";
 import { Footer } from "../components/Footer";
+import { createActorWithConfig } from "../config";
 
 const BG = "#0A0B14";
 const GREEN = "#39FF14";
@@ -304,6 +307,41 @@ const specs = [
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function TheDomePage() {
+  useEffect(() => {
+    const track = async () => {
+      try {
+        let sid = sessionStorage.getItem("_vis_sid");
+        if (!sid) {
+          sid = crypto.randomUUID();
+          sessionStorage.setItem("_vis_sid", sid);
+        }
+        let countryCode: string | null = null;
+        try {
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 2000);
+          const res = await fetch("https://ipapi.co/country/", {
+            signal: ctrl.signal,
+          });
+          clearTimeout(timer);
+          const text = (await res.text()).trim();
+          if (/^[A-Z]{2}$/.test(text)) countryCode = text;
+        } catch {
+          // geolocation failed — use null
+        }
+        const publicActor = await createActorWithConfig(createActor);
+        await (publicActor as backendInterface).recordVisit(
+          "/the-dome",
+          BigInt(Math.floor(Date.now())) * 1_000_000n,
+          sid,
+          countryCode,
+        );
+      } catch {
+        // silent
+      }
+    };
+    track();
+  }, []);
+
   return (
     <div
       style={{

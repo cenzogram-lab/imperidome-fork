@@ -1,21 +1,27 @@
 {
-  "overview": "Imperidome is a production-grade SaaS platform for business and client management on the Internet Computer blockchain. It features a full Admin Panel, Client Portal, and public website with CRM, financial tools, content management, and now fully editable questionnaire forms for all 16 product types.",
+  "overview": "Imperidome is a production-grade full-stack SaaS platform for business and client management, deployed on the Internet Computer. It features a robust Admin Panel (24+ tabs), a comprehensive Client Portal (14 tabs), and a dynamic public-facing website. Now with a full Site Analytics page tracking live visitors, daily trends, page breakdowns, and geography.",
   "features": [
-    "Dynamic questionnaire editor for 16 product types",
-    "Admin can edit every question label, type, and option",
-    "Client portal renders forms from live backend definitions",
-    "8 Custom Build + 5 Speedy Site + 3 Ads/Services questionnaire types",
-    "Graceful fallback to hardcoded questions if none configured",
-    "All question definitions persisted across canister upgrades"
+    "Site Analytics admin page with live visitor counter",
+    "30-second polling live visitor count with green pulse indicator",
+    "Time-grouped stats: Today, This Week, This Month, All Time",
+    "30-day daily visitor trend bar chart (Recharts)",
+    "Top 10 most visited pages breakdown table",
+    "Top 6 visitor countries breakdown",
+    "Silent anonymous visit tracking on all public pages",
+    "50,000 entry FIFO-capped stable storage for visit data",
+    "Admin CRM, Lead Pipeline, and Client Portal",
+    "Stripe payments, Google Calendar, Google Sheets sync"
   ],
-  "category": "productivity",
+  "category": "business",
   "tags": [
+    "analytics",
+    "admin",
     "saas",
     "crm",
-    "admin-panel",
-    "questionnaire",
-    "client-portal",
-    "internet-computer"
+    "internet-computer",
+    "motoko",
+    "react",
+    "typescript"
   ],
-  "last_updated": "2026-05-07T02:04:45.266Z"
+  "last_updated": "2026-05-09T19:45:03.594Z"
 }

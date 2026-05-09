@@ -16,11 +16,13 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
-import type { Product } from "../backend.d.ts";
+import { createActor } from "../backend";
+import type { Product, backendInterface } from "../backend.d.ts";
 import { EditableText } from "../components/EditableText";
 import { Footer } from "../components/Footer";
 import { Navbar } from "../components/Navbar";
 import PerformanceSnapshot from "../components/PerformanceSnapshot";
+import { createActorWithConfig } from "../config";
 import { useActor } from "../hooks/useActor";
 import { useSeoMeta } from "../hooks/useSeoMeta";
 import { useCartStore } from "../store/useCartStore";
@@ -686,6 +688,7 @@ export default function ProductsPage() {
   useSeoMeta("products", "Services — Imperidome");
   const [activeTab, setActiveTab] = useState<Tab>("Custom Sites");
   const [hoveredTab, setHoveredTab] = useState<Tab | null>(null);
+  const [tabMenuOpen, setTabMenuOpen] = useState(false);
   const [adSeconds, setAdSeconds] = useState(15);
   const [speedyBilling, setSpeedyBilling] = useState<"monthly" | "annual">(
     "monthly",
@@ -698,6 +701,42 @@ export default function ProductsPage() {
   // Fetch ALL active products from the backend once on mount.
   // Used for (1) active/inactive visibility, (2) live price display.
   const { actor, isFetching } = useActor();
+
+  useEffect(() => {
+    const track = async () => {
+      try {
+        let sid = sessionStorage.getItem("_vis_sid");
+        if (!sid) {
+          sid = crypto.randomUUID();
+          sessionStorage.setItem("_vis_sid", sid);
+        }
+        let countryCode: string | null = null;
+        try {
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 2000);
+          const res = await fetch("https://ipapi.co/country/", {
+            signal: ctrl.signal,
+          });
+          clearTimeout(timer);
+          const text = (await res.text()).trim();
+          if (/^[A-Z]{2}$/.test(text)) countryCode = text;
+        } catch {
+          // geolocation failed — use null
+        }
+        const publicActor = await createActorWithConfig(createActor);
+        await (publicActor as backendInterface).recordVisit(
+          window.location.pathname,
+          BigInt(Math.floor(Date.now())) * 1_000_000n,
+          sid!,
+          countryCode,
+        );
+      } catch {
+        // silent
+      }
+    };
+    track();
+  }, []);
+
   const [backendProducts, setBackendProducts] = useState<Product[]>([]);
   const [activeCategoryNames, setActiveCategoryNames] = useState<Set<string>>(
     new Set(),
@@ -839,54 +878,265 @@ export default function ProductsPage() {
           </p>
         </div>
 
-        {/* Tab pills */}
+        {/* Tab pills — desktop (≥768px): full row; mobile (<768px): hamburger */}
+        {/* Mobile hamburger button */}
         <div
           style={{
             display: "flex",
-            gap: "8px",
-            flexWrap: "nowrap",
-            overflowX: "auto",
-            scrollbarWidth: "none",
-            WebkitOverflowScrolling: "touch",
+            alignItems: "center",
             marginBottom: "40px",
-            paddingBottom: "4px",
           }}
-          data-ocid="products.tab"
         >
-          {visibleTabs.map((tab) => {
-            const isActive = activeTab === tab;
-            const isHovered = hoveredTab === tab;
-            return (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setActiveTab(tab)}
-                onMouseEnter={() => setHoveredTab(tab)}
-                onMouseLeave={() => setHoveredTab(null)}
+          {/* Desktop tab row — hidden below 768px via inline media query workaround using a wrapper */}
+          <style>{`
+            @media (max-width: 767px) {
+              .products-tab-row { display: none !important; }
+              .products-tab-hamburger { display: flex !important; }
+            }
+            @media (min-width: 768px) {
+              .products-tab-row { display: flex !important; }
+              .products-tab-hamburger { display: none !important; }
+            }
+          `}</style>
+
+          <div
+            className="products-tab-row"
+            style={{
+              gap: "8px",
+              flexWrap: "nowrap",
+              overflowX: "auto",
+              scrollbarWidth: "none",
+              WebkitOverflowScrolling: "touch",
+              paddingBottom: "4px",
+              width: "100%",
+            }}
+            data-ocid="products.tab"
+          >
+            {visibleTabs.map((tab) => {
+              const isActive = activeTab === tab;
+              const isHovered = hoveredTab === tab;
+              return (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                  onMouseEnter={() => setHoveredTab(tab)}
+                  onMouseLeave={() => setHoveredTab(null)}
+                  style={{
+                    padding: "10px 20px",
+                    minHeight: "44px",
+                    borderRadius: "9999px",
+                    border: isActive ? "none" : "1px solid #1C1F33",
+                    background: isActive ? "#5EF08A" : "transparent",
+                    color: isActive
+                      ? "#0A0B14"
+                      : isHovered
+                        ? "#EEF0F8"
+                        : "rgba(156,163,175,0.4)",
+                    fontWeight: isActive ? "700" : "500",
+                    fontSize: "0.9rem",
+                    cursor: "pointer",
+                    transition:
+                      "color 0.15s, background 0.15s, border-color 0.15s",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  <EditableText
+                    textKey={TAB_TEXT_KEYS[tab]}
+                    defaultText={tab}
+                  />
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Mobile hamburger button */}
+          <button
+            type="button"
+            className="products-tab-hamburger"
+            onClick={() => setTabMenuOpen(true)}
+            aria-label="Open navigation menu"
+            data-ocid="products.tab_hamburger"
+            style={{
+              display: "none",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "6px",
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid #1C1F33",
+              borderRadius: "10px",
+              padding: "10px 16px",
+              cursor: "pointer",
+              color: "#EEF0F8",
+              fontSize: "0.9rem",
+              fontWeight: "600",
+              minHeight: "44px",
+            }}
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 20 20"
+              fill="none"
+              aria-hidden="true"
+            >
+              <rect
+                x="2"
+                y="4"
+                width="16"
+                height="2"
+                rx="1"
+                fill="currentColor"
+              />
+              <rect
+                x="2"
+                y="9"
+                width="16"
+                height="2"
+                rx="1"
+                fill="currentColor"
+              />
+              <rect
+                x="2"
+                y="14"
+                width="16"
+                height="2"
+                rx="1"
+                fill="currentColor"
+              />
+            </svg>
+            <span style={{ color: "#5EF08A" }}>{activeTab}</span>
+          </button>
+        </div>
+
+        {/* Mobile fullscreen tab overlay */}
+        {tabMenuOpen && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              zIndex: 9999,
+              background: "rgba(10,11,20,0.97)",
+              backdropFilter: "blur(16px)",
+              WebkitBackdropFilter: "blur(16px)",
+              display: "flex",
+              flexDirection: "column",
+              overflowY: "auto",
+            }}
+            data-ocid="products.tab_overlay"
+          >
+            {/* Overlay header */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "20px 24px",
+                borderBottom: "1px solid #1C1F33",
+                flexShrink: 0,
+              }}
+            >
+              <span
                 style={{
-                  padding: "10px 20px",
-                  minHeight: "44px",
-                  borderRadius: "9999px",
-                  border: isActive ? "none" : "1px solid #1C1F33",
-                  background: isActive ? "#5EF08A" : "transparent",
-                  color: isActive
-                    ? "#0A0B14"
-                    : isHovered
-                      ? "#EEF0F8"
-                      : "rgba(156,163,175,0.4)",
-                  fontWeight: isActive ? "700" : "500",
-                  fontSize: "0.9rem",
-                  cursor: "pointer",
-                  transition:
-                    "color 0.15s, background 0.15s, border-color 0.15s",
-                  whiteSpace: "nowrap",
+                  color: "#EEF0F8",
+                  fontSize: "1rem",
+                  fontWeight: "700",
+                  letterSpacing: "0.02em",
                 }}
               >
-                <EditableText textKey={TAB_TEXT_KEYS[tab]} defaultText={tab} />
+                Services
+              </span>
+              <button
+                type="button"
+                onClick={() => setTabMenuOpen(false)}
+                aria-label="Close navigation menu"
+                data-ocid="products.tab_overlay_close"
+                style={{
+                  background: "rgba(255,255,255,0.07)",
+                  border: "1px solid #1C1F33",
+                  borderRadius: "8px",
+                  color: "#EEF0F8",
+                  width: "40px",
+                  height: "40px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  fontSize: "1.2rem",
+                  flexShrink: 0,
+                }}
+              >
+                ✕
               </button>
-            );
-          })}
-        </div>
+            </div>
+
+            {/* Tab list */}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                padding: "12px 0",
+                flex: 1,
+              }}
+            >
+              {visibleTabs.map((tab) => {
+                const isActive = activeTab === tab;
+                return (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => {
+                      setActiveTab(tab);
+                      setTabMenuOpen(false);
+                    }}
+                    data-ocid={`products.tab_overlay_item.${TABS.indexOf(tab) + 1}`}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      minHeight: "52px",
+                      padding: "14px 24px",
+                      background: isActive
+                        ? "rgba(94,240,138,0.08)"
+                        : "transparent",
+                      border: "none",
+                      borderLeft: isActive
+                        ? "3px solid #5EF08A"
+                        : "3px solid transparent",
+                      color: isActive ? "#5EF08A" : "#EEF0F8",
+                      fontWeight: isActive ? "700" : "500",
+                      fontSize: "1rem",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      transition: "background 0.15s, color 0.15s",
+                      width: "100%",
+                    }}
+                  >
+                    <EditableText
+                      textKey={TAB_TEXT_KEYS[tab]}
+                      defaultText={tab}
+                    />
+                    {isActive && (
+                      <span
+                        style={{
+                          color: "#5EF08A",
+                          fontSize: "0.9rem",
+                          flexShrink: 0,
+                          marginLeft: "8px",
+                        }}
+                      >
+                        ✓
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Tab content with crossfade */}
         <AnimatePresence mode="wait">

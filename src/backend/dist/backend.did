@@ -706,7 +706,17 @@ service : {
       convertedLeads: nat;
       totalLeads: nat;
     }) query;
+  getCountryBreakdown: (email: text) ->
+   (vec record {
+          text;
+          nat;
+          float64;
+        }) query;
   getCycles: () -> (nat) query;
+  getDailyVisitorChart: (email: text) -> (vec record {
+                                                text;
+                                                nat;
+                                              }) query;
   getDashboardMetrics: () -> (DashboardMetrics) query;
   getEmailLogs: (adminEmail: text) -> (vec EmailLog) query;
   getEmailTemplates: () -> (vec EmailTemplate) query;
@@ -725,6 +735,7 @@ service : {
       ok: GoogleSheetsConfig;
     });
   getLeads: (adminEmail: text) -> (vec Lead) query;
+  getLiveVisitorCount: (email: text) -> (nat) query;
   getMarqueeLogos: () -> (vec MarqueeLogo) query;
   getMessages: (callerEmail: text, targetClientEmail: text) ->
    (vec ClientMessage) query;
@@ -819,12 +830,28 @@ service : {
       ok: text;
     });
   getStripeTestMode: () -> (bool) query;
+  getTopPages: (email: text) -> (vec record {
+                                       text;
+                                       nat;
+                                       float64;
+                                     }) query;
   getUnreadMessageCounts: (adminEmail: text) ->
    (vec record {
           text;
           nat;
         }) query;
   getVapidPublicKey: () -> (text) query;
+  getVisitorStats: (email: text) ->
+   (record {
+      allTimeSessions: nat;
+      allTimeUnique: nat;
+      monthSessions: nat;
+      monthUnique: nat;
+      todaySessions: nat;
+      todayUnique: nat;
+      weekSessions: nat;
+      weekUnique: nat;
+    }) query;
   handleStripeWebhook: (payload: text, _signature: text) ->
    (variant {
       err: text;
@@ -860,6 +887,8 @@ service : {
    QuestionnaireId) -> ();
   publishBlogPost: (adminEmail: text, id: BlogPostId) -> ();
   publishPortfolioItem: (adminEmail: text, id: text) -> (UpsertResult);
+  recordVisit: (pagePath: text, timestamp: int, sessionId: text, countryCode:
+   opt text) -> (bool);
   registerUser: (args:
    record {
      email: text;

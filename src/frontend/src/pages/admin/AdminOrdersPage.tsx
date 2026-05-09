@@ -1021,6 +1021,7 @@ export default function AdminOrdersPage() {
   const [stripeUnavailable, setStripeUnavailable] = useState(false);
   const [stripeNotConfigured, setStripeNotConfigured] = useState(false);
   const [activeTab, setActiveTab] = useState<TransactionTab>("one-time");
+  const [tabMenuOpen, setTabMenuOpen] = useState(false);
 
   // Load orders
   useEffect(() => {
@@ -1299,6 +1300,14 @@ export default function AdminOrdersPage() {
         }
         .stripe-tab-btn { transition: color 0.15s, border-color 0.15s; }
         .stripe-tab-btn:hover { color: #EEF0F8 !important; }
+        @media (max-width: 767px) {
+          .orders-tab-mobile-header { display: flex !important; }
+          .orders-tab-desktop-row { display: none !important; }
+        }
+        @media (min-width: 768px) {
+          .orders-tab-mobile-header { display: none !important; }
+          .orders-tab-desktop-row { display: flex !important; }
+        }
       `}</style>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -1742,9 +1751,48 @@ export default function AdminOrdersPage() {
           data-ocid="orders.transaction.tabs"
           style={{ ...DARK_CARD, overflow: "hidden" }}
         >
-          {/* Tab Navigation */}
+          {/* Mobile hamburger — shown only below 768px */}
           <div
-            className="tabs-scroll-container"
+            className="orders-tab-mobile-header"
+            style={{
+              display: "none",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "12px 16px",
+              borderBottom: "1px solid #1C1F33",
+              background: "rgba(19,21,36,0.5)",
+            }}
+          >
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#EEF0F8" }}>
+              {tabsConfig.find((t) => t.key === activeTab)?.label ??
+                "Transactions"}
+            </span>
+            <button
+              type="button"
+              data-ocid="orders.tab.hamburger_button"
+              aria-label="Open transaction tabs menu"
+              onClick={() => setTabMenuOpen(true)}
+              style={{
+                background: "transparent",
+                border: "1px solid #1C1F33",
+                borderRadius: 6,
+                padding: "6px 10px",
+                cursor: "pointer",
+                color: "#EEF0F8",
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                fontSize: 18,
+                lineHeight: 1,
+              }}
+            >
+              ☰
+            </button>
+          </div>
+
+          {/* Desktop tab row — hidden below 768px */}
+          <div
+            className="orders-tab-desktop-row tabs-scroll-container"
             style={{
               display: "flex",
               borderBottom: "1px solid #1C1F33",
@@ -1783,6 +1831,97 @@ export default function AdminOrdersPage() {
               </button>
             ))}
           </div>
+
+          {/* Mobile fullscreen overlay */}
+          {tabMenuOpen && (
+            <div
+              data-ocid="orders.tab.mobile_overlay"
+              style={{
+                position: "fixed",
+                top: 0,
+                left: 0,
+                width: "100%",
+                height: "100%",
+                zIndex: 9999,
+                background: "rgba(10,11,22,0.97)",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              {/* Overlay header */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "18px 20px",
+                  borderBottom: "1px solid #1C1F33",
+                }}
+              >
+                <span
+                  style={{ fontSize: 14, fontWeight: 700, color: "#EEF0F8" }}
+                >
+                  Transactions
+                </span>
+                <button
+                  type="button"
+                  data-ocid="orders.tab.mobile_overlay_close"
+                  aria-label="Close transaction tabs menu"
+                  onClick={() => setTabMenuOpen(false)}
+                  style={{
+                    background: "transparent",
+                    border: "1px solid #1C1F33",
+                    borderRadius: 6,
+                    padding: "6px 12px",
+                    cursor: "pointer",
+                    color: "#EEF0F8",
+                    fontSize: 18,
+                    lineHeight: 1,
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+              {/* Tab list */}
+              <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
+                {tabsConfig.map(({ key, label }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    data-ocid={`orders.tab.mobile.${key}`}
+                    onClick={() => {
+                      setActiveTab(key);
+                      setTabMenuOpen(false);
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      width: "100%",
+                      minHeight: 52,
+                      padding: "0 24px",
+                      background:
+                        activeTab === key
+                          ? "rgba(94,240,138,0.08)"
+                          : "transparent",
+                      border: "none",
+                      borderLeft:
+                        activeTab === key
+                          ? "3px solid #5EF08A"
+                          : "3px solid transparent",
+                      cursor: "pointer",
+                      fontSize: 15,
+                      fontWeight: activeTab === key ? 700 : 500,
+                      color: activeTab === key ? "#5EF08A" : "#EEF0F8",
+                      textAlign: "left",
+                      transition: "background 0.1s",
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Tab Content */}
           <div style={{ padding: 20 }}>

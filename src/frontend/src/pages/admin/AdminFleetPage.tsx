@@ -792,6 +792,7 @@ function FleetPanel({
 export default function AdminFleetPage() {
   const { actor, isFetching } = useActor();
   const [activeTab, setActiveTab] = useState<FleetTab>("sites");
+  const [tabMenuOpen, setTabMenuOpen] = useState(false);
 
   // Stable function references for Sites tab
   const getFleetSites = useCallback(
@@ -876,7 +877,7 @@ export default function AdminFleetPage() {
         </p>
       </div>
 
-      {/* Sub-tab bar */}
+      {/* Sub-tab bar — desktop (hidden on mobile) */}
       <div
         style={{
           display: "flex",
@@ -887,6 +888,7 @@ export default function AdminFleetPage() {
           WebkitOverflowScrolling: "touch",
           scrollbarWidth: "none" as React.CSSProperties["scrollbarWidth"],
         }}
+        className="fleet-tab-bar-desktop"
       >
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
@@ -919,6 +921,137 @@ export default function AdminFleetPage() {
         })}
       </div>
 
+      {/* Hamburger button — mobile only (below 768px) */}
+      <div
+        className="fleet-tab-bar-mobile"
+        style={{
+          marginBottom: "28px",
+          borderBottom: "1px solid #1C1F33",
+          paddingBottom: "12px",
+        }}
+      >
+        <button
+          type="button"
+          data-ocid="fleet.tab_menu_open"
+          onClick={() => setTabMenuOpen(true)}
+          aria-label="Open navigation menu"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            background: "rgba(255,255,255,0.05)",
+            border: "1px solid #1C1F33",
+            borderRadius: "8px",
+            color: "#EEF0F8",
+            cursor: "pointer",
+            fontSize: "14px",
+            fontWeight: 600,
+            padding: "10px 16px",
+          }}
+        >
+          <span style={{ fontSize: "18px", lineHeight: 1 }}>☰</span>
+          {tabs.find((t) => t.id === activeTab)?.label ?? "Menu"}
+        </button>
+      </div>
+
+      {/* Fullscreen overlay — mobile tab menu */}
+      {tabMenuOpen && (
+        <div
+          data-ocid="fleet.tab_menu"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            zIndex: 9999,
+            background: "#0A0C1A",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {/* Overlay header */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "20px 24px",
+              borderBottom: "1px solid #1C1F33",
+            }}
+          >
+            <span
+              style={{ color: "#EEF0F8", fontSize: "16px", fontWeight: 700 }}
+            >
+              Infrastructure
+            </span>
+            <button
+              type="button"
+              data-ocid="fleet.tab_menu_close"
+              onClick={() => setTabMenuOpen(false)}
+              aria-label="Close navigation menu"
+              style={{
+                background: "rgba(255,255,255,0.08)",
+                border: "1px solid #1C1F33",
+                borderRadius: "8px",
+                color: "#EEF0F8",
+                cursor: "pointer",
+                fontSize: "20px",
+                fontWeight: 700,
+                width: "40px",
+                height: "40px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                lineHeight: 1,
+              }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Tab list */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "12px 0" }}>
+            {tabs.map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  data-ocid={`fleet.${tab.id}.tab`}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setTabMenuOpen(false);
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    width: "100%",
+                    minHeight: "52px",
+                    padding: "0 24px",
+                    background: isActive
+                      ? "rgba(94,240,138,0.08)"
+                      : "transparent",
+                    border: "none",
+                    borderLeft: isActive
+                      ? "3px solid #5EF08A"
+                      : "3px solid transparent",
+                    color: isActive ? "#5EF08A" : "#EEF0F8",
+                    cursor: "pointer",
+                    fontSize: "16px",
+                    fontWeight: isActive ? 700 : 500,
+                    textAlign: "left",
+                    transition: "background 0.15s",
+                  }}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Sites panel */}
       {activeTab === "sites" && (
         <FleetPanel
@@ -946,6 +1079,12 @@ export default function AdminFleetPage() {
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         input::placeholder { color: #4A4D60; }
+        .fleet-tab-bar-desktop { display: flex; }
+        .fleet-tab-bar-mobile { display: none; }
+        @media (max-width: 767px) {
+          .fleet-tab-bar-desktop { display: none !important; }
+          .fleet-tab-bar-mobile { display: block !important; }
+        }
       `}</style>
     </AdminLayout>
   );

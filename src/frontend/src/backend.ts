@@ -779,7 +779,9 @@ export interface backendInterface {
         totalLeads: bigint;
         conversionRate: number;
     }>;
+    getCountryBreakdown(email: string): Promise<Array<[string, bigint, number]>>;
     getCycles(): Promise<bigint>;
+    getDailyVisitorChart(email: string): Promise<Array<[string, bigint]>>;
     getDashboardMetrics(): Promise<DashboardMetrics>;
     getEmailLogs(adminEmail: string): Promise<Array<EmailLog>>;
     getEmailTemplates(): Promise<Array<EmailTemplate>>;
@@ -801,6 +803,7 @@ export interface backendInterface {
         err: string;
     }>;
     getLeads(adminEmail: string): Promise<Array<Lead>>;
+    getLiveVisitorCount(email: string): Promise<bigint>;
     getMarqueeLogos(): Promise<Array<MarqueeLogo>>;
     getMessages(callerEmail: string, targetClientEmail: string): Promise<Array<ClientMessage>>;
     getMyActivity(): Promise<Array<ActivityLog>>;
@@ -915,8 +918,19 @@ export interface backendInterface {
         err: string;
     }>;
     getStripeTestMode(): Promise<boolean>;
+    getTopPages(email: string): Promise<Array<[string, bigint, number]>>;
     getUnreadMessageCounts(adminEmail: string): Promise<Array<[string, bigint]>>;
     getVapidPublicKey(): Promise<string>;
+    getVisitorStats(email: string): Promise<{
+        todayUnique: bigint;
+        weekUnique: bigint;
+        monthUnique: bigint;
+        todaySessions: bigint;
+        allTimeUnique: bigint;
+        monthSessions: bigint;
+        weekSessions: bigint;
+        allTimeSessions: bigint;
+    }>;
     handleStripeWebhook(payload: string, _signature: string): Promise<{
         __kind__: "ok";
         ok: string;
@@ -955,6 +969,7 @@ export interface backendInterface {
     markQuestionnaireReviewed(adminEmail: string, questionnaireId: QuestionnaireId): Promise<void>;
     publishBlogPost(adminEmail: string, id: BlogPostId): Promise<void>;
     publishPortfolioItem(adminEmail: string, id: string): Promise<UpsertResult>;
+    recordVisit(pagePath: string, timestamp: bigint, sessionId: string, countryCode: string | null): Promise<boolean>;
     registerUser(args: {
         email: string;
         passwordHash: Uint8Array;
@@ -2343,6 +2358,20 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async getCountryBreakdown(arg0: string): Promise<Array<[string, bigint, number]>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getCountryBreakdown(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getCountryBreakdown(arg0);
+            return result;
+        }
+    }
     async getCycles(): Promise<bigint> {
         if (this.processError) {
             try {
@@ -2354,6 +2383,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.getCycles();
+            return result;
+        }
+    }
+    async getDailyVisitorChart(arg0: string): Promise<Array<[string, bigint]>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getDailyVisitorChart(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getDailyVisitorChart(arg0);
             return result;
         }
     }
@@ -2493,6 +2536,20 @@ export class Backend implements backendInterface {
         } else {
             const result = await this.actor.getLeads(arg0);
             return from_candid_vec_n67(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async getLiveVisitorCount(arg0: string): Promise<bigint> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getLiveVisitorCount(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getLiveVisitorCount(arg0);
+            return result;
         }
     }
     async getMarqueeLogos(): Promise<Array<MarqueeLogo>> {
@@ -3233,6 +3290,20 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async getTopPages(arg0: string): Promise<Array<[string, bigint, number]>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getTopPages(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getTopPages(arg0);
+            return result;
+        }
+    }
     async getUnreadMessageCounts(arg0: string): Promise<Array<[string, bigint]>> {
         if (this.processError) {
             try {
@@ -3258,6 +3329,29 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.getVapidPublicKey();
+            return result;
+        }
+    }
+    async getVisitorStats(arg0: string): Promise<{
+        todayUnique: bigint;
+        weekUnique: bigint;
+        monthUnique: bigint;
+        todaySessions: bigint;
+        allTimeUnique: bigint;
+        monthSessions: bigint;
+        weekSessions: bigint;
+        allTimeSessions: bigint;
+    }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getVisitorStats(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getVisitorStats(arg0);
             return result;
         }
     }
@@ -3518,6 +3612,20 @@ export class Backend implements backendInterface {
         } else {
             const result = await this.actor.publishPortfolioItem(arg0, arg1);
             return from_candid_UpsertResult_n15(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async recordVisit(arg0: string, arg1: bigint, arg2: string, arg3: string | null): Promise<boolean> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.recordVisit(arg0, arg1, arg2, to_candid_opt_n8(this._uploadFile, this._downloadFile, arg3));
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.recordVisit(arg0, arg1, arg2, to_candid_opt_n8(this._uploadFile, this._downloadFile, arg3));
+            return result;
         }
     }
     async registerUser(arg0: {

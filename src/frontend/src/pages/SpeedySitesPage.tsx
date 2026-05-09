@@ -14,9 +14,11 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 import React, { useEffect, useState } from "react";
-import type { Product } from "../backend.d.ts";
+import { createActor } from "../backend";
+import type { Product, backendInterface } from "../backend.d.ts";
 import { EditableText } from "../components/EditableText";
 import { Footer } from "../components/Footer";
+import { createActorWithConfig } from "../config";
 import { useActor } from "../hooks/useActor";
 import { useCartStore } from "../store/useCartStore";
 
@@ -241,6 +243,41 @@ function getProductPrice(p: Product): number {
 export default function SpeedySitesDetail() {
   const { addItem, openDrawer } = useCartStore();
   const { actor, isFetching } = useActor();
+
+  useEffect(() => {
+    const track = async () => {
+      try {
+        let sid = sessionStorage.getItem("_vis_sid");
+        if (!sid) {
+          sid = crypto.randomUUID();
+          sessionStorage.setItem("_vis_sid", sid);
+        }
+        let countryCode: string | null = null;
+        try {
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 2000);
+          const res = await fetch("https://ipapi.co/country/", {
+            signal: ctrl.signal,
+          });
+          clearTimeout(timer);
+          const text = (await res.text()).trim();
+          if (/^[A-Z]{2}$/.test(text)) countryCode = text;
+        } catch {
+          // geolocation failed — use null
+        }
+        const publicActor = await createActorWithConfig(createActor);
+        await (publicActor as backendInterface).recordVisit(
+          window.location.pathname,
+          BigInt(Math.floor(Date.now())) * 1_000_000n,
+          sid!,
+          countryCode,
+        );
+      } catch {
+        // silent
+      }
+    };
+    track();
+  }, []);
 
   // Live backend products for this category
   const [backendProducts, setBackendProducts] = useState<Product[]>([]);

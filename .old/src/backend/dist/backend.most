@@ -495,6 +495,8 @@ type UserProfile__491224006 =
     role : Text
   };
 type UserRole__1054455867 = {#admin; #guest; #user};
+type VisitEvent__14683284 =
+  {countryCode : ?Text; pagePath : Text; sessionId : Text; timestamp : Int};
 type WeeklySchedule__905542794 =
   {
     friday : DaySchedule__841151278;
@@ -523,6 +525,7 @@ actor {
   stable MAX_REFERRAL_CONVERTS : Nat;
   stable MAX_REFERRAL_NAMES : Nat;
   stable MAX_SITE_TEXT : Nat;
+  stable MAX_VISIT_EVENTS : Nat;
   stable RESET_RATE_LIMIT : Nat;
   stable RESET_WINDOW_NS : Int;
   stable var SELF_CANISTER_ID : Text;
@@ -604,6 +607,7 @@ actor {
   stable var _stableUserProfiles : [UserProfile__491224006];
   stable var _stableVapidPrivateKey : Text;
   stable var _stableVapidPublicKey : Text;
+  stable var _stableVisitEvents : [VisitEvent__14683284];
   stable accessControlState :
     {
       var adminAssigned : Bool;

@@ -6828,6 +6828,8 @@ actor ImperidomeCanister {
     _stableQuestionDefs := questionDefsMap.entries().toArray();
     // Persist purchase requests
     _stablePurchaseRequests := _stablePurchaseRequests; // already in stable storage, no in-memory map to drain
+    // Persist visit events
+    _stableVisitEvents := _stableVisitEvents; // already in stable storage, no in-memory map to drain
   };
 
   system func postupgrade() {
@@ -6870,6 +6872,8 @@ actor ImperidomeCanister {
     for (logo in _stableMarqueeLogos.vals()) {
       marqueeLogos.add(logo.id, logo);
     };
+    // Visit events are stored directly in _stableVisitEvents; no in-memory map to restore
+    _stableVisitEvents := _stableVisitEvents;
   // PORTFOLIO V0 → CURRENT MIGRATION: drain old-shape records (no SEO fields) from
     // _stablePortfolio (V0 type, matched to the old .most snapshot) into _stablePortfolioNew.
     // This fires exactly once when upgrading the live canister that stored PortfolioItemV0.
@@ -7982,4 +7986,313 @@ actor ImperidomeCanister {
     let updated = { current with blockedDates = current.blockedDates.filter(func(d : Text) : Bool { not Text.equal(d, date) }) };
     _stableAvailabilitySettings := ?updated;
   };
+
+  // ── ANALYTICS ────────────────────────────────────────────────────────────────
+
+  // VisitEvent — one recorded page-load event from the public site.
+  public type VisitEvent = {
+    pagePath    : Text;
+    timestamp   : Int;
+    sessionId   : Text;
+    countryCode : ?Text;
+  };
+
+  // VISIT EVENTS STABLE STORAGE — auto-persisted via enhanced orthogonal persistence.
+  // Capped at 50,000 entries using FIFO eviction.
+  stable var _stableVisitEvents : [VisitEvent] = [];
+
+  let MAX_VISIT_EVENTS : Nat = 50_000;
+
+  // recordVisit — public (no auth): called on every public page load from the frontend.
+  // Stores the visit event and applies FIFO eviction when the cap is reached.
+  public shared func recordVisit(
+    pagePath    : Text,
+    timestamp   : Int,
+    sessionId   : Text,
+    countryCode : ?Text,
+  ) : async Bool {
+    let event : VisitEvent = { pagePath; timestamp; sessionId; countryCode };
+    if (_stableVisitEvents.size() >= MAX_VISIT_EVENTS) {
+      // Drop the oldest entry (index 0) before appending
+      var trimmed : [VisitEvent] = [];
+      var i = 1;
+      while (i < _stableVisitEvents.size()) {
+        trimmed := trimmed.concat([_stableVisitEvents[i]]);
+        i += 1;
+      };
+      _stableVisitEvents := trimmed.concat([event]);
+    } else {
+      _stableVisitEvents := _stableVisitEvents.concat([event]);
+    };
+    true
+  };
+
+  // getLiveVisitorCount — admin-only: returns the number of unique session IDs
+  // whose most-recent visit timestamp falls within the last 5 minutes.
+  public shared query({ caller }) func getLiveVisitorCount(email : Text) : async Nat {
+    if (not Text.equal(email, "vincenzo@imperidome.com")) {
+      Runtime.trap("Unauthorized: Admin access required");
+    };
+    adminOnly(caller);
+    let fiveMinNs : Int = 5 * 60 * 1_000_000_000;
+    let cutoff = Time.now() - fiveMinNs;
+    // Collect unique session IDs active within the window
+    var seen : [Text] = [];
+    var count = 0;
+    for (ev in _stableVisitEvents.vals()) {
+      if (ev.timestamp >= cutoff) {
+        let already = seen.find(func(s : Text) : Bool { Text.equal(s, ev.sessionId) }) != null;
+        if (not already) {
+          seen := seen.concat([ev.sessionId]);
+          count += 1;
+        };
+      };
+    };
+    count
+  };
+
+  // getVisitorStats — admin-only: returns unique visitor and session counts
+  // grouped by today / this week / this month / all time.
+  public shared query({ caller }) func getVisitorStats(email : Text) : async {
+    todayUnique   : Nat;
+    todaySessions : Nat;
+    weekUnique    : Nat;
+    weekSessions  : Nat;
+    monthUnique   : Nat;
+    monthSessions : Nat;
+    allTimeUnique : Nat;
+    allTimeSessions : Nat;
+  } {
+    if (not Text.equal(email, "vincenzo@imperidome.com")) {
+      Runtime.trap("Unauthorized: Admin access required");
+    };
+    adminOnly(caller);
+    let secNs : Int = 1_000_000_000;
+    let now = Time.now();
+    let todayCutoff  = now - (86_400 * secNs);
+    let weekCutoff   = now - (7 * 86_400 * secNs);
+    let monthCutoff  = now - (30 * 86_400 * secNs);
+    var todaySeen   : [Text] = [];
+    var weekSeen    : [Text] = [];
+    var monthSeen   : [Text] = [];
+    var allTimeSeen : [Text] = [];
+    var todaySessions   = 0;
+    var weekSessions    = 0;
+    var monthSessions   = 0;
+    var allTimeSessions = 0;
+    for (ev in _stableVisitEvents.vals()) {
+      // All time
+      allTimeSessions += 1;
+      let inAllTime = allTimeSeen.find(func(s : Text) : Bool { Text.equal(s, ev.sessionId) }) != null;
+      if (not inAllTime) { allTimeSeen := allTimeSeen.concat([ev.sessionId]) };
+      // Month
+      if (ev.timestamp >= monthCutoff) {
+        monthSessions += 1;
+        let inMonth = monthSeen.find(func(s : Text) : Bool { Text.equal(s, ev.sessionId) }) != null;
+        if (not inMonth) { monthSeen := monthSeen.concat([ev.sessionId]) };
+      };
+      // Week
+      if (ev.timestamp >= weekCutoff) {
+        weekSessions += 1;
+        let inWeek = weekSeen.find(func(s : Text) : Bool { Text.equal(s, ev.sessionId) }) != null;
+        if (not inWeek) { weekSeen := weekSeen.concat([ev.sessionId]) };
+      };
+      // Today
+      if (ev.timestamp >= todayCutoff) {
+        todaySessions += 1;
+        let inToday = todaySeen.find(func(s : Text) : Bool { Text.equal(s, ev.sessionId) }) != null;
+        if (not inToday) { todaySeen := todaySeen.concat([ev.sessionId]) };
+      };
+    };
+    {
+      todayUnique     = todaySeen.size();
+      todaySessions;
+      weekUnique      = weekSeen.size();
+      weekSessions;
+      monthUnique     = monthSeen.size();
+      monthSessions;
+      allTimeUnique   = allTimeSeen.size();
+      allTimeSessions;
+    }
+  };
+
+  // getDailyVisitorChart — admin-only: returns (dateString, uniqueVisitorCount) tuples
+  // for each of the past 30 calendar days, sorted oldest to newest.
+  // dateString format: "YYYY-MM-DD" derived from nanosecond timestamp.
+  public shared query({ caller }) func getDailyVisitorChart(email : Text) : async [(Text, Nat)] {
+    if (not Text.equal(email, "vincenzo@imperidome.com")) {
+      Runtime.trap("Unauthorized: Admin access required");
+    };
+    adminOnly(caller);
+    let secNs : Int = 1_000_000_000;
+    let now = Time.now();
+    // today's day index (seconds since epoch / 86400)
+    let todayDayIdx : Int = (now / secNs) / 86_400;
+    // Build 30 slots: [todayDayIdx-29, ..., todayDayIdx]
+    // For each slot collect unique session IDs
+    var result : [(Text, Nat)] = [];
+    var slot = 0;
+    while (slot < 30) {
+      let dayIdx = todayDayIdx - (29 - slot);
+      // Filter events that fall on this calendar day
+      var seenOnDay : [Text] = [];
+      for (ev in _stableVisitEvents.vals()) {
+        let evDayIdx = (ev.timestamp / secNs) / 86_400;
+        if (evDayIdx == dayIdx) {
+          let already = seenOnDay.find(func(s : Text) : Bool { Text.equal(s, ev.sessionId) }) != null;
+          if (not already) {
+            seenOnDay := seenOnDay.concat([ev.sessionId]);
+          };
+        };
+      };
+      // Format dayIdx as "YYYY-MM-DD"
+      // dayIdx is days since 1970-01-01
+      let totalDays : Int = dayIdx;
+      let y400    = 146_097;  // days in 400-year cycle
+      let y100    = 36_524;
+      let y4      = 1_461;
+      var n       = totalDays + 719_468; // shift to civil calendar epoch
+      let era     = (if (n >= 0) { n } else { n - (y400 - 1) }) / y400;
+      let doe     = n - era * y400;
+      let yoe     = (doe - doe / y4 + doe / y100 - doe / y400) / 365;
+      let y       = yoe + era * 400;
+      let doy     = doe - (365 * yoe + yoe / 4 - yoe / 100);
+      let mp      = (5 * doy + 2) / 153;
+      let d       = doy - (153 * mp + 2) / 5 + 1;
+      let m       = mp + (if (mp < 10) { 3 } else { -9 });
+      let yr      = y + (if (m <= 2) { 1 } else { 0 });
+      // Zero-pad month and day
+      let mStr = if (m < 10) { "0" # m.toText() } else { m.toText() };
+      let dStr = if (d < 10) { "0" # d.toText() } else { d.toText() };
+      let dateStr = yr.toText() # "-" # mStr # "-" # dStr;
+      result := result.concat([(dateStr, seenOnDay.size())]);
+      slot += 1;
+    };
+    result
+  };
+
+  // getTopPages — admin-only: returns the top 10 most-visited page paths with visit
+  // count and percentage of total traffic, sorted descending by count.
+  public shared query({ caller }) func getTopPages(email : Text) : async [(Text, Nat, Float)] {
+    if (not Text.equal(email, "vincenzo@imperidome.com")) {
+      Runtime.trap("Unauthorized: Admin access required");
+    };
+    adminOnly(caller);
+    let total = _stableVisitEvents.size();
+    if (total == 0) { return [] };
+    // Accumulate (path, count) pairs
+    var pageCounts : [(Text, Nat)] = [];
+    for (ev in _stableVisitEvents.vals()) {
+      let idx = pageCounts.find(func(pair : (Text, Nat)) : Bool { Text.equal(pair.0, ev.pagePath) });
+      switch (idx) {
+        case (?found) {
+          pageCounts := pageCounts.map<(Text, Nat), (Text, Nat)>(
+            func(pair : (Text, Nat)) : (Text, Nat) {
+              if (Text.equal(pair.0, ev.pagePath)) { (pair.0, pair.1 + 1) }
+              else { pair }
+            }
+          );
+        };
+        case (null) {
+          pageCounts := pageCounts.concat([(ev.pagePath, 1)]);
+        };
+      };
+    };
+    // Sort descending by count
+    let sorted = pageCounts.sort(func(a : (Text, Nat), b : (Text, Nat)) : { #less; #equal; #greater } {
+      Nat.compare(b.1, a.1)
+    });
+    // Take top 10 and annotate with percentage
+    let totalF = total.toFloat();
+    var out : [(Text, Nat, Float)] = [];
+    var i = 0;
+    while (i < sorted.size() and i < 10) {
+      let (path, cnt) = sorted[i];
+      let pct = cnt.toFloat() / totalF * 100.0;
+      out := out.concat([(path, cnt, pct)]);
+      i += 1;
+    };
+    out
+  };
+
+  // getCountryBreakdown — admin-only: returns the top 6 countries by unique visitor count
+  // with percentage. Country codes are mapped to full names via inline lookup.
+  public shared query({ caller }) func getCountryBreakdown(email : Text) : async [(Text, Nat, Float)] {
+    if (not Text.equal(email, "vincenzo@imperidome.com")) {
+      Runtime.trap("Unauthorized: Admin access required");
+    };
+    adminOnly(caller);
+    // Map country code to full name
+    func countryName(code : Text) : Text {
+      if      (Text.equal(code, "US")) { "United States" }
+      else if (Text.equal(code, "GB")) { "United Kingdom" }
+      else if (Text.equal(code, "CA")) { "Canada" }
+      else if (Text.equal(code, "AU")) { "Australia" }
+      else if (Text.equal(code, "DE")) { "Germany" }
+      else if (Text.equal(code, "FR")) { "France" }
+      else if (Text.equal(code, "IN")) { "India" }
+      else if (Text.equal(code, "BR")) { "Brazil" }
+      else if (Text.equal(code, "MX")) { "Mexico" }
+      else if (Text.equal(code, "JP")) { "Japan" }
+      else if (Text.equal(code, "NL")) { "Netherlands" }
+      else if (Text.equal(code, "ES")) { "Spain" }
+      else if (Text.equal(code, "IT")) { "Italy" }
+      else if (Text.equal(code, "SE")) { "Sweden" }
+      else if (Text.equal(code, "SG")) { "Singapore" }
+      else if (Text.equal(code, "AE")) { "UAE" }
+      else if (Text.equal(code, "ZA")) { "South Africa" }
+      else { code }
+    };
+    // Count unique session IDs per country code (skip null country)
+    var countryCounts : [(Text, [Text])] = []; // (countryCode, [sessionId])
+    for (ev in _stableVisitEvents.vals()) {
+      switch (ev.countryCode) {
+        case (null) {};
+        case (?code) {
+          let existing = countryCounts.find(func(pair : (Text, [Text])) : Bool { Text.equal(pair.0, code) });
+          switch (existing) {
+            case (?found) {
+              let alreadySeen = found.1.find(func(s : Text) : Bool { Text.equal(s, ev.sessionId) }) != null;
+              if (not alreadySeen) {
+                countryCounts := countryCounts.map<(Text, [Text]), (Text, [Text])>(
+                  func(pair : (Text, [Text])) : (Text, [Text]) {
+                    if (Text.equal(pair.0, code)) { (pair.0, pair.1.concat([ev.sessionId])) }
+                    else { pair }
+                  }
+                );
+              };
+            };
+            case (null) {
+              countryCounts := countryCounts.concat([(code, [ev.sessionId])]);
+            };
+          };
+        };
+      };
+    };
+    // Sum total visitors with country data
+    var totalWithCountry = 0;
+    for (pair in countryCounts.vals()) {
+      totalWithCountry += pair.1.size();
+    };
+    if (totalWithCountry == 0) { return [] };
+    // Convert to (code, count) and sort descending
+    let countPairs : [(Text, Nat)] = countryCounts.map<(Text, [Text]), (Text, Nat)>(
+      func(pair : (Text, [Text])) : (Text, Nat) { (pair.0, pair.1.size()) }
+    );
+    let sorted = countPairs.sort(func(a : (Text, Nat), b : (Text, Nat)) : { #less; #equal; #greater } {
+      Nat.compare(b.1, a.1)
+    });
+    // Take top 6 and annotate with country name and percentage
+    let totalF = totalWithCountry.toFloat();
+    var out : [(Text, Nat, Float)] = [];
+    var i = 0;
+    while (i < sorted.size() and i < 6) {
+      let (code, cnt) = sorted[i];
+      let pct = cnt.toFloat() / totalF * 100.0;
+      out := out.concat([(countryName(code), cnt, pct)]);
+      i += 1;
+    };
+    out
+  };
+
 };

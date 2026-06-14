@@ -1,3 +1,4 @@
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import {
   Bot,
   Calendar,
@@ -165,15 +166,111 @@ function SectionWrapper({
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Map from URL slug (from AIReceptionistPage.tsx tierSlug) to TIERS key */
+const SLUG_TO_TIER_KEY: Record<string, "tier1" | "tier2" | "tier3"> = {
+  "the-safety-net": "tier1",
+  "the-receptionist": "tier2",
+  "the-closer": "tier3",
+};
+
+const AI_SECTIONS = [
+  "Business Identity",
+  "Voice & Personality",
+  "Knowledge Base Training",
+  "Operations & Lead Capture",
+  "Booking & Calendar",
+  "Escalation & Goals",
+  "Submit",
+];
+
+function AiStepIndicator() {
+  return (
+    <div style={{ marginBottom: "8px" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "0",
+          marginBottom: "12px",
+          flexWrap: "wrap",
+          rowGap: "8px",
+        }}
+      >
+        {AI_SECTIONS.map((section, i) => (
+          <div key={section} style={{ display: "flex", alignItems: "center" }}>
+            <div
+              style={{
+                width: "30px",
+                height: "30px",
+                borderRadius: "50%",
+                background:
+                  i === 0 ? "rgba(94,240,138,0.15)" : "rgba(255,255,255,0.04)",
+                border:
+                  i === 0
+                    ? "2px solid #5EF08A"
+                    : "2px solid rgba(255,255,255,0.1)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: i === 0 ? "#5EF08A" : "#4A4D60",
+                fontSize: "0.75rem",
+                fontWeight: "800",
+                flexShrink: 0,
+              }}
+            >
+              {i + 1}
+            </div>
+            {i < AI_SECTIONS.length - 1 && (
+              <div
+                style={{
+                  width: "28px",
+                  height: "2px",
+                  background: "rgba(255,255,255,0.07)",
+                }}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+      <p
+        style={{
+          textAlign: "center",
+          color: "rgba(200,205,220,0.55)",
+          fontSize: "0.75rem",
+          fontWeight: "600",
+          letterSpacing: "0.06em",
+          margin: 0,
+        }}
+      >
+        Complete all sections below to submit
+      </p>
+    </div>
+  );
+}
+
 export default function AiReceptionistForm() {
   const [selectedTier, setSelectedTier] = useState<
     "tier1" | "tier2" | "tier3" | ""
   >("");
+  const navigate = useNavigate();
+
+  // Pre-select tier from URL param (?tier=the-safety-net etc.)
+  const search = useSearch({ from: "/ai-receptionist-setup" }) as {
+    tier?: string;
+  };
+  useEffect(() => {
+    if (search.tier) {
+      const key = SLUG_TO_TIER_KEY[search.tier];
+      if (key) setSelectedTier(key);
+    }
+  }, [search]);
   const [formData, setFormData] = useState<FormData>({});
   const { actor } = useActor();
   const { addItem, openDrawer } = useCartStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [catalogFetchFailed, setCatalogFetchFailed] = useState(false);
 
   // Live monthly prices from backend, keyed by backendName (lowercase)
   const [liveMonthly, setLiveMonthly] = useState<Record<string, number>>({});
@@ -201,10 +298,14 @@ export default function AiReceptionistForm() {
             map[p.name.toLowerCase()] = price;
           }
         }
+        const hasZeroPrice =
+          Object.keys(map).length === 0 ||
+          Object.values(map).every((v) => v === 0);
+        if (hasZeroPrice) setCatalogFetchFailed(true);
         setLiveMonthly(map);
       })
       .catch(() => {
-        // fail silently — fallback display handled below
+        setCatalogFetchFailed(true);
       });
   }, [actor]);
 
@@ -232,15 +333,27 @@ export default function AiReceptionistForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedTier) return alert("Please select a tier first.");
+    if (!selectedTier) {
+      setSubmitError("Please select a tier first.");
+      return;
+    }
 
     // Quality Control Validation
     if (selectedTier !== "tier1") {
       if (!formData.ai_services || formData.ai_services.length < 15) {
-        return alert(
+        setSubmitError(
           "Please describe your services in more detail. The AI needs this context to answer caller questions accurately!",
         );
+        return;
       }
+    }
+
+    const subscriptionPrice = getTierMonthly(selectedTier);
+    if (catalogFetchFailed || !subscriptionPrice || subscriptionPrice === 0) {
+      setSubmitError(
+        "Unable to confirm pricing. Please refresh and try again.",
+      );
+      return;
     }
 
     if (!actor) {
@@ -334,8 +447,27 @@ export default function AiReceptionistForm() {
       // Step 2: Only after backend confirms success, trigger Stripe checkout via cart
       const backendName = TIERS[selectedTier].backendName;
       const monthly = getTierMonthly(selectedTier);
-      const priceStr = monthly > 0 ? `$${monthly.toLocaleString()}/mo` : "—";
+      const priceStr = monthly > 0 ? `${monthly.toLocaleString()}/mo` : "—";
       addItem({ name: backendName, price: priceStr });
+
+      // NEW-H-2: Setup fee item name must match backend catalog exactly.
+      // Backend catalog names:
+      //   tier2 (Receptionist): "AI Receptionist Setup Fee - Receptionist"
+      //   tier3 (Closer):       "AI Receptionist Setup Fee - Closer"
+      const TIER_SETUP_FEE_CATALOG_NAMES: Record<string, string> = {
+        tier2: "AI Receptionist Setup Fee - Receptionist",
+        tier3: "AI Receptionist Setup Fee - Closer",
+      };
+      const setupFee = TIERS[selectedTier]?.setup ?? 0;
+      if (setupFee > 0) {
+        const setupFeeName =
+          TIER_SETUP_FEE_CATALOG_NAMES[selectedTier] ??
+          `AI Receptionist Setup Fee - ${TIERS[selectedTier].name}`;
+        addItem({
+          name: setupFeeName,
+          price: `${setupFee.toLocaleString()}`,
+        });
+      }
       openDrawer();
     } catch (error) {
       setSubmitError(
@@ -349,6 +481,40 @@ export default function AiReceptionistForm() {
     <>
       <div className="min-h-screen bg-[#0A0B14] text-[#EEF0F8] font-sans pb-32 pt-12">
         <div className="max-w-4xl mx-auto px-6">
+          {/* Back button + Step indicator */}
+          <div style={{ marginBottom: "32px" }}>
+            <button
+              type="button"
+              onClick={() => navigate({ to: "/services" })}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                background: "none",
+                border: "none",
+                padding: "0 0 16px 0",
+                color: "rgba(200,205,220,0.7)",
+                fontSize: "0.82rem",
+                fontWeight: "500",
+                cursor: "pointer",
+                letterSpacing: "0.02em",
+                transition: "color 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.color =
+                  "rgba(200,205,220,1)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.color =
+                  "rgba(200,205,220,0.7)";
+              }}
+              data-ocid="ai-receptionist.back_button"
+            >
+              {String.fromCharCode(8592)} Back to AI Receptionist
+            </button>
+            <AiStepIndicator />
+          </div>
+
           <div className="mb-12 text-center">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#5EF08A]/10 border border-[#5EF08A]/30 text-[#5EF08A] text-xs font-bold tracking-widest uppercase mb-4">
               <Sparkles className="w-4 h-4" /> 24/7 Lead Capture System

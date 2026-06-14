@@ -1,4 +1,4 @@
-import { useSearch } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import {
   AlertCircle,
   ChevronLeft,
@@ -12,6 +12,7 @@ import { useState } from "react";
 import { Footer } from "../components/Footer";
 import { Navbar } from "../components/Navbar";
 import { useActor } from "../hooks/useActor";
+import { useCartStore } from "../store/useCartStore";
 
 // Tier → product name mapping for backend catalog lookup
 const TIER_PRODUCT_NAMES: Record<string, string> = {
@@ -442,6 +443,8 @@ export default function ProductLabBriefPage() {
   const tier = (search.tier ?? "flash") as "flash" | "starter" | "scale";
 
   const { actor } = useActor();
+  const { addItem, openDrawer } = useCartStore();
+  const navigate = useNavigate();
 
   // Step state
   const [step, setStep] = useState(1);
@@ -526,8 +529,16 @@ export default function ProductLabBriefPage() {
         null,
       );
 
-      // Step 3: After successful backend save, redirect to the unified checkout
-      window.location.href = "/checkout";
+      // Step 3: After successful backend save, add correct item to cart and open drawer
+      const tierPrices: Record<string, { name: string; price: string }> = {
+        flash: { name: "Flash", price: "$399" },
+        starter: { name: "Starter", price: "$899/mo" },
+        scale: { name: "Scale", price: "$1,249/mo" },
+      };
+      const cartEntry = tierPrices[tier] ?? tierPrices.flash;
+      addItem({ name: cartEntry.name, price: cartEntry.price });
+      openDrawer();
+      navigate({ to: "/" });
     } catch (err) {
       setSubmitError(
         `Submission failed: ${(err as Error).message ?? "Unknown error"}. Please try again.`,
@@ -681,6 +692,39 @@ export default function ProductLabBriefPage() {
               {tierDisplay.price}
             </span>
           </motion.div>
+        </div>
+
+        {/* Back to Product Ads */}
+        <div style={{ marginBottom: "16px" }}>
+          <button
+            type="button"
+            onClick={() => navigate({ to: "/services" })}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              background: "none",
+              border: "none",
+              padding: "0",
+              color: "rgba(200,205,220,0.7)",
+              fontSize: "0.82rem",
+              fontWeight: "500",
+              cursor: "pointer",
+              letterSpacing: "0.02em",
+              transition: "color 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.color =
+                "rgba(200,205,220,1)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.color =
+                "rgba(200,205,220,0.7)";
+            }}
+            data-ocid="product-lab.back_to_service"
+          >
+            {"\u2190"} Back to Product Ads
+          </button>
         </div>
 
         {/* Step indicator */}

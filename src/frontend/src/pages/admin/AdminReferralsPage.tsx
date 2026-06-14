@@ -6,22 +6,30 @@ import {
   Loader2,
   Plus,
   RefreshCw,
+  Trash2,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import type {
+  CSSProperties,
+  FormEvent,
+  KeyboardEvent,
+  MouseEvent,
+} from "react";
 import { toast } from "sonner";
-import type { ReferralStat } from "../../backend.d";
+import type { ReferralStat, backendInterface } from "../../backend.d";
+import { ADMIN_EMAIL_KEY } from "../../constants";
 import { useActor } from "../../hooks/useActor";
 import { getSession } from "../../hooks/useSession";
 import AdminLayout from "./AdminLayout";
 
 function getAdminEmail(): string {
   const s = getSession();
-  return s?.email ?? localStorage.getItem("imperidome_admin_email") ?? "";
+  return s?.email ?? localStorage.getItem(ADMIN_EMAIL_KEY) ?? "";
 }
 
 // ─── Glassmorphism card style (matches admin panel system) ────────────────────
-const glassCard: React.CSSProperties = {
+const glassCard: CSSProperties = {
   background: "rgba(10,10,10,0.75)",
   backdropFilter: "blur(30px)",
   WebkitBackdropFilter: "blur(30px)",
@@ -54,16 +62,19 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
           fontWeight: 600,
           letterSpacing: "0.08em",
           textTransform: "uppercase",
+          fontFamily: "'Courier New', monospace",
         }}
       >
         {label}
       </span>
       <span
         style={{
-          color: "#fff",
+          color: "#5EF08A",
           fontSize: "22px",
           fontWeight: 700,
           lineHeight: 1,
+          fontFamily: "'Courier New', monospace",
+          textShadow: "0 0 8px rgba(94,240,138,0.4)",
         }}
       >
         {value}
@@ -74,12 +85,11 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
 
 // ─── Generate Partner Link Modal ──────────────────────────────────────────────
 interface GenerateModalProps {
-  adminEmail: string;
   onClose: () => void;
   onSuccess: (url: string) => void;
 }
 
-const inputStyle: React.CSSProperties = {
+const inputStyle: CSSProperties = {
   width: "100%",
   background: "rgba(255,255,255,0.05)",
   border: "1px solid rgba(255,255,255,0.1)",
@@ -91,7 +101,7 @@ const inputStyle: React.CSSProperties = {
   boxSizing: "border-box",
 };
 
-const labelStyle: React.CSSProperties = {
+const labelStyle: CSSProperties = {
   display: "block",
   color: "#ccc",
   fontSize: "12px",
@@ -101,7 +111,7 @@ const labelStyle: React.CSSProperties = {
   letterSpacing: "0.06em",
 };
 
-function GenerateModal({ adminEmail, onClose, onSuccess }: GenerateModalProps) {
+function GenerateModal({ onClose, onSuccess }: GenerateModalProps) {
   const { actor, isFetching } = useActor();
   const [partnerName, setPartnerName] = useState("");
   const [partnerEmail, setPartnerEmail] = useState("");
@@ -113,21 +123,20 @@ function GenerateModal({ adminEmail, onClose, onSuccess }: GenerateModalProps) {
     nameRef.current?.focus();
   }, []);
 
-  function handleBackdropKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+  function handleBackdropKeyDown(e: KeyboardEvent<HTMLDialogElement>) {
     if (e.key === "Escape") onClose();
   }
 
-  function handleBackdropClick(e: React.MouseEvent<HTMLDivElement>) {
+  function handleBackdropClick(e: MouseEvent<HTMLDialogElement>) {
     if (e.target === e.currentTarget) onClose();
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!actor || isFetching) return;
     setLoading(true);
     try {
       const url = await actor.generatePartnerLink(
-        adminEmail,
         partnerName.trim(),
         partnerEmail.trim(),
       );
@@ -135,7 +144,9 @@ function GenerateModal({ adminEmail, onClose, onSuccess }: GenerateModalProps) {
       onSuccess(url);
     } catch (err) {
       toast.error("Failed to generate partner link. Please try again.");
-      console.error(err);
+      if (import.meta.env.DEV) {
+        console.error(err);
+      }
     } finally {
       setLoading(false);
     }
@@ -146,12 +157,14 @@ function GenerateModal({ adminEmail, onClose, onSuccess }: GenerateModalProps) {
     navigator.clipboard
       .writeText(generatedUrl)
       .then(() => toast.success("Link copied!"))
-      .catch(() => {});
+      .catch(() => {
+        toast.error("Failed to copy link. Please copy it manually.");
+      });
   }
 
   return (
-    <div
-      role="presentation"
+    <dialog
+      open
       style={{
         position: "fixed",
         inset: 0,
@@ -165,8 +178,7 @@ function GenerateModal({ adminEmail, onClose, onSuccess }: GenerateModalProps) {
       onClick={handleBackdropClick}
       onKeyDown={handleBackdropKeyDown}
     >
-      <dialog
-        open
+      <div
         aria-label="Generate Partner Link"
         style={{
           width: "100%",
@@ -369,13 +381,13 @@ function GenerateModal({ adminEmail, onClose, onSuccess }: GenerateModalProps) {
             </div>
           </div>
         )}
-      </dialog>
+      </div>
       <style>
         {
           "@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }"
         }
       </style>
-    </div>
+    </dialog>
   );
 }
 
@@ -384,6 +396,8 @@ export default function AdminReferralsPage() {
   const { actor, isFetching } = useActor();
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
+  // Local copy of stats for optimistic removal after revoke
+  const [localStats, setLocalStats] = useState<ReferralStat[] | null>(null);
 
   const adminEmail = getAdminEmail();
 
@@ -396,17 +410,26 @@ export default function AdminReferralsPage() {
     queryKey: ["referralStats", adminEmail],
     queryFn: async () => {
       if (!actor || !adminEmail) return [];
-      return actor.getReferralStats(adminEmail);
+      return actor.getReferralStats();
     },
     enabled: !!actor && !isFetching && !!adminEmail,
   });
 
+  // Sync localStats when query data changes
+  useEffect(() => {
+    if (stats) setLocalStats(stats);
+  }, [stats]);
+
   // Sort by conversions descending
-  const sorted = (stats ?? [])
+  const displayStats = localStats ?? stats ?? [];
+  const sorted = displayStats
     .slice()
-    .sort(
-      (a, b) =>
-        Number(b.successfulConversions) - Number(a.successfulConversions),
+    .sort((a, b) =>
+      b.successfulConversions > a.successfulConversions
+        ? 1
+        : b.successfulConversions < a.successfulConversions
+          ? -1
+          : 0,
     );
 
   const totalClicks = sorted.reduce((acc, s) => acc + Number(s.totalClicks), 0);
@@ -418,6 +441,24 @@ export default function AdminReferralsPage() {
   function handleGenerateSuccess(_url: string) {
     queryClient.invalidateQueries({ queryKey: ["referralStats"] });
     toast.success("Partner link generated successfully!");
+  }
+
+  async function handleRevoke(code: string) {
+    if (!actor) return;
+    try {
+      const result = await (actor as backendInterface).deleteReferral(code);
+      if ("ok" in result) {
+        setLocalStats((prev) => (prev ?? []).filter((s) => s.code !== code));
+        toast.success(`Referral link "${code}" revoked successfully.`);
+      } else {
+        toast.error(`Failed to revoke: ${result.err}`);
+      }
+    } catch (_e) {
+      toast.error("Failed to revoke referral link. Please try again.");
+      if (import.meta.env.DEV) {
+        console.error(_e);
+      }
+    }
   }
 
   return (
@@ -436,10 +477,14 @@ export default function AdminReferralsPage() {
         <div>
           <h1
             style={{
-              color: "#fff",
+              color: "#5EF08A",
               fontSize: "22px",
               fontWeight: 700,
               margin: 0,
+              fontFamily: "'Courier New', monospace",
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              textShadow: "0 0 10px rgba(94,240,138,0.4)",
             }}
           >
             Referral Control Center
@@ -615,7 +660,7 @@ export default function AdminReferralsPage() {
             style={{
               overflowX: "auto",
               WebkitOverflowScrolling:
-                "touch" as React.CSSProperties["WebkitOverflowScrolling"],
+                "touch" as CSSProperties["WebkitOverflowScrolling"],
             }}
           >
             <table
@@ -664,6 +709,7 @@ export default function AdminReferralsPage() {
                     key={stat.code}
                     stat={stat}
                     zebra={idx % 2 === 1}
+                    onRevoke={handleRevoke}
                   />
                 ))}
               </tbody>
@@ -674,7 +720,6 @@ export default function AdminReferralsPage() {
 
       {showModal && (
         <GenerateModal
-          adminEmail={adminEmail}
           onClose={() => setShowModal(false)}
           onSuccess={handleGenerateSuccess}
         />
@@ -684,8 +729,17 @@ export default function AdminReferralsPage() {
 }
 
 // ─── Table row ────────────────────────────────────────────────────────────────
-function ReferralRow({ stat, zebra }: { stat: ReferralStat; zebra: boolean }) {
+function ReferralRow({
+  stat,
+  zebra,
+  onRevoke,
+}: {
+  stat: ReferralStat;
+  zebra: boolean;
+  onRevoke: (code: string) => void;
+}) {
   const [copied, setCopied] = useState(false);
+  const [confirmRevoke, setConfirmRevoke] = useState(false);
 
   function copyCode() {
     navigator.clipboard
@@ -694,7 +748,9 @@ function ReferralRow({ stat, zebra }: { stat: ReferralStat; zebra: boolean }) {
         setCopied(true);
         setTimeout(() => setCopied(false), 1800);
       })
-      .catch(() => {});
+      .catch(() => {
+        toast.error("Failed to copy code. Please copy it manually.");
+      });
   }
 
   const conversions = Number(stat.successfulConversions);
@@ -789,57 +845,146 @@ function ReferralRow({ stat, zebra }: { stat: ReferralStat; zebra: boolean }) {
       {/* Actions */}
       <td style={{ padding: "14px 20px", whiteSpace: "nowrap" }}>
         <div
-          style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}
+          style={{
+            display: "flex",
+            gap: "8px",
+            justifyContent: "flex-end",
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
         >
-          <button
-            type="button"
-            onClick={copyCode}
-            aria-label={`Copy referral code ${stat.code}`}
-            data-ocid={`admin.referrals.copy.${stat.code}`}
-            title="Copy code"
-            style={{
-              padding: "6px 12px",
-              background: copied
-                ? "rgba(57,255,20,0.2)"
-                : "rgba(255,255,255,0.06)",
-              border: copied
-                ? "1px solid rgba(57,255,20,0.4)"
-                : "1px solid rgba(255,255,255,0.1)",
-              borderRadius: "6px",
-              color: copied ? neonGreen : "#ccc",
-              cursor: "pointer",
-              fontSize: "12px",
-              fontWeight: 600,
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
-              transition: "all 0.15s",
-            }}
-          >
-            <Copy size={12} />
-            {copied ? "Copied!" : "Copy"}
-          </button>
-          <a
-            href={`${window.location.origin}?ref=${stat.code}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={`Open referral link for ${stat.code}`}
-            data-ocid={`admin.referrals.open.${stat.code}`}
-            title="Preview link"
-            style={{
-              padding: "6px 10px",
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: "6px",
-              color: "#ccc",
-              textDecoration: "none",
-              display: "flex",
-              alignItems: "center",
-              transition: "all 0.15s",
-            }}
-          >
-            <ExternalLink size={12} />
-          </a>
+          {confirmRevoke ? (
+            // Inline confirmation prompt
+            <>
+              <span
+                style={{
+                  fontSize: "12px",
+                  color: "#f87171",
+                  fontWeight: 600,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Revoke link?
+              </span>
+              <button
+                type="button"
+                data-ocid={`admin.referrals.revoke_confirm.${stat.code}`}
+                onClick={() => {
+                  setConfirmRevoke(false);
+                  onRevoke(stat.code);
+                }}
+                style={{
+                  padding: "5px 10px",
+                  background: "rgba(239,68,68,0.2)",
+                  border: "1px solid rgba(239,68,68,0.5)",
+                  borderRadius: "6px",
+                  color: "#f87171",
+                  cursor: "pointer",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                <Trash2 size={11} />
+                Yes, Revoke
+              </button>
+              <button
+                type="button"
+                data-ocid={`admin.referrals.revoke_cancel.${stat.code}`}
+                onClick={() => setConfirmRevoke(false)}
+                style={{
+                  padding: "5px 10px",
+                  background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  borderRadius: "6px",
+                  color: "#ccc",
+                  cursor: "pointer",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                }}
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={copyCode}
+                aria-label={`Copy referral code ${stat.code}`}
+                data-ocid={`admin.referrals.copy.${stat.code}`}
+                title="Copy code"
+                style={{
+                  padding: "6px 12px",
+                  background: copied
+                    ? "rgba(57,255,20,0.2)"
+                    : "rgba(255,255,255,0.06)",
+                  border: copied
+                    ? "1px solid rgba(57,255,20,0.4)"
+                    : "1px solid rgba(255,255,255,0.1)",
+                  borderRadius: "6px",
+                  color: copied ? neonGreen : "#ccc",
+                  cursor: "pointer",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  transition: "all 0.15s",
+                }}
+              >
+                <Copy size={12} />
+                {copied ? "Copied!" : "Copy"}
+              </button>
+              <a
+                href={`${window.location.origin}?ref=${stat.code}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`Open referral link for ${stat.code}`}
+                data-ocid={`admin.referrals.open.${stat.code}`}
+                title="Preview link"
+                style={{
+                  padding: "6px 10px",
+                  background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  borderRadius: "6px",
+                  color: "#ccc",
+                  textDecoration: "none",
+                  display: "flex",
+                  alignItems: "center",
+                  transition: "all 0.15s",
+                }}
+              >
+                <ExternalLink size={12} />
+              </a>
+              <button
+                type="button"
+                onClick={() => setConfirmRevoke(true)}
+                aria-label={`Revoke referral link ${stat.code}`}
+                data-ocid={`admin.referrals.revoke.${stat.code}`}
+                title="Revoke link"
+                style={{
+                  padding: "6px 10px",
+                  background: "rgba(239,68,68,0.08)",
+                  border: "1px solid rgba(239,68,68,0.25)",
+                  borderRadius: "6px",
+                  color: "#f87171",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  transition: "all 0.15s",
+                }}
+              >
+                <Trash2 size={12} />
+                Revoke
+              </button>
+            </>
+          )}
         </div>
       </td>
     </tr>

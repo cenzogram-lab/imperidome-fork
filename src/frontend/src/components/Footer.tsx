@@ -1,8 +1,11 @@
+import TypewriterText from "@/components/TypewriterText";
 import { useEffect } from "react";
 import { createActor } from "../backend";
 import { createActorWithConfig } from "../config";
 import { useSiteTextStore } from "../store/useSiteTextStore";
 import { EditableText } from "./EditableText";
+
+import { useInternetIdentity } from "@caffeineai/core-infrastructure";
 
 // ─── Social SVG Icons ─────────────────────────────────────────────────────────
 function InstagramIcon() {
@@ -76,6 +79,7 @@ function YouTubeIcon() {
 }
 
 export function Footer() {
+  const { login } = useInternetIdentity();
   const getText = useSiteTextStore((s) => s.getText);
   const fetchAllSiteText = useSiteTextStore((s) => s.fetchAllSiteText);
 
@@ -103,6 +107,9 @@ export function Footer() {
   const linkedinUrl = getText("social.linkedin_url", "#");
   const tiktokUrl = getText("social.tiktok_url", "#");
   const youtubeUrl = getText("social.youtube_url", "#");
+
+  const contactEmail = getText("contact_email", "Vincenzo@imperidome.com");
+  const contactPhone = getText("contact_phone", "856 553 3446");
 
   const socialLinks = [
     {
@@ -139,39 +146,9 @@ export function Footer() {
 
   const services = [
     {
-      key: "footer.products_link_custom_sites",
-      label: "Custom Sites",
-      href: "/services/custom-sites",
-    },
-    {
-      key: "footer.products_link_speedy_sites",
-      label: "Speedy Sites",
-      href: "/services/speedy-sites",
-    },
-    {
-      key: "footer.products_link_saas_plans",
-      label: "SaaS Plans",
-      href: "/services/saas-plans",
-    },
-    {
-      key: "footer.products_link_cinematic_ads",
-      label: "Cinematic Ads",
-      href: "/services/cinematic-ads",
-    },
-    {
-      key: "footer.products_link_product_ads",
-      label: "Product Ads",
-      href: "/services/product-ads",
-    },
-    {
-      key: "footer.products_link_ai_receptionist",
-      label: "AI Receptionist",
-      href: "/services/ai-receptionist",
-    },
-    {
-      key: "footer.products_link_growth_hub",
-      label: "Growth Hub",
-      href: "/services/growth-hub",
+      key: "footer.products_link_services",
+      label: "All Services",
+      href: "/services",
     },
   ];
 
@@ -188,11 +165,6 @@ export function Footer() {
       href: "/get-started",
     },
     { key: "footer.company_link_blog", label: "Blog", href: "/blog" },
-    {
-      key: "footer.company_link_platform_limitations",
-      label: "Platform Limitations",
-      href: "/platform-limitations",
-    },
     {
       key: "footer.company_link_referral",
       label: "Referral Program",
@@ -238,11 +210,14 @@ export function Footer() {
           "0 -4px 40px rgba(57,255,20,0.06), 0 -1px 0 rgba(57,255,20,0.15), inset 0 1px 0 rgba(57,255,20,0.08)",
         backgroundImage:
           "radial-gradient(ellipse 80% 30% at 50% 0%, rgba(57,255,20,0.04) 0%, transparent 60%)",
+        position: "relative",
+        zIndex: 50,
+        pointerEvents: "auto",
       }}
     >
       {/* Main footer columns */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 sm:gap-10">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-8 sm:gap-10">
           {/* Column 1: Brand */}
           <div className="col-span-2 md:col-span-1 flex flex-col gap-4">
             <span
@@ -251,24 +226,33 @@ export function Footer() {
                 color: "#5EF08A",
                 textShadow:
                   "0 0 4px #39FF14, 0 0 16px rgba(57,255,20,0.6), 0 0 40px rgba(57,255,20,0.3)",
+                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                letterSpacing: "0.12em",
               }}
             >
-              <EditableText
-                textKey="footer.brand_title"
-                defaultText="IMPERIDOME"
-              />
+              <TypewriterText text="IMPERIDOME" as="span" speed={80} />
             </span>
-            <p className="text-sm leading-relaxed" style={{ color: "#7A7D90" }}>
-              <EditableText
-                textKey="footer.brand_tagline"
-                defaultText="Better than a freelancer. Faster than an agency. Priced for the real world."
+            <p
+              className="text-sm leading-relaxed"
+              style={{
+                color: "#7A7D90",
+                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+              }}
+            >
+              <TypewriterText
+                text="Better than a freelancer. Faster than an agency. Priced for the real world."
+                as="span"
+                speed={20}
               />
             </p>
-            <p className="text-sm mt-auto" style={{ color: "#7A7D90" }}>
-              <EditableText
-                textKey="footer.copyright"
-                defaultText="@ 2026 Imperidome"
-              />
+            <p
+              className="text-sm mt-auto"
+              style={{
+                color: "#7A7D90",
+                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+              }}
+            >
+              <TypewriterText text="© 2026 Imperidome" as="span" speed={40} />
             </p>
           </div>
 
@@ -276,23 +260,27 @@ export function Footer() {
           <div className="flex flex-col gap-3">
             <h3
               className="font-semibold text-sm uppercase tracking-wider mb-1"
-              style={{ color: "#EEF0F8" }}
+              style={{
+                color: "#5EF08A",
+                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                letterSpacing: "0.12em",
+              }}
             >
-              <EditableText
-                textKey="footer.products_heading"
-                defaultText="Services"
-              />
+              <TypewriterText text="Services" as="span" speed={60} />
             </h3>
             {services.map((item) => (
               <a
                 key={item.href}
                 href={item.href}
                 className="text-sm transition-all duration-150 hover:text-[#5EF08A]"
-                style={{ color: "#7A7D90" }}
+                style={{
+                  color: "#7A7D90",
+                  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                }}
                 data-ocid="footer.services.link"
                 {...linkHoverStyle}
               >
-                <EditableText textKey={item.key} defaultText={item.label} />
+                <TypewriterText text={item.label} as="span" speed={40} />
               </a>
             ))}
           </div>
@@ -301,48 +289,152 @@ export function Footer() {
           <div className="flex flex-col gap-3">
             <h3
               className="font-semibold text-sm uppercase tracking-wider mb-1"
-              style={{ color: "#EEF0F8" }}
+              style={{
+                color: "#5EF08A",
+                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                letterSpacing: "0.12em",
+              }}
             >
-              <EditableText
-                textKey="footer.company_heading"
-                defaultText="Company"
-              />
+              <TypewriterText text="Company" as="span" speed={60} />
             </h3>
-            {company.map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
-                className="text-sm transition-all duration-150 hover:text-[#5EF08A]"
-                style={{ color: "#7A7D90" }}
-                data-ocid="footer.company.link"
-                {...linkHoverStyle}
-              >
-                <EditableText textKey={item.key} defaultText={item.label} />
-              </a>
-            ))}
+            {company.map((item) =>
+              item.key === "footer.company_link_login" ? (
+                <button
+                  key={item.href}
+                  type="button"
+                  className="text-sm transition-all duration-150 hover:text-[#5EF08A] cursor-pointer text-left bg-transparent border-none p-0"
+                  style={{
+                    color: "#7A7D90",
+                    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                  }}
+                  data-ocid="footer.company.login_link"
+                  onClick={() => {
+                    login();
+                  }}
+                >
+                  <TypewriterText text={item.label} as="span" speed={40} />
+                </button>
+              ) : (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  className="text-sm transition-all duration-150 hover:text-[#5EF08A]"
+                  style={{
+                    color: "#7A7D90",
+                    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                  }}
+                  data-ocid="footer.company.link"
+                  {...linkHoverStyle}
+                >
+                  <TypewriterText text={item.label} as="span" speed={40} />
+                </a>
+              ),
+            )}
           </div>
 
-          {/* Column 4: Legal */}
+          {/* Column 4: Contact */}
           <div className="flex flex-col gap-3">
             <h3
               className="font-semibold text-sm uppercase tracking-wider mb-1"
-              style={{ color: "#EEF0F8" }}
+              style={{
+                color: "#5EF08A",
+                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                letterSpacing: "0.12em",
+              }}
             >
-              <EditableText
-                textKey="footer.legal_heading"
-                defaultText="Legal"
-              />
+              <TypewriterText text="Contact" as="span" speed={60} />
+            </h3>
+            <a
+              href={`mailto:${contactEmail}`}
+              className="text-sm transition-all duration-150 hover:text-[#5EF08A]"
+              style={{
+                color: "#7A7D90",
+                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+              }}
+              data-ocid="footer.contact.email"
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLAnchorElement).style.textShadow =
+                  "0 0 6px #39FF14, 0 0 18px rgba(57,255,20,0.4)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLAnchorElement).style.textShadow =
+                  "none";
+              }}
+            >
+              <span
+                style={{
+                  display: "block",
+                  fontSize: "10px",
+                  color: "#5EF08A",
+                  fontWeight: 600,
+                  letterSpacing: "0.08em",
+                  marginBottom: "2px",
+                  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                }}
+              >
+                EMAIL
+              </span>
+              {contactEmail}
+            </a>
+            <a
+              href={`tel:+${(getText("contact_phone", "856 553 3446") || "18565533446").replace(/\D/g, "")}`}
+              className="text-sm transition-all duration-150 hover:text-[#5EF08A]"
+              style={{
+                color: "#7A7D90",
+                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+              }}
+              data-ocid="footer.contact.phone"
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLAnchorElement).style.textShadow =
+                  "0 0 6px #39FF14, 0 0 18px rgba(57,255,20,0.4)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLAnchorElement).style.textShadow =
+                  "none";
+              }}
+            >
+              <span
+                style={{
+                  display: "block",
+                  fontSize: "10px",
+                  color: "#5EF08A",
+                  fontWeight: 600,
+                  letterSpacing: "0.08em",
+                  marginBottom: "2px",
+                  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                }}
+              >
+                PHONE
+              </span>
+              {contactPhone}
+            </a>
+          </div>
+
+          {/* Column 5: Legal */}
+          <div className="flex flex-col gap-3">
+            <h3
+              className="font-semibold text-sm uppercase tracking-wider mb-1"
+              style={{
+                color: "#5EF08A",
+                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                letterSpacing: "0.12em",
+              }}
+            >
+              <TypewriterText text="Legal" as="span" speed={60} />
             </h3>
             {legal.map((item) => (
               <a
                 key={item.href}
                 href={item.href}
                 className="text-sm transition-all duration-150 hover:text-[#5EF08A]"
-                style={{ color: "#7A7D90" }}
+                style={{
+                  color: "#7A7D90",
+                  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                }}
                 data-ocid="footer.legal.link"
                 {...linkHoverStyle}
               >
-                <EditableText textKey={item.key} defaultText={item.label} />
+                <TypewriterText text={item.label} as="span" speed={40} />
               </a>
             ))}
           </div>
@@ -410,24 +502,39 @@ export function Footer() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-center sm:justify-between gap-2">
           <p
             className="text-sm text-center sm:text-left"
-            style={{ color: "#7A7D90" }}
+            style={{
+              color: "#7A7D90",
+              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+            }}
           >
-            <EditableText
-              textKey="footer.bottom_disclaimer"
-              defaultText="Imperidome LLC."
-            />
+            <TypewriterText text="WEBLY LLC" as="span" speed={40} />
           </p>
           <a
             href="/terms"
             className="text-sm transition-all duration-150 hover:text-[#5EF08A]"
-            style={{ color: "#7A7D90" }}
+            style={{
+              color: "#7A7D90",
+              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+            }}
             data-ocid="footer.terms.link"
             {...linkHoverStyle}
           >
-            <EditableText
-              textKey="footer.terms_conditions_link"
-              defaultText="Terms &amp; Conditions"
-            />
+            <TypewriterText text="Terms & Conditions" as="span" speed={40} />
+          </a>
+        </div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-4 flex justify-center">
+          <a
+            href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(typeof window !== "undefined" ? window.location.hostname : "imperidome.com")}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs transition-all duration-150 hover:opacity-80"
+            style={{
+              color: "rgba(122,125,144,0.5)",
+              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+              letterSpacing: "0.06em",
+            }}
+          >
+            Built with love using caffeine.ai
           </a>
         </div>
       </div>

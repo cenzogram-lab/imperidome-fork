@@ -1,7 +1,7 @@
 /**
  * FloatingGodModeToggle — Persistent floating pencil button.
  *
- * Visible only when logged in as the Super Admin (vincenzo@imperidome.com).
+ * Visible only when logged in as an admin.
  * Toggles Edit Site Text mode ON/OFF from any page without going to the dashboard.
  */
 
@@ -10,12 +10,7 @@ import { useActor } from "../hooks/useActor";
 import { getSession } from "../hooks/useSession";
 import { useSiteTextStore } from "../store/useSiteTextStore";
 
-const SUPER_ADMIN_EMAIL = "vincenzo@imperidome.com";
 const NEON = "#39FF14";
-
-function getSessionEmail(): string | null {
-  return getSession()?.email ?? null;
-}
 
 export function FloatingGodModeToggle() {
   const editMode = useSiteTextStore((s) => s.editMode);
@@ -27,7 +22,7 @@ export function FloatingGodModeToggle() {
   // Re-check session on mount and whenever storage changes (login/logout)
   useEffect(() => {
     function check() {
-      setIsSuperAdmin(getSessionEmail() === SUPER_ADMIN_EMAIL);
+      setIsSuperAdmin(getSession()?.role === "admin");
     }
     check();
     window.addEventListener("storage", check);

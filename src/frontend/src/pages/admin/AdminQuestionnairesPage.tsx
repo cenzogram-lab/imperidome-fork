@@ -1,3 +1,4 @@
+import type { Principal } from "@icp-sdk/core/principal";
 import {
   AlertTriangle,
   CheckCircle,
@@ -11,19 +12,16 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import type { CSSProperties, FormEvent, ReactNode } from "react";
 import type {
-  CrmClient,
   QuestionDefinition,
   Questionnaire,
+  UserProfile,
+  backendInterface,
 } from "../../backend.d";
+import TypewriterText from "../../components/TypewriterText";
 import { useActor } from "../../hooks/useActor";
-import { getSession } from "../../hooks/useSession";
 import AdminLayout from "./AdminLayout";
-
-function getAdminEmail(): string {
-  const s = getSession();
-  return s?.email ?? localStorage.getItem("imperidome_admin_email") ?? "";
-}
 
 interface QWithClient extends Questionnaire {
   clientName: string;
@@ -35,35 +33,7 @@ type FilterOption = "all" | "unreviewed" | "reviewed" | "not_submitted";
 type PageTab = "submissions" | "question_editor";
 
 // ── Questionnaire type groups ────────────────────────────────────────────────
-const TIER_GROUPS = [
-  {
-    group: "Custom Build Sites",
-    tiers: [
-      "DIGITAL PRESENCE",
-      "AUTHORITY SITE",
-      "BOOKING PRO",
-      "RESTAURANT PRO",
-      "RESTAURANT EMPIRE",
-      "DIGITAL STOREFRONT",
-      "MEMBERSHIP ENGINE",
-      "ENTERPRISE SCALE",
-    ],
-  },
-  {
-    group: "Speedy Sites",
-    tiers: [
-      "SPEEDY BASIC",
-      "SPEEDY BOOKING",
-      "SPEEDY PRODUCT STOREFRONT",
-      "SPEEDY MENU STOREFRONT",
-      "SPEEDY RECURRING STOREFRONT",
-    ],
-  },
-  {
-    group: "Ads & Services",
-    tiers: ["CinematicAds", "ProductAds", "AIReceptionist"],
-  },
-];
+// Replaced by dynamic tierGroups state loaded from getAllProductsAdmin()
 
 const INPUT_TYPE_OPTIONS = [
   { value: "text", label: "Text" },
@@ -86,6 +56,8 @@ if (
 }
 
 function formatDate(ts: bigint): string {
+  if (ts === 0n) return "—";
+  if (Number.isNaN(Number(ts))) return "—";
   const ms = Number(ts) / 1_000_000;
   return new Date(ms).toLocaleDateString("en-US", {
     month: "long",
@@ -95,6 +67,8 @@ function formatDate(ts: bigint): string {
 }
 
 function formatReviewedAt(ts: bigint): string {
+  if (ts === 0n) return "—";
+  if (Number.isNaN(Number(ts))) return "—";
   const ms = Number(ts) / 1_000_000;
   return new Date(ms).toLocaleString("en-US", {
     month: "long",
@@ -152,7 +126,7 @@ function isLinkUrl(val: string): boolean {
   return trimmed.startsWith("http://") || trimmed.startsWith("https://");
 }
 
-function renderSingleValue(val: string): React.ReactNode {
+function renderSingleValue(val: string): ReactNode {
   const trimmed = val.trim();
   if (!trimmed) return <span style={{ color: "#7A7D90" }}>—</span>;
 
@@ -219,7 +193,7 @@ function renderSingleValue(val: string): React.ReactNode {
   );
 }
 
-function renderAnswerValue(value: string): React.ReactNode {
+function renderAnswerValue(value: string): ReactNode {
   if (!value || !value.trim()) {
     return <span style={{ color: "#7A7D90" }}>—</span>;
   }
@@ -382,7 +356,7 @@ function ConvertToClientModal({
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
     setErrorMsg(null);
@@ -398,7 +372,7 @@ function ConvertToClientModal({
     }
   }
 
-  const inputStyle: React.CSSProperties = {
+  const inputStyle: CSSProperties = {
     width: "100%",
     background: "rgba(14,16,32,0.9)",
     border: "1px solid #1C1F33",
@@ -410,7 +384,7 @@ function ConvertToClientModal({
     boxSizing: "border-box",
   };
 
-  const labelStyle: React.CSSProperties = {
+  const labelStyle: CSSProperties = {
     display: "block",
     fontSize: "11px",
     fontWeight: 700,
@@ -674,7 +648,7 @@ function DetailRow({
   children,
 }: {
   label: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div
@@ -1143,30 +1117,30 @@ function fromEditable(
   };
 }
 
-function generateId(): string {
-  return `q_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-}
+const generateId = () => crypto.randomUUID();
 
-const QE_INPUT: React.CSSProperties = {
+const QE_INPUT: CSSProperties = {
   width: "100%",
-  background: "rgba(14,16,32,0.9)",
-  border: "1px solid #1C1F33",
+  background: "rgba(7,8,16,0.95)",
+  border: "1px solid rgba(94,240,138,0.3)",
   borderRadius: 6,
   padding: "8px 10px",
   fontSize: 13,
   color: "#EEF0F8",
   outline: "none",
   boxSizing: "border-box",
+  fontFamily: "'Courier New', Courier, monospace",
 };
 
-const QE_LABEL: React.CSSProperties = {
+const QE_LABEL: CSSProperties = {
   fontSize: 11,
   fontWeight: 700,
-  color: "#7A7D90",
+  color: "rgba(94,240,138,0.7)",
   textTransform: "uppercase",
-  letterSpacing: "0.05em",
+  letterSpacing: "0.07em",
   marginBottom: 4,
   display: "block",
+  fontFamily: "'Courier New', Courier, monospace",
 };
 
 interface QuestionEditorProps {
@@ -1181,6 +1155,27 @@ function QuestionEditor({ actor }: QuestionEditorProps) {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [tierGroups, setTierGroups] = useState<
+    { group: string; tiers: string[] }[]
+  >([]);
+  useEffect(() => {
+    if (!actor) return;
+    actor
+      .getAllProductsAdmin()
+      .then((products: Array<{ category?: string; name: string }>) => {
+        const grouped: Record<string, string[]> = {};
+        for (const p of products) {
+          const cat = p.category ?? "Uncategorized";
+          if (!grouped[cat]) grouped[cat] = [];
+          grouped[cat].push(p.name);
+        }
+        setTierGroups(
+          Object.entries(grouped).map(([group, tiers]) => ({ group, tiers })),
+        );
+      })
+      .catch(() => {});
+  }, [actor]);
 
   const isDirty = JSON.stringify(questions) !== JSON.stringify(savedQuestions);
 
@@ -1199,7 +1194,9 @@ function QuestionEditor({ actor }: QuestionEditorProps) {
       ).getQuestionDefinitions(tierCode);
       const editable = defs
         .slice()
-        .sort((a, b) => Number(a.sortOrder) - Number(b.sortOrder))
+        .sort((a, b) =>
+          a.sortOrder > b.sortOrder ? 1 : a.sortOrder < b.sortOrder ? -1 : 0,
+        )
         .map(toEditable);
       setQuestions(editable);
       setSavedQuestions(editable);
@@ -1287,11 +1284,10 @@ function QuestionEditor({ actor }: QuestionEditorProps) {
     if (!selectedTier) return;
     setSaving(true);
     try {
-      const adminEmail = getAdminEmail();
       const defs = questions.map((q) => fromEditable(q, selectedTier));
       const result = await (
         actor as import("../../backend.d").backendInterface
-      ).updateQuestionDefinitions(adminEmail, selectedTier, defs);
+      ).updateQuestionDefinitions(selectedTier, defs);
       if ("err" in result) {
         showToast(`Save failed: ${result.err}`, false);
       } else {
@@ -1318,8 +1314,8 @@ function QuestionEditor({ actor }: QuestionEditorProps) {
       {/* Tier selector */}
       <div
         style={{
-          background: "rgba(17,19,34,0.7)",
-          border: "1px solid #1C1F33",
+          background: "rgba(10,11,20,0.92)",
+          border: "1px solid rgba(94,240,138,0.2)",
           borderRadius: 8,
           padding: 20,
           marginBottom: 16,
@@ -1349,7 +1345,7 @@ function QuestionEditor({ actor }: QuestionEditorProps) {
             }}
           >
             <option value="">— Select a questionnaire type —</option>
-            {TIER_GROUPS.map((group) => (
+            {tierGroups.map((group) => (
               <optgroup key={group.group} label={group.group}>
                 {group.tiers.map((t) => (
                   <option key={t} value={t}>
@@ -1927,39 +1923,66 @@ export default function AdminQuestionnairesPage() {
     setLoading(true);
     setError(null);
 
-    const adminEmail = getAdminEmail();
+    const a = actor as backendInterface;
+
     (async () => {
       try {
-        const [qs, clients] = await Promise.all([
-          (
-            actor as import("@/backend").backendInterface
-          ).getAdminAllQuestionnaires(adminEmail),
-          (actor as import("../../backend.d").backendInterface)
-            .getClients(adminEmail)
-            .catch(() => [] as CrmClient[]),
-        ]);
+        const qs = await a.getAdminAllQuestionnaires();
 
-        const emailToClient = new Map<string, CrmClient>();
-        for (const c of clients) {
-          if (c.email) emailToClient.set(c.email.toLowerCase(), c);
+        // ── Batched principal-keyed client resolution (same pattern as AdminOrdersPage) ──
+        // Collect unique principal strings from questionnaire client_id fields
+        const uniquePrincipals = Array.from(
+          new Set(
+            (qs ?? [])
+              .map(
+                (q) =>
+                  (
+                    q.client_id as unknown as { toString?: () => string }
+                  )?.toString?.() ?? "",
+              )
+              .filter(Boolean),
+          ),
+        );
+
+        // Resolve each principal to a UserProfile concurrently
+        const resolvedProfiles = await Promise.all(
+          uniquePrincipals.map(async (principalStr) => {
+            try {
+              const matchingQ = (qs ?? []).find(
+                (q) =>
+                  ((
+                    q.client_id as unknown as { toString?: () => string }
+                  )?.toString?.() ?? "") === principalStr,
+              );
+              if (!matchingQ)
+                return { principalStr, profile: null as UserProfile | null };
+              const profile = await a.getClientByPrincipal(
+                matchingQ.client_id as unknown as Principal,
+              );
+              return { principalStr, profile: profile ?? null };
+            } catch {
+              return { principalStr, profile: null as UserProfile | null };
+            }
+          }),
+        );
+
+        // Build a Map<principalStr, UserProfile> for O(1) lookups
+        const principalToProfile = new Map<string, UserProfile>();
+        for (const { principalStr, profile } of resolvedProfiles) {
+          if (profile) principalToProfile.set(principalStr, profile);
         }
 
         const enriched: QWithClient[] = (qs ?? []).map((q) => {
-          const parsedAnswers = parseAnswers(q.answers);
-          const answerEmail =
-            parsedAnswers
-              .find(
-                (a) =>
-                  a.label.toLowerCase().includes("email") ||
-                  a.label.toLowerCase().includes("contact"),
-              )
-              ?.value?.toLowerCase() ?? "";
-          const client = answerEmail
-            ? emailToClient.get(answerEmail)
-            : undefined;
-          const clientName = client?.name?.trim() || "Unknown Client";
-          const businessName = "";
-          const clientEmail = client?.email ?? answerEmail;
+          const principalStr =
+            (
+              q.client_id as unknown as { toString?: () => string }
+            )?.toString?.() ?? "";
+          const profile = principalToProfile.get(principalStr);
+          const clientName = profile
+            ? `${profile.firstName} ${profile.lastName}`.trim() || profile.email
+            : "Unknown Client";
+          const businessName = profile?.businessName ?? "";
+          const clientEmail = profile?.email ?? "";
           return { ...q, clientName, businessName, clientEmail };
         });
 
@@ -2019,7 +2042,7 @@ export default function AdminQuestionnairesPage() {
     try {
       await (
         actor as import("../../backend.d").backendInterface
-      ).deleteQuestionnaire(getAdminEmail(), id);
+      ).deleteQuestionnaire(id);
       setQuestionnaires((prev) => prev.filter((q) => q.id !== id));
       if (selectedQ?.id === id) setSelectedQ(null);
     } catch (err) {
@@ -2032,14 +2055,36 @@ export default function AdminQuestionnairesPage() {
     }
   }
 
+  function handleExportSubmission(submission: QWithClient) {
+    const parsedAnswers = parseAnswers(submission.answers);
+    const exportData = {
+      clientName: submission.clientName || "Unknown",
+      submissionDate:
+        submission.submitted && submission.submitted_at
+          ? new Date(Number(submission.submitted_at) / 1_000_000).toISOString()
+          : "Unknown",
+      answers: parsedAnswers,
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `questionnaire-${String(submission.id || "export")}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   async function handleMarkReviewed(id: bigint): Promise<bigint | null> {
     if (!actor) return null;
-    const adminEmail = getAdminEmail();
     setMarkingRowId(id);
     try {
       await (
         actor as import("../../backend.d").backendInterface
-      ).markQuestionnaireReviewed(adminEmail, id);
+      ).markQuestionnaireReviewed(id);
       const nowNs = BigInt(Date.now()) * BigInt(1_000_000);
       setQuestionnaires((prev) =>
         prev.map((q) =>
@@ -2102,12 +2147,14 @@ export default function AdminQuestionnairesPage() {
       );
       return typeof clientId === "string" ? clientId : String(clientId);
     } catch (err) {
-      console.error("Failed to create client:", err);
+      if (import.meta.env.DEV) {
+        console.error("Failed to create client:", err);
+      }
       return null;
     }
   }
 
-  const inputStyle: React.CSSProperties = {
+  const inputStyle: CSSProperties = {
     border: "1px solid #1C1F33",
     borderRadius: 6,
     padding: "8px 12px",
@@ -2118,7 +2165,7 @@ export default function AdminQuestionnairesPage() {
   };
 
   // Sub-tab styles
-  function tabStyle(active: boolean): React.CSSProperties {
+  function tabStyle(active: boolean): CSSProperties {
     return {
       background: active ? "rgba(94,240,138,0.12)" : "transparent",
       border: active
@@ -2504,6 +2551,24 @@ export default function AdminQuestionnairesPage() {
                                 {deletingRowId === q.id
                                   ? "Deleting..."
                                   : "Delete"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleExportSubmission(q)}
+                                style={{
+                                  background: "rgba(94,240,138,0.1)",
+                                  border: "1px solid rgba(94,240,138,0.3)",
+                                  borderRadius: 6,
+                                  cursor: "pointer",
+                                  color: "#5EF08A",
+                                  padding: "5px 10px",
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  whiteSpace: "nowrap",
+                                  fontFamily: "monospace",
+                                }}
+                              >
+                                Export
                               </button>
                               {markRowError?.id === q.id && (
                                 <div

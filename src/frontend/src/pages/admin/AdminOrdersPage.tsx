@@ -1,16 +1,19 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import type { Principal } from "@icp-sdk/core/principal";
 import { Link } from "@tanstack/react-router";
-import { CheckCircle, Download, Eye } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { backendInterface } from "../../backend.d";
+import {
+  CheckCircle,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  Eye,
+} from "lucide-react";
+import type { CSSProperties, ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as XLSX from "xlsx";
+import type { UserProfile, backendInterface } from "../../backend.d";
 import { useActor } from "../../hooks/useActor";
-import { getSession } from "../../hooks/useSession";
 import AdminLayout from "./AdminLayout";
-
-function getAdminEmail(): string {
-  const s = getSession();
-  return s?.email ?? localStorage.getItem("imperidome_admin_email") ?? "";
-}
 
 // ─── Order Types ────────────────────────────────────────────────────────────
 
@@ -28,7 +31,7 @@ type StatusKey =
   | "cancelled";
 
 type OrderFilterOption = "all" | "active" | "live" | "paused" | "cancelled";
-type TransactionTab = "one-time" | "subscriptions" | "health";
+type TransactionTab = "one-time" | "subscriptions" | "health" | "payouts";
 
 // ─── Stripe Data Types ───────────────────────────────────────────────────────
 
@@ -78,6 +81,8 @@ interface StripePayout {
   currency: string;
   status: "paid" | "pending" | "in_transit" | "canceled" | "failed";
   arrival_date: number;
+  description?: string | null;
+  bank_account?: { last4?: string } | null;
 }
 
 interface StripeCustomer {
@@ -115,6 +120,17 @@ interface StripeData {
   pendingPayouts: number;
   customerCount: number;
 }
+
+// ─── Timeline Constants ─────────────────────────────────────────────────────
+
+const MAIN_STAGES = ["New", "In Review", "In Progress", "Completed"] as const;
+type MainStage = (typeof MAIN_STAGES)[number];
+const CANCEL_STAGES = ["Cancellation Requested", "Cancelled"] as const;
+
+const ALL_TIMELINE_STATUSES: readonly string[] = [
+  ...MAIN_STAGES,
+  ...CANCEL_STAGES,
+];
 
 // ─── Order Constants ─────────────────────────────────────────────────────────
 
@@ -182,25 +198,18 @@ interface Order {
   launch_target: string;
   created_at: bigint;
   updated_at: bigint;
+  amount: number;
+  stripeSessionId?: string;
+  clientEmail?: string;
+  serviceName?: string;
 }
 
 interface ClientInfo {
   name: string;
   email: string;
   businessName: string;
+  /** Stored as email since UserProfile has no principal field. */
   principalStr: string;
-}
-
-interface ClientSummary {
-  profile: {
-    principal: { toString?: () => string };
-    firstName: string;
-    lastName: string;
-    email: string;
-    businessName: string;
-    [key: string]: unknown;
-  };
-  [key: string]: unknown;
 }
 
 // ─── Utility Functions ───────────────────────────────────────────────────────
@@ -213,7 +222,8 @@ function makeStatus(key: StatusKey): Record<string, null> {
   return { [key]: null };
 }
 
-function tsToDate(ns: bigint): Date {
+function tsToDate(ns: bigint): Date | null {
+  if (ns === 0n) return null;
   return new Date(Number(ns) / 1_000_000);
 }
 
@@ -223,14 +233,6 @@ function isCurrentMonth(date: Date): boolean {
     date.getFullYear() === now.getFullYear() &&
     date.getMonth() === now.getMonth()
   );
-}
-
-function formatDate(ts: bigint): string {
-  return tsToDate(ts).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
 }
 
 function formatUnixDate(unix: number): string {
@@ -244,38 +246,42 @@ function formatUnixDate(unix: number): string {
 function formatCents(cents: number): string {
   return `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+function truncatePrincipal(principal: string): string {
+  if (principal.length <= 12) return principal;
+  return `${principal.substring(0, 6)}...${principal.substring(principal.length - 3)}`;
+}
 
-function exportOrdersCSV(
-  orders: Order[],
-  clientInfoMap: Map<string, ClientInfo>,
-) {
+function exportCartOrdersCSV(orders: Order[]) {
   const headers = [
     "Order ID",
-    "Client Name",
-    "Business Name",
-    "Tier",
+    "Client Email",
+    "Service Name",
+    "Amount",
     "Status",
-    "Delivery Window",
-    "Launch Target",
-    "Created",
+    "Date",
   ];
   const csvEscape = (val: string) => `"${String(val).replace(/"/g, '""')}"`;
   const lines = orders.map((o) => {
-    const clientIdStr = o.client_id?.toString?.() ?? "";
-    const info = clientInfoMap.get(clientIdStr);
-    const clientName = info?.name ?? "Unknown";
-    const businessName = info?.businessName ?? "";
+    const email = o.clientEmail ?? "";
+    const serviceName = o.serviceName ?? "";
+    const amount =
+      o.amount !== undefined && o.amount > 0 ? o.amount.toFixed(2) : "0.00";
+    let dateStr = "—";
+    if (o.created_at && o.created_at !== 0n) {
+      const ms = Number(o.created_at / 1_000_000n);
+      if (!Number.isNaN(ms) && ms > 0) {
+        dateStr = new Date(ms).toISOString().slice(0, 10);
+      }
+    }
     const statusKey = getStatusKey(o.status);
     const statusLabel = STATUS_LABELS[statusKey] ?? statusKey;
     return [
       csvEscape(o.id.toString()),
-      csvEscape(clientName),
-      csvEscape(businessName),
-      csvEscape(o.tier_code),
+      csvEscape(email),
+      csvEscape(serviceName),
+      amount,
       csvEscape(statusLabel),
-      csvEscape(o.delivery_window),
-      csvEscape(o.launch_target),
-      csvEscape(formatDate(o.created_at)),
+      csvEscape(dateStr),
     ].join(",");
   });
   const csv = [headers.join(","), ...lines].join("\n");
@@ -644,6 +650,320 @@ function SubscriptionsTab({
   );
 }
 
+// ─── Payouts Excel export ────────────────────────────────────────────────────
+
+function exportPayoutsExcel(payouts: StripePayout[]) {
+  const rows = payouts.map((p) => ({
+    "Payout ID": p.id,
+    Amount: `${(p.amount / 100).toFixed(2)}`,
+    Currency: p.currency.toUpperCase(),
+    Status: p.status,
+    "Arrival Date": new Date(p.arrival_date * 1000).toLocaleDateString(
+      "en-US",
+      {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      },
+    ),
+    "Description / Bank":
+      p.description ||
+      (p.bank_account?.last4
+        ? `\u00b7\u00b7\u00b7\u00b7${p.bank_account.last4}`
+        : ""),
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Payouts");
+  XLSX.writeFile(wb, "Imperidome_Payouts.xlsx");
+}
+
+// ─── Transaction Tab: Payouts ───────────────────────────────────────────────
+
+function PayoutsTab({ payouts }: { payouts: StripePayout[] }) {
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+
+  const filteredPayouts = payouts.filter((p) => {
+    const arrivalDateStr = new Date(p.arrival_date * 1000)
+      .toISOString()
+      .split("T")[0];
+    if (fromDate && arrivalDateStr < fromDate) return false;
+    if (toDate && arrivalDateStr > toDate) return false;
+    return true;
+  });
+
+  const inputStyle: CSSProperties = {
+    border: "1px solid #1C1F33",
+    borderRadius: 6,
+    padding: "7px 10px",
+    fontSize: 13,
+    color: "#EEF0F8",
+    background: "rgba(19,21,36,1)",
+    outline: "none",
+    height: 40,
+    boxSizing: "border-box" as const,
+    colorScheme: "dark",
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* Export button row */}
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <button
+          type="button"
+          data-ocid="orders.payouts.export_excel_button"
+          onClick={() => exportPayoutsExcel(filteredPayouts)}
+          disabled={filteredPayouts.length === 0}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            border: "1px solid rgba(255,255,255,0.2)",
+            borderRadius: 6,
+            padding: "0 14px",
+            height: 38,
+            fontSize: 13,
+            fontWeight: 600,
+            color: "white",
+            background: "transparent",
+            cursor: filteredPayouts.length === 0 ? "not-allowed" : "pointer",
+            opacity: filteredPayouts.length === 0 ? 0.5 : 1,
+            whiteSpace: "nowrap",
+          }}
+        >
+          <Download size={14} />
+          Export Excel
+        </button>
+      </div>
+      {/* Date range filter row — matches Finance tab filter style exactly */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <label
+            htmlFor="payouts-date-from"
+            style={{
+              fontSize: 12,
+              color: "#7A7D90",
+              whiteSpace: "nowrap",
+              fontWeight: 600,
+            }}
+          >
+            From
+          </label>
+          <input
+            id="payouts-date-from"
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            data-ocid="orders.payouts.date_from_input"
+            style={{
+              ...inputStyle,
+              color: fromDate ? "#EEF0F8" : "#7A7D90",
+            }}
+          />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <label
+            htmlFor="payouts-date-to"
+            style={{
+              fontSize: 12,
+              color: "#7A7D90",
+              whiteSpace: "nowrap",
+              fontWeight: 600,
+            }}
+          >
+            To
+          </label>
+          <input
+            id="payouts-date-to"
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            data-ocid="orders.payouts.date_to_input"
+            style={{
+              ...inputStyle,
+              color: toDate ? "#EEF0F8" : "#7A7D90",
+            }}
+          />
+        </div>
+        {(fromDate || toDate) && (
+          <button
+            type="button"
+            data-ocid="orders.payouts.date_clear_button"
+            onClick={() => {
+              setFromDate("");
+              setToDate("");
+            }}
+            style={{
+              border: "1px solid #1C1F33",
+              borderRadius: 6,
+              padding: "0 12px",
+              height: 40,
+              fontSize: 12,
+              fontWeight: 700,
+              color: "#7A7D90",
+              background: "transparent",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+            }}
+          >
+            Clear
+          </button>
+        )}
+        {(fromDate || toDate) && (
+          <span style={{ fontSize: 12, color: "#7A7D90", marginLeft: 4 }}>
+            Showing {filteredPayouts.length} of {payouts.length} payout
+            {payouts.length !== 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+
+      {/* Payouts table */}
+      {filteredPayouts.length === 0 ? (
+        <div
+          style={{
+            textAlign: "center",
+            padding: "32px 0",
+            color: "#7A7D90",
+            fontSize: 13,
+          }}
+        >
+          {payouts.length === 0
+            ? "No payouts found."
+            : "No payouts in the selected date range."}
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto" }}>
+          <table
+            style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}
+          >
+            <thead>
+              <tr>
+                {[
+                  "Payout ID",
+                  "Amount",
+                  "Currency",
+                  "Status",
+                  "Arrival Date",
+                  "Description / Bank",
+                ].map((h) => (
+                  <th
+                    key={h}
+                    style={{
+                      textAlign: "left",
+                      padding: "8px 12px",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "#7A7D90",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                      borderBottom: "1px solid #1C1F33",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filteredPayouts.map((payout) => {
+                const descOrBank =
+                  payout.description ||
+                  (payout.bank_account?.last4
+                    ? `\u00b7\u00b7\u00b7\u00b7${payout.bank_account.last4}`
+                    : null);
+                return (
+                  <tr
+                    key={payout.id}
+                    style={{ borderTop: "1px solid rgba(28,31,51,0.6)" }}
+                  >
+                    <td
+                      style={{ padding: "10px 12px", verticalAlign: "middle" }}
+                    >
+                      <span
+                        style={{
+                          fontFamily: "monospace",
+                          fontSize: 12,
+                          color: "#7A7D90",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {payout.id.length > 14
+                          ? `${payout.id.slice(0, 14)}\u2026`
+                          : payout.id}
+                      </span>
+                    </td>
+                    <td
+                      style={{ padding: "10px 12px", verticalAlign: "middle" }}
+                    >
+                      <span
+                        style={{
+                          fontWeight: 700,
+                          color: "#EEF0F8",
+                          fontSize: 13,
+                          fontFamily: "monospace",
+                        }}
+                      >
+                        {formatCents(payout.amount)}
+                      </span>
+                    </td>
+                    <td
+                      style={{
+                        padding: "10px 12px",
+                        verticalAlign: "middle",
+                        color: "#7A7D90",
+                        fontSize: 13,
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {payout.currency}
+                    </td>
+                    <td
+                      style={{ padding: "10px 12px", verticalAlign: "middle" }}
+                    >
+                      <StripeBadge status={payout.status} />
+                    </td>
+                    <td
+                      style={{
+                        padding: "10px 12px",
+                        verticalAlign: "middle",
+                        color: "#7A7D90",
+                        fontSize: 13,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {formatUnixDate(payout.arrival_date)}
+                    </td>
+                    <td
+                      style={{
+                        padding: "10px 12px",
+                        verticalAlign: "middle",
+                        color: descOrBank ? "#EEF0F8" : "#7A7D90",
+                        fontSize: 13,
+                      }}
+                    >
+                      {descOrBank ?? "\u2014"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Transaction Tab: Payment Health ─────────────────────────────────────────
 
 function PaymentHealthTab({
@@ -777,18 +1097,282 @@ function PaymentHealthTab({
 
 // ─── OrderRow ────────────────────────────────────────────────────────────────
 
+// ─── OrderTimeline ───────────────────────────────────────────────────────────
+
+function getOrderStatusStr(status: Record<string, null>): string {
+  try {
+    const key = Object.keys(status as unknown as Record<string, unknown>)[0];
+    return key ?? String(status);
+  } catch {
+    return String(status);
+  }
+}
+
+function OrderTimeline({
+  order,
+  actor,
+  onStatusChange,
+}: {
+  order: Order;
+  actor: { updateOrderStatus?: unknown } | null;
+  onStatusChange: (orderId: bigint, newKey: StatusKey) => void;
+}) {
+  const statusStr = getOrderStatusStr(order.status);
+  const cancelStageSet = new Set<string>(CANCEL_STAGES);
+  const isCancel = cancelStageSet.has(statusStr);
+
+  // Determine how far along the main stages we are
+  const mainIdx = MAIN_STAGES.indexOf(statusStr as MainStage);
+  // If in cancel branch, the last main stage reached is "In Progress" (index 2)
+  const lastMainReached = isCancel ? 2 : mainIdx;
+
+  const [timelineUpdating, setTimelineUpdating] = useState(false);
+  const [timelineError, setTimelineError] = useState<string | null>(null);
+  const [timelineSuccess, setTimelineSuccess] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  async function handleTimelineStatusChange(newStatus: string) {
+    if (!actor || newStatus === statusStr) return;
+    setTimelineError(null);
+    setTimelineUpdating(true);
+    // Capture previous status for rollback on failure
+    const previousStatus = statusStr;
+    // Check if it maps to a legacy StatusKey first, otherwise use as-is
+    const legacyKeys = ALL_STATUS_KEYS as readonly string[];
+    if (legacyKeys.includes(newStatus)) {
+      onStatusChange(order.id, newStatus as StatusKey);
+    }
+    try {
+      const result = await (
+        actor as Record<
+          string,
+          (...args: unknown[]) => Promise<{ err?: string }>
+        >
+      ).updateOrderStatus(String(order.id), newStatus);
+      if (result && "err" in result) throw new Error("Update failed");
+      setTimelineSuccess(true);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setTimelineSuccess(false), 2200);
+    } catch {
+      setTimelineError("Failed to update status");
+      // Revert optimistic status update on failure
+      if (legacyKeys.includes(previousStatus)) {
+        onStatusChange(order.id, previousStatus as StatusKey);
+      }
+    } finally {
+      setTimelineUpdating(false);
+    }
+  }
+
+  const dotBase: CSSProperties = {
+    width: 16,
+    height: 16,
+    borderRadius: "50%",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    border: "2px solid",
+    fontSize: 8,
+    fontWeight: 800,
+  };
+
+  return (
+    <div style={{ padding: "16px 20px", background: "rgba(10,11,22,0.5)" }}>
+      {/* Timeline row */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 0,
+          marginBottom: 20,
+          flexWrap: "nowrap",
+          overflowX: "auto",
+        }}
+      >
+        {MAIN_STAGES.map((stage, i) => {
+          const reached = lastMainReached >= i;
+          return (
+            <div
+              key={stage}
+              style={{ display: "flex", alignItems: "center", flexShrink: 0 }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 6,
+                  minWidth: 72,
+                }}
+              >
+                <div
+                  style={{
+                    ...dotBase,
+                    background: reached ? "#5EF08A" : "transparent",
+                    borderColor: reached ? "#5EF08A" : "#3A3D50",
+                    color: reached ? "#0a0b16" : "#3A3D50",
+                  }}
+                >
+                  {reached && "✓"}
+                </div>
+                <span
+                  style={{
+                    fontSize: 10,
+                    color: reached ? "#EEF0F8" : "#3A3D50",
+                    fontWeight: reached ? 700 : 400,
+                    whiteSpace: "nowrap",
+                    textAlign: "center",
+                  }}
+                >
+                  {stage}
+                </span>
+              </div>
+              {i < MAIN_STAGES.length - 1 && (
+                <div
+                  style={{
+                    height: 2,
+                    width: 40,
+                    background: lastMainReached > i ? "#5EF08A" : "#1C1F33",
+                    flexShrink: 0,
+                    marginBottom: 22,
+                  }}
+                />
+              )}
+            </div>
+          );
+        })}
+        {/* Cancel branch */}
+        {isCancel && (
+          <>
+            <div
+              style={{
+                height: 2,
+                width: 32,
+                background: "#f87171",
+                flexShrink: 0,
+                marginBottom: 22,
+              }}
+            />
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 6,
+                minWidth: 80,
+                flexShrink: 0,
+              }}
+            >
+              <div
+                style={{
+                  ...dotBase,
+                  background: "#f87171",
+                  borderColor: "#f87171",
+                  color: "#0a0b16",
+                }}
+              >
+                ✕
+              </div>
+              <span
+                style={{
+                  fontSize: 10,
+                  color: "#f87171",
+                  fontWeight: 700,
+                  whiteSpace: "nowrap",
+                  textAlign: "center",
+                }}
+              >
+                {statusStr}
+              </span>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Status update dropdown */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          flexWrap: "wrap",
+        }}
+      >
+        <span
+          style={{
+            fontSize: 11,
+            color: "#7A7D90",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.05em",
+          }}
+        >
+          Update Status:
+        </span>
+        <select
+          data-ocid={`orders.timeline.status_select.${order.id.toString()}`}
+          value={statusStr}
+          disabled={timelineUpdating}
+          onChange={(e) => handleTimelineStatusChange(e.target.value)}
+          style={{
+            border: "1px solid #1C1F33",
+            borderRadius: 6,
+            padding: "5px 8px",
+            fontSize: 12,
+            color: "#EEF0F8",
+            background: timelineUpdating
+              ? "rgba(19,21,36,0.5)"
+              : "rgba(19,21,36,1)",
+            cursor: timelineUpdating ? "wait" : "pointer",
+            outline: "none",
+            minWidth: 180,
+          }}
+        >
+          {ALL_TIMELINE_STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+        {timelineSuccess && (
+          <span
+            style={{
+              display: "flex",
+              alignItems: "center",
+              color: "#5EF08A",
+              fontSize: 12,
+            }}
+          >
+            <CheckCircle size={13} style={{ marginRight: 4 }} /> Updated
+          </span>
+        )}
+        {timelineError && (
+          <span style={{ fontSize: 11, color: "#f87171" }}>
+            {timelineError}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function OrderRow({
   order,
   info,
   index,
   actor,
   onStatusChange,
+  isExpanded,
+  onToggleExpand,
 }: {
   order: Order;
   info: ClientInfo | undefined;
   index: number;
   actor: { updateOrderStatus?: unknown; sendOrderStatusEmail?: unknown } | null;
   onStatusChange: (orderId: bigint, newKey: StatusKey) => void;
+  isExpanded: boolean;
+  onToggleExpand: (id: bigint) => void;
 }) {
   const [updating, setUpdating] = useState(false);
   const [showCheck, setShowCheck] = useState(false);
@@ -798,28 +1382,30 @@ function OrderRow({
   const currentKey = getStatusKey(order.status);
   const clientPath = info ? `/admin/clients/${info.principalStr}` : "#";
 
-  async function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+  async function handleChange(e: ChangeEvent<HTMLSelectElement>) {
     const newKey = e.target.value as StatusKey;
     if (newKey === currentKey || !actor) return;
     setRowError(null);
     setUpdating(true);
     onStatusChange(order.id, newKey);
     try {
+      // updateOrderStatus: adminEmail, orderId as string, status as plain string
       const result = await (
         actor as Record<
           string,
           (...args: unknown[]) => Promise<{ err?: string }>
         >
-      ).updateOrderStatus(getAdminEmail(), order.id, makeStatus(newKey));
+      ).updateOrderStatus(String(order.id), newKey);
       if (result && "err" in result) throw new Error("Update failed");
+      // sendOrderStatusEmail: clientPrincipal (Principal), status (Status), clientEmail (string)
       if (EMAIL_TRIGGER_STATUSES.includes(newKey) && info) {
         try {
           await (
             actor as Record<string, (...args: unknown[]) => Promise<unknown>>
           ).sendOrderStatusEmail(
-            order.client_id,
-            makeStatus(newKey),
-            info.email,
+            order.client_id, // Principal — pass directly from order
+            { [newKey]: null }, // status variant object as backend expects
+            info.email, // clientEmail resolved from clientInfoMap
           );
         } catch {
           /* non-blocking */
@@ -838,7 +1424,26 @@ function OrderRow({
   return (
     <tr
       data-ocid={`orders.table.row.${index}`}
-      style={{ borderTop: "1px solid #1C1F33", transition: "background 0.15s" }}
+      onKeyUp={(e) => {
+        if (e.key === "Enter" || e.key === " ") onToggleExpand(order.id);
+      }}
+      style={{
+        borderTop: "1px solid #1C1F33",
+        transition: "background 0.15s",
+        cursor: "pointer",
+      }}
+      onClick={(e) => {
+        // Don't toggle if clicking an interactive element inside the row
+        const target = e.target as HTMLElement;
+        if (
+          target.tagName === "SELECT" ||
+          target.tagName === "BUTTON" ||
+          target.tagName === "A" ||
+          target.closest("a, button, select")
+        )
+          return;
+        onToggleExpand(order.id);
+      }}
     >
       <td style={{ padding: "12px 12px", verticalAlign: "middle" }}>
         <span
@@ -868,7 +1473,11 @@ function OrderRow({
             {info.name}
           </Link>
         ) : (
-          <span style={{ color: "#7A7D90", fontSize: 14 }}>Unknown</span>
+          <span
+            style={{ color: "#7A7D90", fontSize: 14, fontFamily: "monospace" }}
+          >
+            {truncatePrincipal(order.client_id?.toString?.() ?? "")}
+          </span>
         )}
       </td>
       <td
@@ -898,6 +1507,9 @@ function OrderRow({
       </td>
       <td style={{ padding: "12px 12px", verticalAlign: "middle" }}>
         <StatusBadge statusKey={currentKey} />
+      </td>
+      <td style={{ padding: "10px 12px", color: "#ccc" }}>
+        {order.amount > 0 ? `${order.amount.toFixed(2)}` : "—"}
       </td>
       <td
         style={{
@@ -930,6 +1542,31 @@ function OrderRow({
             flexWrap: "nowrap",
           }}
         >
+          <button
+            type="button"
+            data-ocid={`orders.table.expand_button.${index}`}
+            aria-label={isExpanded ? "Collapse row" : "Expand row"}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleExpand(order.id);
+            }}
+            style={{
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              color: isExpanded ? "#5EF08A" : "#7A7D90",
+              display: "flex",
+              alignItems: "center",
+              padding: 2,
+              flexShrink: 0,
+            }}
+          >
+            {isExpanded ? (
+              <ChevronDown size={15} />
+            ) : (
+              <ChevronRight size={15} />
+            )}
+          </button>
           <Link
             to={clientPath}
             data-ocid={`orders.table.view_button.${index}`}
@@ -943,6 +1580,33 @@ function OrderRow({
           >
             <Eye size={17} />
           </Link>
+          {order.stripeSessionId && (
+            <a
+              href={`https://dashboard.stripe.com/payments/${order.stripeSessionId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-ocid={`orders.table.stripe_link.${index}`}
+              style={{
+                color: "#7A7D90",
+                fontSize: 11,
+                fontWeight: 600,
+                textDecoration: "none",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
+                letterSpacing: "0.02em",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = "#a5b4fc";
+                e.currentTarget.style.textDecoration = "underline";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = "#7A7D90";
+                e.currentTarget.style.textDecoration = "none";
+              }}
+            >
+              View in Stripe
+            </a>
+          )}
           <div
             style={{
               position: "relative",
@@ -1002,6 +1666,8 @@ function OrderRow({
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
+const PAGE_SIZE = 50;
+
 export default function AdminOrdersPage() {
   const { actor, isFetching } = useActor();
 
@@ -1013,8 +1679,11 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [emailSearch, setEmailSearch] = useState("");
+  const [serviceTypeFilter, setServiceTypeFilter] = useState<string>("");
   const [filter, setFilter] = useState<OrderFilterOption>("all");
-
+  const [currentPage, setCurrentPage] = useState(1);
+  const [expandedOrderId, setExpandedOrderId] = useState<bigint | null>(null);
   // Stripe state
   const [stripeData, setStripeData] = useState<StripeData | null>(null);
   const [stripeLoading, setStripeLoading] = useState(true);
@@ -1023,40 +1692,77 @@ export default function AdminOrdersPage() {
   const [activeTab, setActiveTab] = useState<TransactionTab>("one-time");
   const [tabMenuOpen, setTabMenuOpen] = useState(false);
 
-  // Load orders
-  useEffect(() => {
+  // fetchOrders is extracted so the Refresh button can call it directly
+  // without needing a refreshKey counter in the dep array.
+  const fetchOrders = useCallback(() => {
     if (!actor || isFetching) return;
     setLoading(true);
     setError(null);
-    const adminEmail = getAdminEmail();
     const aa = actor as unknown as {
-      getAdminAllOrders: (email: string) => Promise<Order[]>;
-      getAdminAllClients: (email: string) => Promise<ClientSummary[]>;
+      getAdminAllOrders: () => Promise<Order[]>;
     };
-    Promise.all([
-      aa.getAdminAllOrders(adminEmail),
-      aa.getAdminAllClients(adminEmail),
-    ])
-      .then(([ordersData, clientsData]) => {
+    aa.getAdminAllOrders()
+      .then((ordersData) => {
         setOrders(ordersData);
-        const map = new Map<string, ClientInfo>();
-        for (const c of clientsData) {
-          const id = c.profile.principal?.toString?.() ?? "";
-          const name =
-            `${c.profile.firstName} ${c.profile.lastName}`.trim() ||
-            c.profile.email;
-          map.set(id, {
-            name,
-            email: c.profile.email,
-            businessName: c.profile.businessName ?? "",
-            principalStr: id,
-          });
-        }
-        setClientInfoMap(map);
       })
       .catch(() => setError("Failed to load orders. Please refresh."))
       .finally(() => setLoading(false));
   }, [actor, isFetching]);
+
+  // Load orders — only fetches orders; client name resolution happens in a
+  // separate effect below so it can re-run after every refresh.
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  // Resolve client names via getClientByPrincipal — runs once after orders
+  // load and again after any refresh.  Batches all unique principals
+  // concurrently with Promise.all so resolution is O(1) per render.
+  useEffect(() => {
+    if (!actor || isFetching || orders.length === 0) return;
+    const a = actor as backendInterface;
+    // Collect unique principal strings from the loaded orders
+    const uniquePrincipals = Array.from(
+      new Set(
+        orders.map((o) => o.client_id?.toString?.() ?? "").filter(Boolean),
+      ),
+    );
+    Promise.all(
+      uniquePrincipals.map(async (principalStr) => {
+        try {
+          // Pass the raw client_id Principal directly — find the matching order
+          const matchingOrder = orders.find(
+            (o) => (o.client_id?.toString?.() ?? "") === principalStr,
+          );
+          if (!matchingOrder) return { principalStr, profile: null };
+          const profile = await a.getClientByPrincipal(
+            matchingOrder.client_id as unknown as Principal,
+          );
+          return { principalStr, profile: profile ?? null };
+        } catch {
+          return { principalStr, profile: null };
+        }
+      }),
+    ).then((results) => {
+      const profileMap: Record<string, UserProfile> = {};
+      const infoMap = new Map<string, ClientInfo>();
+      for (const { principalStr, profile } of results) {
+        if (!profile) continue;
+        profileMap[principalStr] = profile;
+        // Also populate clientInfoMap (keyed by principal) for CSV export
+        const name =
+          `${profile.firstName} ${profile.lastName}`.trim() || profile.email;
+        infoMap.set(principalStr, {
+          name,
+          email: profile.email,
+          businessName: profile.businessName ?? "",
+          principalStr,
+        });
+      }
+      setClientInfoMap(infoMap);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders, actor, isFetching]);
 
   // Load Stripe data (non-blocking — separate from orders)
   useEffect(() => {
@@ -1064,7 +1770,6 @@ export default function AdminOrdersPage() {
     setStripeLoading(true);
 
     const a = actor as backendInterface;
-    const stripeAdminEmail = getAdminEmail();
     const emptyStripeData = {
       charges: [] as StripeCharge[],
       subscriptions: [] as StripeSubscription[],
@@ -1089,10 +1794,10 @@ export default function AdminOrdersPage() {
         }
         setStripeNotConfigured(false);
         return Promise.all([
-          a.getStripeCharges(stripeAdminEmail),
-          a.getStripeSubscriptions(stripeAdminEmail),
-          a.getStripePayouts(stripeAdminEmail),
-          a.getStripeCustomers(stripeAdminEmail),
+          a.getStripeCharges(),
+          a.getStripeSubscriptions(),
+          a.getStripePayouts(),
+          a.getStripeCustomers(),
         ])
           .then(([chargesRes, subsRes, payoutsRes, customersRes]) => {
             const chargesParsed =
@@ -1166,6 +1871,13 @@ export default function AdminOrdersPage() {
       });
   }, [actor, isFetching]);
 
+  // Derive ClientInfo from the resolved UserProfile map for use in order rows.
+  // clientInfoMap is now also principal-keyed (populated by the resolution
+  // effect above), so this is O(1) per lookup.
+  const principalToClient = useMemo<Map<string, ClientInfo>>(() => {
+    return clientInfoMap;
+  }, [clientInfoMap]);
+
   // Internal stats
   const stats = useMemo(() => {
     const total = orders.length;
@@ -1174,21 +1886,38 @@ export default function AdminOrdersPage() {
     ).length;
     const launchedThisMonth = orders.filter((o) => {
       const key = getStatusKey(o.status);
-      return key === "live" && isCurrentMonth(tsToDate(o.updated_at));
+      const d1 = tsToDate(o.updated_at);
+      return key === "live" && !!d1 && isCurrentMonth(d1);
     }).length;
     const cancelledThisMonth = orders.filter((o) => {
       const key = getStatusKey(o.status);
-      return key === "cancelled" && isCurrentMonth(tsToDate(o.updated_at));
+      const d2 = tsToDate(o.updated_at);
+      return key === "cancelled" && !!d2 && isCurrentMonth(d2);
     }).length;
     return { total, activeBuilds, launchedThisMonth, cancelledThisMonth };
   }, [orders]);
 
-  // Filter logic — enhanced with Stripe subscription status
+  // Derive unique service types from loaded orders for the service type filter
+  const serviceTypes = useMemo(() => {
+    const types = orders
+      .map((o) => o.tier_code)
+      .filter((t) => t && t.length > 0);
+    return Array.from(new Set(types)).sort();
+  }, [orders]);
+
+  // Reset to page 1 when search, emailSearch, serviceTypeFilter, or filter changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional — reset on search/filter change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, emailSearch, serviceTypeFilter, filter]);
+
+  // Filter logic — uses principal-keyed principalToClient (O(1) lookups)
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const eq = emailSearch.trim().toLowerCase();
     return orders.filter((o) => {
       const clientIdStr = o.client_id?.toString?.() ?? "";
-      const info = clientInfoMap.get(clientIdStr);
+      const info = principalToClient.get(clientIdStr);
       const clientName = (info?.name ?? "").toLowerCase();
       const businessName = (info?.businessName ?? "").toLowerCase();
       const matchesSearch =
@@ -1196,6 +1925,15 @@ export default function AdminOrdersPage() {
         clientName.includes(q) ||
         businessName.includes(q) ||
         o.tier_code.toLowerCase().includes(q);
+
+      // Email search filter — case-insensitive substring match on clientEmail
+      const matchesEmail =
+        !eq || (o.clientEmail ?? "").toLowerCase().includes(eq);
+
+      // Service type filter — case-insensitive substring match on tier_code
+      const matchesServiceType =
+        serviceTypeFilter === "" ||
+        o.tier_code.toLowerCase().includes(serviceTypeFilter.toLowerCase());
 
       const statusKey = getStatusKey(o.status);
       let matchesFilter = true;
@@ -1217,9 +1955,18 @@ export default function AdminOrdersPage() {
       } else if (filter === "cancelled") {
         matchesFilter = statusKey === "cancelled";
       }
-      return matchesSearch && matchesFilter;
+      return (
+        matchesSearch && matchesEmail && matchesServiceType && matchesFilter
+      );
     });
-  }, [orders, clientInfoMap, search, filter]);
+  }, [
+    orders,
+    principalToClient,
+    search,
+    emailSearch,
+    serviceTypeFilter,
+    filter,
+  ]);
 
   // Stripe search results shown inline when search is active
   const stripeSearchResults = useMemo(() => {
@@ -1246,6 +1993,15 @@ export default function AdminOrdersPage() {
     return { charges: matchedCharges, subscriptions: matchedSubs };
   }, [search, stripeData]);
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginatedOrders = filtered.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
+  );
+  const paginationStart =
+    filtered.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const paginationEnd = Math.min(currentPage * PAGE_SIZE, filtered.length);
+
   function handleStatusChange(orderId: bigint, newKey: StatusKey) {
     setOrders((prev) =>
       prev.map((o) =>
@@ -1254,7 +2010,7 @@ export default function AdminOrdersPage() {
     );
   }
 
-  const inputStyle: React.CSSProperties = {
+  const inputStyle: CSSProperties = {
     border: "1px solid #1C1F33",
     borderRadius: 6,
     padding: "10px 14px",
@@ -1266,7 +2022,7 @@ export default function AdminOrdersPage() {
     height: 42,
   };
 
-  const DARK_CARD: React.CSSProperties = {
+  const DARK_CARD: CSSProperties = {
     background: "rgba(17,19,34,0.7)",
     backdropFilter: "blur(12px)",
     border: "1px solid #1C1F33",
@@ -1279,6 +2035,7 @@ export default function AdminOrdersPage() {
     { key: "one-time", label: "One-Time Payments" },
     { key: "subscriptions", label: "Subscriptions" },
     { key: "health", label: "Payment Health" },
+    { key: "payouts", label: "Payouts" },
   ];
 
   const searchActive = search.trim().length > 0;
@@ -1414,6 +2171,79 @@ export default function AdminOrdersPage() {
                   flexShrink: 0,
                 }}
               />
+              {/* Payouts Summary stat card */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span
+                  style={{
+                    color: "#7A7D90",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.04em",
+                  }}
+                >
+                  Payouts Summary
+                </span>
+                <div
+                  style={{ display: "flex", alignItems: "baseline", gap: 8 }}
+                >
+                  <div
+                    style={{ display: "flex", alignItems: "baseline", gap: 4 }}
+                  >
+                    <span
+                      style={{
+                        fontWeight: 700,
+                        color: "#5EF08A",
+                        fontSize: 18,
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      {stripeData && (stripeData.payouts ?? []).length > 0
+                        ? formatCents(
+                            (stripeData.payouts ?? [])
+                              .filter((p) => p.status === "paid")
+                              .reduce((s, p) => s + p.amount, 0),
+                          )
+                        : "—"}
+                    </span>
+                    <span style={{ color: "#7A7D90", fontSize: 12 }}>
+                      Total Paid
+                    </span>
+                  </div>
+                  <span style={{ color: "#1C1F33", fontSize: 16 }}>·</span>
+                  <div
+                    style={{ display: "flex", alignItems: "baseline", gap: 4 }}
+                  >
+                    <span
+                      style={{
+                        fontWeight: 700,
+                        color: "#fbbf24",
+                        fontSize: 18,
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      {stripeData && (stripeData.payouts ?? []).length > 0
+                        ? formatCents(
+                            (stripeData.payouts ?? [])
+                              .filter((p) => p.status === "in_transit")
+                              .reduce((s, p) => s + p.amount, 0),
+                          )
+                        : "—"}
+                    </span>
+                    <span style={{ color: "#7A7D90", fontSize: 12 }}>
+                      In Transit
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div
+                style={{
+                  width: 1,
+                  height: 20,
+                  background: "#1C1F33",
+                  flexShrink: 0,
+                }}
+              />
               <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
                 <span
                   style={{ fontWeight: 700, color: "#EEF0F8", fontSize: 18 }}
@@ -1468,6 +2298,58 @@ export default function AdminOrdersPage() {
             placeholder="Search by client name or tier."
             style={{ ...inputStyle, flex: 1, minWidth: 200 }}
           />
+          <input
+            data-ocid="orders.email_search_input"
+            type="text"
+            value={emailSearch}
+            onChange={(e) => setEmailSearch(e.target.value)}
+            placeholder="Search by email…"
+            style={{ ...inputStyle, flex: 1, minWidth: 180 }}
+          />
+          <select
+            data-ocid="orders.service_type_filter.select"
+            value={serviceTypeFilter}
+            onChange={(e) => setServiceTypeFilter(e.target.value)}
+            style={{
+              ...inputStyle,
+              paddingRight: 32,
+              cursor: "pointer",
+              minWidth: 160,
+              appearance: "auto",
+            }}
+          >
+            <option value="">All Service Types</option>
+            {serviceTypes.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+          {(emailSearch !== "" || serviceTypeFilter !== "") && (
+            <button
+              type="button"
+              data-ocid="orders.clear_filters.button"
+              onClick={() => {
+                setEmailSearch("");
+                setServiceTypeFilter("");
+              }}
+              style={{
+                border: "1px solid #1C1F33",
+                borderRadius: 6,
+                padding: "0 12px",
+                height: 42,
+                fontSize: 13,
+                fontWeight: 700,
+                color: "#7A7D90",
+                background: "transparent",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
+              }}
+            >
+              Clear Filters
+            </button>
+          )}
           <select
             data-ocid="orders.filter.select"
             value={filter}
@@ -1488,8 +2370,31 @@ export default function AdminOrdersPage() {
           </select>
           <button
             type="button"
-            data-ocid="orders.export.button"
-            onClick={() => exportOrdersCSV(filtered, clientInfoMap)}
+            data-ocid="orders.refresh.button"
+            onClick={() => fetchOrders()}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              border: "1px solid rgba(255,255,255,0.2)",
+              borderRadius: 6,
+              padding: "0 14px",
+              height: 42,
+              fontSize: 14,
+              fontWeight: 600,
+              color: "white",
+              background: "transparent",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+            }}
+          >
+            Refresh
+          </button>
+          <button
+            type="button"
+            data-ocid="orders.export_cart_csv.button"
+            onClick={() => exportCartOrdersCSV(filtered)}
             disabled={loading || filtered.length === 0}
             style={{
               display: "flex",
@@ -1581,6 +2486,7 @@ export default function AdminOrdersPage() {
                       "Business Name",
                       "Tier",
                       "Status",
+                      "Amount",
                       "Delivery Window",
                       "Launch Target",
                       "Actions",
@@ -1605,22 +2511,118 @@ export default function AdminOrdersPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((order, idx) => {
+                  {paginatedOrders.map((order, idx) => {
                     const clientIdStr = order.client_id?.toString?.() ?? "";
-                    const info = clientInfoMap.get(clientIdStr);
+                    // O(1) lookup in principal-keyed map resolved by getClientByPrincipal
+                    const info = principalToClient.get(clientIdStr);
+                    const rowIdx = (currentPage - 1) * PAGE_SIZE + idx + 1;
+                    const isExpanded = expandedOrderId === order.id;
                     return (
-                      <OrderRow
-                        key={order.id.toString()}
-                        order={order}
-                        info={info}
-                        index={idx + 1}
-                        actor={actor}
-                        onStatusChange={handleStatusChange}
-                      />
+                      <>
+                        <OrderRow
+                          key={order.id.toString()}
+                          order={order}
+                          info={info}
+                          index={rowIdx}
+                          actor={actor}
+                          onStatusChange={handleStatusChange}
+                          isExpanded={isExpanded}
+                          onToggleExpand={(id) =>
+                            setExpandedOrderId((prev) =>
+                              prev === id ? null : id,
+                            )
+                          }
+                        />
+                        {isExpanded && (
+                          <tr key={`${order.id.toString()}-expand`}>
+                            <td
+                              colSpan={9}
+                              style={{
+                                padding: 0,
+                                background: "rgba(10,11,22,0.5)",
+                                borderTop: "1px solid rgba(94,240,138,0.15)",
+                                borderBottom: "1px solid rgba(94,240,138,0.15)",
+                              }}
+                            >
+                              <OrderTimeline
+                                order={order}
+                                actor={actor}
+                                onStatusChange={handleStatusChange}
+                              />
+                            </td>
+                          </tr>
+                        )}
+                      </>
                     );
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* ── Pagination controls ───────────────────────────────────────── */}
+          {!loading && filtered.length > PAGE_SIZE && (
+            <div
+              data-ocid="orders.pagination"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingTop: 16,
+                flexWrap: "wrap",
+                gap: 10,
+              }}
+            >
+              <span style={{ fontSize: 12, color: "#7A7D90" }}>
+                Showing {paginationStart}–{paginationEnd} of {filtered.length}{" "}
+                orders
+              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button
+                  type="button"
+                  data-ocid="orders.pagination_prev"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  style={{
+                    border: "1px solid #1C1F33",
+                    borderRadius: 6,
+                    padding: "5px 14px",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: currentPage === 1 ? "#3A3D50" : "#EEF0F8",
+                    background: "rgba(19,21,36,1)",
+                    cursor: currentPage === 1 ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Previous
+                </button>
+                <span
+                  style={{ fontSize: 12, color: "#EEF0F8", fontWeight: 600 }}
+                >
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button
+                  type="button"
+                  data-ocid="orders.pagination_next"
+                  onClick={() =>
+                    setCurrentPage((p) => Math.min(totalPages, p + 1))
+                  }
+                  disabled={currentPage === totalPages}
+                  style={{
+                    border: "1px solid #1C1F33",
+                    borderRadius: 6,
+                    padding: "5px 14px",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: currentPage === totalPages ? "#3A3D50" : "#EEF0F8",
+                    background: "rgba(19,21,36,1)",
+                    cursor:
+                      currentPage === totalPages ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Next
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -1799,8 +2801,8 @@ export default function AdminOrdersPage() {
               background: "rgba(19,21,36,0.5)",
               overflowX: "auto",
               WebkitOverflowScrolling: "touch",
-              scrollbarWidth: "none" as React.CSSProperties["scrollbarWidth"],
-              msOverflowStyle: "none" as React.CSSProperties["msOverflowStyle"],
+              scrollbarWidth: "none" as CSSProperties["scrollbarWidth"],
+              msOverflowStyle: "none" as CSSProperties["msOverflowStyle"],
               overscrollBehavior: "contain",
             }}
           >
@@ -1962,6 +2964,9 @@ export default function AdminOrdersPage() {
                     : "Revenue data temporarily unavailable — Stripe API may be loading"
                 }
               />
+            )}
+            {activeTab === "payouts" && (
+              <PayoutsTab payouts={stripeData?.payouts ?? []} />
             )}
           </div>
         </div>

@@ -5,12 +5,12 @@ import {
   ShoppingCart,
   Trash2,
   X,
-  Zap,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Product } from "../backend.d.ts";
+import { PENDING_ORDER_KEY } from "../constants";
 import { useActor } from "../hooks/useActor";
 import { useCartStore } from "../store/useCartStore";
 
@@ -169,25 +169,17 @@ function parsePrice(price: string): number {
  * One-time products → price_onetime. Subscription products → price_monthly.
  * Falls back through all price fields.
  */
-function getProductPrice(product: Product): number {
-  if (
-    product.price_onetime !== undefined &&
-    product.price_onetime !== null &&
-    product.price_monthly === undefined
-  ) {
-    return product.price_onetime;
-  }
-  if (product.price_monthly !== undefined && product.price_monthly !== null) {
-    return product.price_monthly;
-  }
-  if (product.price_onetime !== undefined && product.price_onetime !== null) {
-    return product.price_onetime;
-  }
-  if (product.price_annual !== undefined && product.price_annual !== null) {
+const getProductPrice = (product: Product): number => {
+  if (product.payment_type === "annual" && product.price_annual)
     return product.price_annual;
-  }
-  return 0;
-}
+  if (
+    (product.payment_type === "one_time" ||
+      product.payment_type === "deposit_50") &&
+    product.price_onetime
+  )
+    return product.price_onetime;
+  return product.price_monthly || product.price_onetime || 0;
+};
 
 // ─── Test mode store (localStorage-backed) ───────────────────────────────────
 
@@ -209,10 +201,35 @@ export function setStripeTestMode(enabled: boolean): void {
   }
 }
 
+// ─── Speedy plan helpers ─────────────────────────────────────────────────────
+
+/** Maps a Speedy one-time site name (lowercase) to its required hosting plan */
+const SPEEDY_SITE_TO_PLAN: Record<string, string> = {
+  "speedy basic": "Basic Plan",
+  "speedy booking": "Booking Plan",
+  "speedy product storefront": "Storefront Plan",
+  "speedy menu storefront": "Storefront Plan",
+  "speedy recurring storefront": "Storefront Plan",
+};
+
+/** The 3 purchasable Speedy hosting plan names (exact backend names) */
+const SPEEDY_PLAN_OPTION_VALUES = [
+  "Basic Plan",
+  "Booking Plan",
+  "Storefront Plan",
+];
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function CheckoutDrawer() {
-  const { isOpen, closeDrawer, items, removeItem } = useCartStore();
+  const {
+    isOpen,
+    closeDrawer,
+    items,
+    removeItem,
+    pendingSwap,
+    clearPendingSwap,
+  } = useCartStore();
   const { actor, isFetching } = useActor();
 
   const [formData, setFormData] = useState({
@@ -223,9 +240,26 @@ export default function CheckoutDrawer() {
   });
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [selectedHostingPlan, setSelectedHostingPlan] = useState("");
-  const [isAiBumpSelected, setIsAiBumpSelected] = useState(false);
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+
+  // ─── Speedy site detection ───────────────────────────────────────────────
+  // Find the Speedy Site item in the cart (if any)
+  const speedySiteItem = items.find((item) =>
+    SPEEDY_ONETIME_NAMES.has(item.name.toLowerCase()),
+  );
+  const hasSpeedySite = !!speedySiteItem;
+
+  // The default plan for the current Speedy site selection
+  const speedyDefaultPlan = speedySiteItem
+    ? (SPEEDY_SITE_TO_PLAN[speedySiteItem.name.toLowerCase()] ?? "Basic Plan")
+    : "";
+
+  // Determine if the cart contains any Custom Site item
+  const hasCustomSite = items.some((item) =>
+    CUSTOM_SITE_NAMES.has(item.name.toLowerCase()),
+  );
 
   // Backend product catalog for live price lookup
   const [backendProducts, setBackendProducts] = useState<Product[]>([]);
@@ -240,6 +274,19 @@ export default function CheckoutDrawer() {
     }
   }, [isOpen]);
 
+  // When a Speedy site enters the cart, pre-select its default plan;
+  // when all Speedy sites are removed, clear the plan if it was a Speedy plan.
+  useEffect(() => {
+    if (hasSpeedySite) {
+      setSelectedHostingPlan(speedyDefaultPlan);
+    } else {
+      // Only clear if the current selection is a Speedy plan (not a SaaS plan)
+      setSelectedHostingPlan((prev) =>
+        SPEEDY_PLAN_OPTION_VALUES.includes(prev) ? "" : prev,
+      );
+    }
+  }, [hasSpeedySite, speedyDefaultPlan]);
+
   // Fetch the product catalog whenever the drawer opens
   useEffect(() => {
     if (!isOpen || !actor || isFetching) return;
@@ -247,7 +294,9 @@ export default function CheckoutDrawer() {
       .getProducts()
       .then((result: Product[]) => setBackendProducts(result))
       .catch((err: unknown) => {
-        console.error("CheckoutDrawer: failed to fetch products", err);
+        if (import.meta.env.DEV) {
+          console.error("CheckoutDrawer: failed to fetch products", err);
+        }
       });
   }, [isOpen, actor, isFetching]);
 
@@ -294,14 +343,41 @@ export default function CheckoutDrawer() {
     const deposit = mode === "deposit";
     return {
       fullPrice,
-      chargedPrice: deposit ? Math.ceil(fullPrice * 0.5) : fullPrice,
+      chargedPrice: deposit ? Math.round(fullPrice * 0.5) : fullPrice,
       isDeposit: deposit,
       paymentMode: mode,
     };
   }
 
   const hostingFee = resolveHostingPlanPrice(selectedHostingPlan);
-  const aiBumpFee = isAiBumpSelected ? 199 : 0;
+
+  // ─── Dynamic Speedy hosting plan options ─────────────────────────────────────
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resolveHostingPlanPrice is stable
+  const speedyPlanOptions = useMemo(
+    () =>
+      SPEEDY_PLAN_OPTION_VALUES.map((v) => ({
+        value: v,
+        label: `${v} — ${resolveHostingPlanPrice(v)}/mo`,
+      })),
+    [backendProducts],
+  );
+
+  // ─── Dynamic Custom Site hosting plan options ─────────────────────────────
+  const CUSTOM_PLAN_NAMES = [
+    "Keep It Live",
+    "Stay Sharp",
+    "Stay Ahead",
+    "Full Partner",
+  ];
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resolveHostingPlanPrice reads backendProducts internally
+  const customPlanOptions = useMemo(
+    () =>
+      CUSTOM_PLAN_NAMES.map((v) => ({
+        value: v,
+        label: `${v} — ${resolveHostingPlanPrice(v)}/mo`,
+      })),
+    [backendProducts],
+  );
 
   const buildFeeToday = items.reduce((sum, item) => {
     const { chargedPrice } = getItemPricing(item.name, item.price);
@@ -310,10 +386,10 @@ export default function CheckoutDrawer() {
 
   const remainingBalance = items.reduce((sum, item) => {
     const { fullPrice, isDeposit } = getItemPricing(item.name, item.price);
-    return sum + (isDeposit ? Math.ceil(fullPrice * 0.5) : 0);
+    return sum + (isDeposit ? Math.round(fullPrice * 0.5) : 0);
   }, 0);
 
-  const dueToday = buildFeeToday + hostingFee + aiBumpFee;
+  const dueToday = buildFeeToday + hostingFee;
   const hasDepositItem = items.some((item) => {
     const bp = findBackendProduct(item.name);
     return isDepositProduct(bp, item.name);
@@ -363,11 +439,9 @@ export default function CheckoutDrawer() {
       productCategory: primaryCategory,
       customerName: formData.name,
       customerEmail: formData.email,
+      services: items.map((i) => i.name),
     };
-    localStorage.setItem(
-      "imperidome_pending_order",
-      JSON.stringify(cartPayload),
-    );
+    localStorage.setItem(PENDING_ORDER_KEY, JSON.stringify(cartPayload));
 
     const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as
       | string
@@ -391,7 +465,7 @@ export default function CheckoutDrawer() {
        *   [deposit]      → one-time charge at 50% of product price
        *   [completion]   → one-time charge at remaining 50% (future use)
        */
-      const stripeItems = items.map((item) => {
+      const cartLineItems = items.map((item) => {
         const { chargedPrice, paymentMode } = getItemPricing(
           item.name,
           item.price,
@@ -424,18 +498,118 @@ export default function CheckoutDrawer() {
           quantity: BigInt(1),
           currency: "usd",
           priceInCents: BigInt(Math.round(chargedPrice * 100)),
+          paymentMode,
         };
       });
 
-      const successUrl = `${window.location.origin}/order-confirmation?session_id={CHECKOUT_SESSION_ID}`;
-      const cancelUrl = `${window.location.origin}/`;
-      const sessionUrl = await actor.createCheckoutSession(
-        stripeItems,
-        successUrl,
-        cancelUrl,
+      // ── A-4: Block mixed subscription + one-time carts ────────────────────
+      const hasSubItem = cartLineItems.some(
+        (li) =>
+          li.paymentMode === "subscription" || li.paymentMode === "quarterly",
+      );
+      const hasPaymentItem = cartLineItems.some(
+        (li) => li.paymentMode === "payment" || li.paymentMode === "deposit",
+      );
+      // Also treat the hosting plan as a subscription if present
+      const hostingIsSubscription = !!selectedHostingPlan;
+      const effectiveHasSub = hasSubItem || hostingIsSubscription;
+
+      const isSpeedyPlusHosting =
+        items.length === 1 &&
+        SPEEDY_ONETIME_NAMES.has(items[0].name.toLowerCase()) &&
+        hostingIsSubscription === true;
+
+      // NEW-C-2: AI Receptionist exemption — exactly 2 items: one [subscription]
+      // plan + one [payment] setup fee. Allow checkout in subscription mode.
+      const isAiReceptionistWithSetupFee =
+        cartLineItems.length === 2 &&
+        cartLineItems.filter((li) => li.paymentMode === "subscription")
+          .length === 1 &&
+        cartLineItems.filter((li) => li.paymentMode === "payment").length ===
+          1 &&
+        cartLineItems
+          .find((li) => li.paymentMode === "payment")
+          ?.productName.toLowerCase()
+          .includes("setup fee") === true;
+
+      // NEW-C-1: Custom Site + SaaS hosting plan exemption — exactly 1 [deposit]
+      // item + 1 [subscription] item selected in the hosting plan dropdown.
+      // Split into two sequential Stripe sessions: deposit first, then subscription.
+      const isCustomSitePlusHosting =
+        cartLineItems.length === 1 &&
+        cartLineItems[0].paymentMode === "deposit" &&
+        !!selectedHostingPlan &&
+        !SPEEDY_ONETIME_NAMES.has(items[0].name.toLowerCase());
+
+      if (
+        effectiveHasSub &&
+        hasPaymentItem &&
+        !isSpeedyPlusHosting &&
+        !isAiReceptionistWithSetupFee
+      ) {
+        setIsProcessing(false);
+        setCheckoutError(
+          "Your cart contains a mix of one-time purchases and monthly plans. Please complete checkout for the one-time items first, then add your monthly plan separately to start the subscription.",
+        );
+        return;
+      }
+
+      // NEW-C-1: Handle Custom Site + hosting plan via sequential sessions.
+      // Store the pending subscription in localStorage so OrderConfirmationPage
+      // can automatically initiate the subscription checkout after the deposit completes.
+      if (isCustomSitePlusHosting) {
+        const subscriptionItemName = selectedHostingPlan;
+        const subscriptionItemPrice = hostingFee;
+        localStorage.setItem(
+          "imperidome_pending_subscription",
+          JSON.stringify({
+            itemName: subscriptionItemName,
+            itemPrice: subscriptionItemPrice,
+            itemPrefix: "[subscription]",
+            customerEmail: formData.email,
+            customerName: formData.name,
+          }),
+        );
+        // Proceed with only the deposit item — the hosting plan will be
+        // charged via a second session on the confirmation page.
+        // The hosting plan push block below is skipped when isCustomSitePlusHosting.
+      }
+
+      // ── Build final stripeItems (drop internal paymentMode field) ─────────
+      const stripeItems = cartLineItems.map(
+        ({ paymentMode: _pm, ...rest }) => rest,
       );
 
-      window.location.href = sessionUrl;
+      // ── A-5: Include hosting plan in stripeItems if selected ──────────────
+      // Skip when isCustomSitePlusHosting — the hosting subscription is queued
+      // in localStorage for a sequential session after the deposit completes.
+      if (selectedHostingPlan && hostingFee > 0 && !isCustomSitePlusHosting) {
+        stripeItems.push({
+          productName: `[subscription] ${selectedHostingPlan} | Monthly Hosting`,
+          productDescription: `${selectedHostingPlan} — Monthly Hosting Plan`,
+          quantity: BigInt(1),
+          currency: "usd",
+          priceInCents: BigInt(Math.round(hostingFee * 100)),
+        });
+      }
+
+      const successUrl = `${window.location.origin}/order-confirmation?session_id={CHECKOUT_SESSION_ID}`;
+      const cancelUrl = `${window.location.origin}/`;
+      const sessionResult = await actor.createCheckoutSession(
+        stripeItems,
+        formData.email,
+        successUrl,
+        cancelUrl,
+        formData.name || "",
+      );
+
+      if ("ok" in sessionResult) {
+        window.location.href = sessionResult.ok;
+      } else if ("err" in sessionResult) {
+        setIsProcessing(false);
+        setCheckoutError("Checkout setup failed. Please try again.");
+        return;
+      }
     } catch (err) {
       setIsProcessing(false);
       const message =
@@ -596,70 +770,66 @@ export default function CheckoutDrawer() {
 
               {items.length > 0 && (
                 <>
-                  {/* HOSTING PLAN SELECTOR */}
-                  <div>
-                    <label
-                      htmlFor="hosting-plan"
-                      className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2"
-                    >
-                      Monthly Hosting Plan
-                    </label>
-                    <select
-                      id="hosting-plan"
-                      value={selectedHostingPlan}
-                      onChange={(e) => setSelectedHostingPlan(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#5EF08A] transition-colors min-h-[44px]"
-                      data-ocid="checkout.select"
-                    >
-                      <option value="" className="bg-[#0A0B14]">
-                        Select a plan...
-                      </option>
-                      <option value="Keep It Live" className="bg-[#0A0B14]">
-                        Keep It Live — $29/mo
-                      </option>
-                      <option value="Stay Sharp" className="bg-[#0A0B14]">
-                        Stay Sharp — $89/mo
-                      </option>
-                      <option value="Stay Ahead" className="bg-[#0A0B14]">
-                        Stay Ahead — $249/mo
-                      </option>
-                      <option value="Full Partner" className="bg-[#0A0B14]">
-                        Full Partner — $549/mo
-                      </option>
-                    </select>
-                  </div>
-
-                  {/* AI RECEPTIONIST ORDER BUMP */}
-                  <label
-                    className={`flex items-start gap-4 p-4 rounded-xl border cursor-pointer transition-all ${
-                      isAiBumpSelected
-                        ? "bg-amber-500/10 border-amber-500/60 shadow-[0_0_16px_rgba(245,158,11,0.1)]"
-                        : "bg-white/5 border-white/10 hover:border-white/20"
-                    }`}
-                    data-ocid="checkout.checkbox"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isAiBumpSelected}
-                      onChange={(e) => setIsAiBumpSelected(e.target.checked)}
-                      className="mt-1 accent-amber-400 w-4 h-4 shrink-0"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Zap className="w-4 h-4 text-amber-400 shrink-0" />
-                        <span className="text-white font-bold text-sm">
-                          ADD: AI Receptionist
-                        </span>
-                        <span className="ml-auto text-amber-400 font-bold text-sm whitespace-nowrap">
-                          +$199/mo
-                        </span>
-                      </div>
-                      <p className="text-gray-400 text-xs leading-relaxed">
-                        Never miss another call. 24/7 AI lead capture and
-                        appointment booking.
-                      </p>
+                  {/* HOSTING PLAN SELECTOR — Speedy Sites show 3 Speedy plans; Custom Sites show 4 SaaS plans */}
+                  {hasSpeedySite ? (
+                    <div>
+                      <label
+                        htmlFor="hosting-plan"
+                        className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2"
+                      >
+                        Monthly Hosting Plan
+                      </label>
+                      <select
+                        id="hosting-plan"
+                        value={selectedHostingPlan}
+                        onChange={(e) => setSelectedHostingPlan(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#5EF08A] transition-colors min-h-[44px]"
+                        data-ocid="checkout.select"
+                      >
+                        <option value="" className="bg-[#0A0B14]">
+                          Select a plan...
+                        </option>
+                        {speedyPlanOptions.map((opt) => (
+                          <option
+                            key={opt.value}
+                            value={opt.value}
+                            className="bg-[#0A0B14]"
+                          >
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                  </label>
+                  ) : hasCustomSite ? (
+                    <div>
+                      <label
+                        htmlFor="hosting-plan"
+                        className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2"
+                      >
+                        Monthly Hosting Plan
+                      </label>
+                      <select
+                        id="hosting-plan"
+                        value={selectedHostingPlan}
+                        onChange={(e) => setSelectedHostingPlan(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#5EF08A] transition-colors min-h-[44px]"
+                        data-ocid="checkout.select"
+                      >
+                        <option value="" className="bg-[#0A0B14]">
+                          Select a plan...
+                        </option>
+                        {customPlanOptions.map((opt) => (
+                          <option
+                            key={opt.value}
+                            value={opt.value}
+                            className="bg-[#0A0B14]"
+                          >
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
 
                   {/* LIVE PRICE BREAKDOWN */}
                   <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-2 text-sm">
@@ -710,7 +880,7 @@ export default function CheckoutDrawer() {
                             <div className="flex justify-between text-gray-500 text-xs pl-2">
                               <span>Remaining balance due at completion</span>
                               <span className="shrink-0">
-                                {fmt(Math.ceil(fullPrice * 0.5))}
+                                {fmt(Math.round(fullPrice * 0.5))}
                               </span>
                             </div>
                           )}
@@ -723,12 +893,6 @@ export default function CheckoutDrawer() {
                         <span className="text-white font-medium">
                           {fmt(hostingFee)}/mo
                         </span>
-                      </div>
-                    )}
-                    {isAiBumpSelected && (
-                      <div className="flex justify-between text-amber-400">
-                        <span>AI Receptionist</span>
-                        <span className="font-medium">+$199/mo</span>
                       </div>
                     )}
                     <div className="pt-2 border-t border-white/10 flex justify-between">
@@ -918,6 +1082,67 @@ export default function CheckoutDrawer() {
                 )}
               </div>
             )}
+          </motion.div>
+        </div>
+      )}
+
+      {/* A-13: PENDING SWAP CONFIRMATION MODAL */}
+      {pendingSwap && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center">
+          {/* Backdrop */}
+          <button
+            type="button"
+            className="absolute inset-0 bg-[#0A0B14]/85 backdrop-blur-sm w-full cursor-default"
+            onClick={clearPendingSwap}
+            aria-label="Close swap dialog"
+          />
+          {/* Dialog */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.92 }}
+            className="relative z-10 bg-[#111322] border border-white/15 rounded-2xl shadow-2xl max-w-sm w-full mx-4 p-6"
+            aria-labelledby="swap-dialog-title"
+            data-ocid="checkout.dialog"
+          >
+            <h3
+              id="swap-dialog-title"
+              className="text-lg font-bold text-white mb-3"
+            >
+              Replace Item in Cart?
+            </h3>
+            <p className="text-sm text-gray-400 mb-5 leading-relaxed">
+              Your cart already contains{" "}
+              <span className="text-white font-semibold">
+                {pendingSwap.existingItem.name}
+              </span>
+              . Adding{" "}
+              <span className="text-white font-semibold">
+                {pendingSwap.newItem.name}
+              </span>{" "}
+              will replace it.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  pendingSwap.onConfirm();
+                  clearPendingSwap();
+                }}
+                className="flex-1 py-3 bg-[#5EF08A] text-[#0A0B14] font-bold rounded-xl transition-colors hover:bg-[#4ade80] text-sm"
+                data-ocid="checkout.confirm_button"
+              >
+                Confirm Swap
+              </button>
+              <button
+                type="button"
+                onClick={clearPendingSwap}
+                className="flex-1 py-3 bg-white/5 border border-white/10 text-gray-300 font-bold rounded-xl transition-colors hover:bg-white/10 text-sm"
+                data-ocid="checkout.cancel_button"
+              >
+                Cancel
+              </button>
+            </div>
           </motion.div>
         </div>
       )}

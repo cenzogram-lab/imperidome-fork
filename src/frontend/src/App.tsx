@@ -7,7 +7,7 @@ import {
   redirect,
   useRouterState,
 } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createActor } from "./backend";
 import type { backendInterface } from "./backend";
 import AnnouncementBanner from "./components/AnnouncementBanner";
@@ -18,28 +18,25 @@ import { HelpWidget } from "./components/HelpWidget";
 import ImperidomeHero from "./components/ImperidomeHero";
 import { useReferralTracker } from "./hooks/useReferralTracker";
 import { useSeoMeta } from "./hooks/useSeoMeta";
-import AIReceptionistPage from "./pages/AIReceptionistPage";
 import AboutPage from "./pages/AboutPage";
 import AdsBuilderPage from "./pages/AdsBuilderPage";
 import AiReceptionistForm from "./pages/AiReceptionistForm";
 import AuditCheckoutPage from "./pages/AuditCheckoutPage";
 import BlogIndexPage from "./pages/BlogIndexPage";
 import BlogPostPage from "./pages/BlogPostPage";
+import BookPage from "./pages/BookPage";
 import CheckoutPage from "./pages/CheckoutPage";
-import CustomSitesPage from "./pages/CustomSitesPage";
 import DashboardPage from "./pages/DashboardPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
-import GrowthHubPage from "./pages/GrowthHubPage";
 import IntakeForm from "./pages/IntakeForm";
 import IntakePage from "./pages/IntakePage";
 import LoginPage from "./pages/LoginPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import OrderConfirmationPage from "./pages/OrderConfirmationPage";
 import OurBuildsPage from "./pages/OurBuildsPage";
-import PlatformLimitationsPage from "./pages/PlatformLimitationsPage";
 import PrivacyPage from "./pages/PrivacyPage";
 import ProcessPage from "./pages/ProcessPage";
-import ProductAdsPage from "./pages/ProductAdsPage";
+import ProductDetailPage from "./pages/ProductDetailPage";
 import ProductLabBriefPage from "./pages/ProductLabBriefPage";
 import ProductsPage from "./pages/ProductsPage";
 import ReferralPage from "./pages/ReferralPage";
@@ -47,11 +44,10 @@ import RegisterPage from "./pages/RegisterPage";
 import ReschedulePage from "./pages/ReschedulePage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import ResultsPage from "./pages/ResultsPage";
-import SaaSPlansPage from "./pages/SaaSPlansPage";
-import SpeedySitesPage from "./pages/SpeedySitesPage";
+import SocialFeedPage from "./pages/SocialFeedPage";
 import TermsPage from "./pages/TermsPage";
-import TheDomePage from "./pages/TheDomePage";
 import AdminAnalyticsPage from "./pages/admin/AdminAnalyticsPage";
+import AdminAnnualRevenuePage from "./pages/admin/AdminAnnualRevenuePage";
 import AdminBlogPage from "./pages/admin/AdminBlogPage";
 import AdminBuildsPage from "./pages/admin/AdminBuildsPage";
 import AdminBulkEmailPage from "./pages/admin/AdminBulkEmailPage";
@@ -67,6 +63,7 @@ import AdminLeadsPage from "./pages/admin/AdminLeadsPage";
 import AdminNotificationLogPage from "./pages/admin/AdminNotificationLogPage";
 import AdminNotificationSettings from "./pages/admin/AdminNotificationSettings";
 import AdminOrdersPage from "./pages/admin/AdminOrdersPage";
+import AdminPlatformDashboard from "./pages/admin/AdminPlatformDashboard";
 import AdminPortfolioPage from "./pages/admin/AdminPortfolioPage";
 import AdminProductsPage from "./pages/admin/AdminProductsPage";
 import AdminProfilePage from "./pages/admin/AdminProfilePage";
@@ -74,8 +71,11 @@ import AdminQuestionnairesPage from "./pages/admin/AdminQuestionnairesPage";
 import AdminReferralsPage from "./pages/admin/AdminReferralsPage";
 import AdminReviewsPage from "./pages/admin/AdminReviewsPage";
 import AdminSiteTextPage from "./pages/admin/AdminSiteTextPage";
+import AdminSocialMediaPage from "./pages/admin/AdminSocialMediaPage";
 import AdminSpreadsheetPage from "./pages/admin/AdminSpreadsheetPage";
 import AdminStripeSettings from "./pages/admin/AdminStripeSettings";
+import PortalAnnualStatementPage from "./pages/portal/PortalAnnualStatementPage";
+import PortalBillingPage from "./pages/portal/PortalBillingPage";
 import PortalDashboardPage from "./pages/portal/PortalDashboardPage";
 import PortalEditRequestsPage from "./pages/portal/PortalEditRequestsPage";
 import PortalFilesPage from "./pages/portal/PortalFilesPage";
@@ -91,7 +91,6 @@ import PortalReferralsPage from "./pages/portal/PortalReferralsPage";
 import PortalReviewsPage from "./pages/portal/PortalReviewsPage";
 import PortalShopPage from "./pages/portal/PortalShopPage";
 import PortalSubscriptionsPage from "./pages/portal/PortalSubscriptionsPage";
-import CinematicAdsDetail from "./pages/product-details/CinematicAdsDetail";
 import ShowcaseAIReceptionistPage from "./pages/showcase/ShowcaseAIReceptionistPage";
 import ShowcaseCinematicAdsPage from "./pages/showcase/ShowcaseCinematicAdsPage";
 import ShowcaseCustomSitesPage from "./pages/showcase/ShowcaseCustomSitesPage";
@@ -113,19 +112,7 @@ function HomePage() {
           sid = crypto.randomUUID();
           sessionStorage.setItem("_vis_sid", sid);
         }
-        let countryCode: string | null = null;
-        try {
-          const ctrl = new AbortController();
-          const timer = setTimeout(() => ctrl.abort(), 2000);
-          const res = await fetch("https://ipapi.co/country/", {
-            signal: ctrl.signal,
-          });
-          clearTimeout(timer);
-          const text = (await res.text()).trim();
-          if (/^[A-Z]{2}$/.test(text)) countryCode = text;
-        } catch {
-          // geolocation failed — use null
-        }
+        const countryCode: string | null = null;
         const { createActorWithConfig } = await import("./config");
         const publicActor = await createActorWithConfig(createActor);
         await (publicActor as backendInterface).recordVisit(
@@ -145,12 +132,13 @@ function HomePage() {
 }
 
 function RootLayout() {
+  const isAdminRoute = window.location.pathname.startsWith("/admin");
   return (
     <>
       <ConditionalBanner />
       <GodModeOverlay />
       <FloatingGodModeToggle />
-      <HelpWidget />
+      {!isAdminRoute && <HelpWidget />}
       <Outlet />
     </>
   );
@@ -181,61 +169,10 @@ const productsRedirectRoute = createRoute({
   },
 });
 
-const customSitesRoute = createRoute({
+const productDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/services/custom-sites",
-  component: CustomSitesPage,
-});
-
-// Legacy sub-route redirects
-const productsCustomSitesRedirect = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/products/custom-sites",
-  beforeLoad: () => {
-    throw redirect({ to: "/services/custom-sites" });
-  },
-});
-
-const speedySitesRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/services/speedy-sites",
-  component: SpeedySitesPage,
-});
-
-const productsSpeedySitesRedirect = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/products/speedy-sites",
-  beforeLoad: () => {
-    throw redirect({ to: "/services/speedy-sites" });
-  },
-});
-
-const saasPlansRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/services/saas-plans",
-  component: SaaSPlansPage,
-});
-
-const productsSaasPlansRedirect = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/products/saas-plans",
-  beforeLoad: () => {
-    throw redirect({ to: "/services/saas-plans" });
-  },
-});
-
-const cinematicAdsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/services/cinematic-ads",
-  component: CinematicAdsDetail,
-});
-
-const productsCinematicAdsRedirect = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/products/cinematic-ads",
-  beforeLoad: () => {
-    throw redirect({ to: "/services/cinematic-ads" });
-  },
+  path: "/services/product/$productId",
+  component: ProductDetailPage,
 });
 
 const productLabRoute = createRoute({
@@ -252,60 +189,10 @@ const productsProductLabRedirect = createRoute({
   },
 });
 
-const productAdsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/product-ads",
-  beforeLoad: () => {
-    throw redirect({ to: "/services/product-ads" });
-  },
-});
-
-const productAdsDetailRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/services/product-ads",
-  component: ProductAdsPage,
-});
-
-const productsProductAdsRedirect = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/products/product-ads",
-  beforeLoad: () => {
-    throw redirect({ to: "/services/product-ads" });
-  },
-});
-
 const productLabBriefRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/product-lab-brief",
   component: ProductLabBriefPage,
-});
-
-const aiReceptionistRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/services/ai-receptionist",
-  component: AIReceptionistPage,
-});
-
-const productsAiReceptionistRedirect = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/products/ai-receptionist",
-  beforeLoad: () => {
-    throw redirect({ to: "/services/ai-receptionist" });
-  },
-});
-
-const growthHubRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/services/growth-hub",
-  component: GrowthHubPage,
-});
-
-const productsGrowthHubRedirect = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/products/growth-hub",
-  beforeLoad: () => {
-    throw redirect({ to: "/services/growth-hub" });
-  },
 });
 
 const processRoute = createRoute({
@@ -333,6 +220,11 @@ const onboardingRoute = createRoute({
   path: "/onboarding",
   component: IntakeForm,
 });
+const bookRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/book",
+  component: BookPage,
+});
 
 const adsBuilderRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -350,6 +242,12 @@ const checkoutRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/checkout",
   component: CheckoutPage,
+});
+
+const socialRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/social",
+  component: SocialFeedPage,
 });
 
 const aboutRoute = createRoute({
@@ -404,12 +302,6 @@ const blogPostRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/blog/$slug",
   component: BlogPostPage,
-});
-
-const platformLimitationsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/platform-limitations",
-  component: PlatformLimitationsPage,
 });
 
 const referralRoute = createRoute({
@@ -478,6 +370,18 @@ const portalInvoicesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/portal/invoices",
   component: PortalInvoicesPage,
+});
+
+const portalAnnualStatementRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/portal/annual-statement",
+  component: PortalAnnualStatementPage,
+});
+
+const portalBillingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/portal/billing",
+  component: PortalBillingPage,
 });
 
 const portalEditRequestsRoute = createRoute({
@@ -569,6 +473,12 @@ const adminOrdersRoute = createRoute({
   component: AdminOrdersPage,
 });
 
+const adminAnnualRevenueRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/admin/annual-revenue",
+  component: AdminAnnualRevenuePage,
+});
+
 const adminProductsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/admin/services",
@@ -635,6 +545,12 @@ const adminGoogleCalendarRoute = createRoute({
   component: AdminGoogleCalendarPage,
 });
 
+const adminSocialMediaRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/admin/social-media",
+  component: AdminSocialMediaPage,
+});
+
 const adminNotificationLogRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/admin/notifications",
@@ -670,6 +586,42 @@ const adminProfileRoute = createRoute({
   component: AdminProfilePage,
 });
 
+const adminPlatformDashboardRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/admin/platform",
+  component: AdminPlatformDashboard,
+});
+
+const adminRootRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/admin",
+  beforeLoad: async ({ location }) => {
+    try {
+      const { createActorWithConfig } = await import("./config");
+      const actor = await createActorWithConfig(createActor);
+      const isAdmin = await (actor as backendInterface).isCallerAdmin();
+      if (!isAdmin) {
+        throw redirect({ to: "/" });
+      }
+    } catch (e) {
+      // Re-throw TanStack Router redirect/notFound errors without intercepting them
+      if (
+        e != null &&
+        typeof e === "object" &&
+        ("to" in e || "statusCode" in e || "isRedirect" in e)
+      ) {
+        throw e;
+      }
+      // Network or canister error — deny access for safety
+      throw redirect({ to: "/" });
+    }
+    // Only redirect bare /admin to the dashboard; children pass through
+    if (location.pathname === "/admin" || location.pathname === "/admin/") {
+      throw redirect({ to: "/admin/dashboard" });
+    }
+  },
+});
+
 const forgotPasswordRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/forgot-password",
@@ -693,12 +645,6 @@ const notFoundRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "*",
   component: NotFoundPage,
-});
-
-const theDomeRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/the-dome",
-  component: TheDomePage,
 });
 
 const showcaseCustomSitesRoute = createRoute({
@@ -747,31 +693,19 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   productsRoute,
   productsRedirectRoute,
-  customSitesRoute,
-  productsCustomSitesRedirect,
-  speedySitesRoute,
-  productsSpeedySitesRedirect,
-  saasPlansRoute,
-  productsSaasPlansRedirect,
-  cinematicAdsRoute,
-  productsCinematicAdsRedirect,
+  productDetailRoute,
   productLabRoute,
   productsProductLabRedirect,
-  productAdsRoute,
-  productAdsDetailRoute,
-  productsProductAdsRedirect,
   productLabBriefRoute,
-  aiReceptionistRoute,
-  productsAiReceptionistRedirect,
-  growthHubRoute,
-  productsGrowthHubRedirect,
   processRoute,
   getStartedRoute,
   intakeRoute,
   onboardingRoute,
+  bookRoute,
   adsBuilderRoute,
   aiReceptionistSetupRoute,
   checkoutRoute,
+  socialRoute,
   aboutRoute,
   ourBuildsRoute,
   resultsRoute,
@@ -781,7 +715,6 @@ const routeTree = rootRoute.addChildren([
   auditCheckoutRoute,
   blogIndexRoute,
   blogPostRoute,
-  platformLimitationsRoute,
   referralRoute,
   termsRoute,
   privacyRoute,
@@ -793,6 +726,8 @@ const routeTree = rootRoute.addChildren([
   portalQuestionnaireFormRoute,
   portalSubscriptionsRoute,
   portalInvoicesRoute,
+  portalAnnualStatementRoute,
+  portalBillingRoute,
   portalEditRequestsRoute,
   portalReviewsRoute,
   portalFilesRoute,
@@ -801,6 +736,7 @@ const routeTree = rootRoute.addChildren([
   portalShopRoute,
   portalRequestsRoute,
   portalProfileRoute,
+  adminRootRoute,
   adminDashboardRoute,
   adminAnalyticsRoute,
   adminClientsRoute,
@@ -808,6 +744,7 @@ const routeTree = rootRoute.addChildren([
   adminQuestionnairesRoute,
   adminReviewsRoute,
   adminOrdersRoute,
+  adminAnnualRevenueRoute,
   adminProductsRoute,
   adminEmailTemplatesRoute,
   adminEmailLogsRoute,
@@ -819,13 +756,15 @@ const routeTree = rootRoute.addChildren([
   adminReferralsRoute,
   adminStripeSettingsRoute,
   adminGoogleCalendarRoute,
+  adminSocialMediaRoute,
   adminNotificationLogRoute,
   adminNotificationSettingsRoute,
   adminBuildsRoute,
   adminSpreadsheetRoute,
   adminProfileRoute,
+  adminPlatformDashboardRoute,
   adminBulkEmailRoute,
-  theDomeRoute,
+
   forgotPasswordRoute,
   resetPasswordRoute,
   rescheduleRoute,

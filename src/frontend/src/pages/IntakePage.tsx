@@ -1,14 +1,11 @@
 import { useRouterState } from "@tanstack/react-router";
 import {
   Bot,
-  CalendarDays,
   CheckCircle,
   ChevronLeft,
   ChevronRight,
-  Clock,
   Film,
   Globe,
-  Loader2,
   MessageSquare,
   Search,
   ShoppingCart,
@@ -19,87 +16,9 @@ import { create } from "zustand";
 import { createActor } from "../backend";
 import type { backendInterface } from "../backend";
 import { Footer } from "../components/Footer";
+import TypewriterText from "../components/TypewriterText";
 import { createActorWithConfig } from "../config";
 import { useActor } from "../hooks/useActor";
-
-// ─── Availability types ───────────────────────────────────────────────────────
-type DaySchedule = { isOpen: boolean; startHour: number; endHour: number };
-type WeeklySchedule = {
-  monday: DaySchedule;
-  tuesday: DaySchedule;
-  wednesday: DaySchedule;
-  thursday: DaySchedule;
-  friday: DaySchedule;
-  saturday: DaySchedule;
-  sunday: DaySchedule;
-};
-type AvailabilitySettings = {
-  weeklySchedule: WeeklySchedule;
-  blockedDates: string[];
-};
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function getDayKey(date: Date): keyof WeeklySchedule {
-  const days: (keyof WeeklySchedule)[] = [
-    "sunday",
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday",
-  ];
-  return days[date.getDay()];
-}
-
-function isDateAvailable(settings: AvailabilitySettings, date: Date): boolean {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  if (date < today) return false;
-  const iso = toLocalISODate(date);
-  if (settings.blockedDates.includes(iso)) return false;
-  const dayKey = getDayKey(date);
-  return settings.weeklySchedule[dayKey].isOpen;
-}
-
-function toLocalISODate(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-// 2-hour buffer: slot is available only if it's at least 2 hours from now
-function getAvailableSlots(
-  settings: AvailabilitySettings,
-  selectedDate: Date,
-): string[] {
-  const dayKey = getDayKey(selectedDate);
-  const schedule = settings.weeklySchedule[dayKey];
-  if (!schedule.isOpen) return [];
-
-  const slots: string[] = [];
-  const now = new Date();
-  const isToday = toLocalISODate(selectedDate) === toLocalISODate(now);
-  const bufferHour = now.getHours() + 2; // 2-hour buffer
-
-  for (let h = schedule.startHour; h < schedule.endHour; h++) {
-    if (isToday && h <= bufferHour) continue;
-    const period = h < 12 ? "AM" : "PM";
-    const display = h === 0 ? 12 : h > 12 ? h - 12 : h;
-    slots.push(`${display}:00 ${period}`);
-  }
-  return slots;
-}
-
-function formatHour24(slot: string): string {
-  // Converts "9:00 AM" → "09:00" for the message payload
-  const [timePart, period] = slot.split(" ");
-  let [h] = timePart.split(":").map(Number);
-  if (period === "PM" && h !== 12) h += 12;
-  if (period === "AM" && h === 12) h = 0;
-  return `${String(h).padStart(2, "0")}:00`;
-}
 
 // ─── Zustand store ────────────────────────────────────────────────────────────
 interface IntakeStore {
@@ -113,9 +32,6 @@ interface IntakeStore {
   email: string;
   phone: string;
   bestTime: string;
-  preferredDate: string;
-  preferredSlot: string;
-  meetingMethod: "phone" | "google_meet";
   setField: (key: string, value: string) => void;
   nextStep: () => void;
   prevStep: () => void;
@@ -133,9 +49,6 @@ const useIntakeStore = create<IntakeStore>((set) => ({
   email: "",
   phone: "",
   bestTime: "",
-  preferredDate: "",
-  preferredSlot: "",
-  meetingMethod: "phone",
   setField: (key, value) => set((s) => ({ ...s, [key]: value })),
   nextStep: () => set((s) => ({ ...s, step: Math.min(s.step + 1, 4) })),
   prevStep: () => set((s) => ({ ...s, step: Math.max(s.step - 1, 1) })),
@@ -151,9 +64,6 @@ const useIntakeStore = create<IntakeStore>((set) => ({
       email: "",
       phone: "",
       bestTime: "",
-      preferredDate: "",
-      preferredSlot: "",
-      meetingMethod: "phone",
     }),
 }));
 
@@ -279,7 +189,107 @@ function ErrorMsg({ msg }: { msg?: string }) {
   );
 }
 
-function ProgressBar({ step }: { step: number }) {
+function ProgressBar({
+  step,
+  showCelebration,
+}: {
+  step: number;
+  showCelebration: boolean;
+}) {
+  // Particle positions spread across the progress bar width
+  const particles: {
+    left: string;
+    color: string;
+    delay: string;
+    translateY: string;
+    rotate: string;
+  }[] = [
+    {
+      left: "5%",
+      color: PARTICLE_COLORS[0],
+      delay: "0ms",
+      translateY: "-80px",
+      rotate: "30deg",
+    },
+    {
+      left: "13%",
+      color: PARTICLE_COLORS[1],
+      delay: "50ms",
+      translateY: "-110px",
+      rotate: "-20deg",
+    },
+    {
+      left: "21%",
+      color: PARTICLE_COLORS[2],
+      delay: "100ms",
+      translateY: "-70px",
+      rotate: "45deg",
+    },
+    {
+      left: "30%",
+      color: PARTICLE_COLORS[3],
+      delay: "150ms",
+      translateY: "-100px",
+      rotate: "-35deg",
+    },
+    {
+      left: "38%",
+      color: PARTICLE_COLORS[0],
+      delay: "200ms",
+      translateY: "-90px",
+      rotate: "60deg",
+    },
+    {
+      left: "46%",
+      color: PARTICLE_COLORS[1],
+      delay: "0ms",
+      translateY: "-120px",
+      rotate: "-50deg",
+    },
+    {
+      left: "54%",
+      color: PARTICLE_COLORS[2],
+      delay: "75ms",
+      translateY: "-75px",
+      rotate: "25deg",
+    },
+    {
+      left: "62%",
+      color: PARTICLE_COLORS[3],
+      delay: "175ms",
+      translateY: "-105px",
+      rotate: "-40deg",
+    },
+    {
+      left: "70%",
+      color: PARTICLE_COLORS[0],
+      delay: "250ms",
+      translateY: "-85px",
+      rotate: "55deg",
+    },
+    {
+      left: "78%",
+      color: PARTICLE_COLORS[1],
+      delay: "300ms",
+      translateY: "-115px",
+      rotate: "-15deg",
+    },
+    {
+      left: "86%",
+      color: PARTICLE_COLORS[2],
+      delay: "350ms",
+      translateY: "-65px",
+      rotate: "70deg",
+    },
+    {
+      left: "94%",
+      color: PARTICLE_COLORS[3],
+      delay: "400ms",
+      translateY: "-95px",
+      rotate: "-60deg",
+    },
+  ];
+
   return (
     <div style={{ marginBottom: "32px" }}>
       <div
@@ -305,27 +315,100 @@ function ProgressBar({ step }: { step: number }) {
           </span>
         ))}
       </div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: "6px",
-        }}
-      >
-        {STEPS.map((label) => {
-          const idx = STEPS.indexOf(label);
-          return (
+      {/* Celebration particles — absolutely positioned above progress bar */}
+      <div style={{ position: "relative" }}>
+        {showCelebration &&
+          particles.map((p) => (
             <div
-              key={label}
+              key={`particle-${p.left}-${p.delay}`}
               style={{
-                height: "4px",
-                borderRadius: "2px",
-                background: idx + 1 <= step ? PRIMARY : BORDER,
-                transition: "background 0.4s ease",
+                position: "absolute",
+                bottom: "100%",
+                left: p.left,
+                width: "8px",
+                height: "8px",
+                borderRadius: "50%",
+                background: p.color,
+                animationName: "imperido-celebrate-particle",
+                animationDuration: "900ms",
+                animationDelay: p.delay,
+                animationTimingFunction: "ease-out",
+                animationFillMode: "forwards",
+                pointerEvents: "none",
+                zIndex: 10,
+                // Store custom props via style for the keyframe end state
+                // Each particle uses unique translateY and rotation inline
               }}
             />
-          );
-        })}
+          ))}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 1fr)",
+            gap: "6px",
+          }}
+        >
+          {STEPS.map((label, idx) => {
+            const remaining = STEPS.length - (idx + 1);
+            const tooltipText =
+              remaining > 0
+                ? `${remaining} step${remaining === 1 ? "" : "s"} remaining`
+                : "Last step";
+            return (
+              <div
+                key={label}
+                style={{ position: "relative" }}
+                className="group"
+              >
+                {/* Tooltip — appears above the bar segment on hover */}
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs font-medium text-white bg-gray-900 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-in-out delay-75 pointer-events-none z-50">
+                  {tooltipText}
+                </div>
+                {/* Bar segment */}
+                <div
+                  title={tooltipText}
+                  style={{
+                    height: "4px",
+                    borderRadius: "2px",
+                    background: idx + 1 <= step ? PRIMARY : BORDER,
+                    transition: "background 0.4s ease",
+                    ...(idx + 1 === step
+                      ? {
+                          animation:
+                            "imperido-pulse-glow 2s ease-in-out infinite",
+                        }
+                      : {}),
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* "Almost there! Last step." message — fades in when on last step */}
+      <div
+        style={{
+          marginTop: "12px",
+          textAlign: "center",
+          opacity: step === STEPS.length ? 1 : 0,
+          transition: "opacity 300ms ease",
+          pointerEvents: "none",
+          height: step === STEPS.length ? "auto" : "0",
+          overflow: "hidden",
+        }}
+      >
+        <span
+          style={{
+            color: PRIMARY,
+            fontSize: "13px",
+            fontWeight: 600,
+            fontFamily: "'JetBrains Mono', 'Courier New', monospace",
+            textShadow: "0 0 8px rgba(94,240,138,0.5)",
+          }}
+        >
+          Almost there! Last step.
+        </span>
       </div>
     </div>
   );
@@ -420,13 +503,14 @@ function Step1({
       <SelectedPackageBanner cart={cart} />
       <h2
         style={{
-          color: TEXT,
+          color: "#5EF08A",
           fontSize: "22px",
           fontWeight: 700,
           marginBottom: "8px",
+          fontFamily: "'JetBrains Mono', 'Courier New', monospace",
         }}
       >
-        What are we building?
+        <TypewriterText text="What are we building?" as="span" speed={45} />
       </h2>
       <p style={{ color: MUTED, fontSize: "14px", marginBottom: "28px" }}>
         Select the service that best fits your goals.
@@ -514,18 +598,19 @@ function Step1({
               </div>
               <p
                 style={{
-                  color: "#EEF0F8",
+                  color: "#5EF08A",
                   fontWeight: 700,
                   fontSize: "14px",
                   marginBottom: "5px",
+                  fontFamily: "'JetBrains Mono', 'Courier New', monospace",
                 }}
               >
-                {label}
+                <TypewriterText text={label} as="span" speed={30} />
               </p>
               <p
                 style={{ color: "#7A7D90", fontSize: "12px", lineHeight: 1.5 }}
               >
-                {desc}
+                <TypewriterText text={desc} as="span" speed={25} />
               </p>
             </button>
           );
@@ -543,13 +628,14 @@ function Step2({ errors }: { errors: Record<string, string> }) {
     <div>
       <h2
         style={{
-          color: TEXT,
+          color: "#5EF08A",
           fontSize: "22px",
           fontWeight: 700,
           marginBottom: "8px",
+          fontFamily: "'JetBrains Mono', 'Courier New', monospace",
         }}
       >
-        Your Business
+        <TypewriterText text="Your Business" as="span" speed={45} />
       </h2>
       <p style={{ color: MUTED, fontSize: "14px", marginBottom: "28px" }}>
         Tell us about what you do.
@@ -632,395 +718,28 @@ function Step2({ errors }: { errors: Record<string, string> }) {
   );
 }
 
-// ─── Date/Time picker sub-component used in Step 3 ───────────────────────────
-function DateTimePicker({
-  availability,
-  preferredDate,
-  preferredSlot,
-  onDateChange,
-  onSlotChange,
-}: {
-  availability: AvailabilitySettings | null;
-  preferredDate: string;
-  preferredSlot: string;
-  onDateChange: (d: string) => void;
-  onSlotChange: (s: string) => void;
-}) {
-  const todayISO = toLocalISODate(new Date());
-
-  // Available slots for the currently selected date
-  const slots: string[] = (() => {
-    if (!availability || !preferredDate) return [];
-    const d = new Date(`${preferredDate}T12:00:00`); // noon to avoid DST issues
-    return getAvailableSlots(availability, d);
-  })();
-
-  // When date changes, clear slot if it's no longer in the new list
-  function handleDateChange(iso: string) {
-    onDateChange(iso);
-    onSlotChange("");
-  }
-
-  // Custom date validation: grey-out unavailable dates via native min +
-  // a browser-side check on the date input's change event.
-  function handleNativeDateChange(iso: string) {
-    if (!availability) {
-      handleDateChange(iso);
-      return;
-    }
-    const d = new Date(`${iso}T12:00:00`);
-    if (!isDateAvailable(availability, d)) {
-      // Silently reject — keep the previous value
-      return;
-    }
-    handleDateChange(iso);
-  }
-
-  const hasAvailability = availability !== null;
-  const noSlotsForDay = hasAvailability && preferredDate && slots.length === 0;
-
-  return (
-    <div
-      style={{
-        background: "rgba(19,21,36,0.6)",
-        border: `1px solid ${BORDER}`,
-        borderRadius: "12px",
-        padding: "20px",
-        marginBottom: "20px",
-      }}
-    >
-      {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-          marginBottom: "18px",
-        }}
-      >
-        <CalendarDays size={18} color={PRIMARY} />
-        <span
-          style={{
-            color: TEXT,
-            fontSize: "14px",
-            fontWeight: 600,
-          }}
-        >
-          Preferred Date &amp; Time
-        </span>
-        <span
-          style={{
-            color: MUTED,
-            fontSize: "12px",
-            marginLeft: "4px",
-          }}
-        >
-          (optional)
-        </span>
-      </div>
-
-      {/* Date input */}
-      <div style={{ marginBottom: preferredDate ? "18px" : "0" }}>
-        <label
-          htmlFor="intake-preferred-date"
-          style={{ ...labelStyle, marginBottom: "8px" }}
-        >
-          Select a date
-        </label>
-        <input
-          id="intake-preferred-date"
-          data-ocid="intake.preferredDate.input"
-          type="date"
-          min={todayISO}
-          value={preferredDate}
-          onChange={(e) => handleNativeDateChange(e.target.value)}
-          style={{
-            ...inputStyle,
-            colorScheme: "dark",
-            cursor: "pointer",
-          }}
-        />
-        {hasAvailability && preferredDate && (
-          <p
-            style={{
-              fontSize: "11px",
-              color: noSlotsForDay ? "#F87171" : MUTED,
-              marginTop: "5px",
-            }}
-          >
-            {noSlotsForDay
-              ? "This day is unavailable. Please choose another date."
-              : `${slots.length} slot${slots.length === 1 ? "" : "s"} available`}
-          </p>
-        )}
-      </div>
-
-      {/* Time slots */}
-      {preferredDate && slots.length > 0 && (
-        <div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              marginBottom: "12px",
-            }}
-          >
-            <Clock size={14} color={MUTED} />
-            <span style={{ color: MUTED, fontSize: "12px", fontWeight: 500 }}>
-              Available times
-            </span>
-          </div>
-          <div
-            data-ocid="intake.timeSlots.grid"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))",
-              gap: "8px",
-            }}
-          >
-            {slots.map((slot) => {
-              const selected = preferredSlot === slot;
-              return (
-                <button
-                  key={slot}
-                  type="button"
-                  data-ocid={`intake.timeSlot.${slot.replace(/[^a-z0-9]/gi, "-").toLowerCase()}.button`}
-                  onClick={() => onSlotChange(selected ? "" : slot)}
-                  style={{
-                    background: selected
-                      ? "rgba(94,240,138,0.18)"
-                      : "rgba(255,255,255,0.04)",
-                    border: selected
-                      ? `1.5px solid ${PRIMARY}`
-                      : `1px solid ${BORDER}`,
-                    borderRadius: "8px",
-                    padding: "9px 6px",
-                    color: selected ? PRIMARY : TEXT,
-                    fontSize: "13px",
-                    fontWeight: selected ? 700 : 500,
-                    cursor: "pointer",
-                    textAlign: "center",
-                    transition: "all 0.2s ease",
-                    boxShadow: selected
-                      ? "0 0 10px rgba(94,240,138,0.2)"
-                      : "none",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!selected) {
-                      e.currentTarget.style.borderColor =
-                        "rgba(94,240,138,0.4)";
-                      e.currentTarget.style.background =
-                        "rgba(94,240,138,0.06)";
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!selected) {
-                      e.currentTarget.style.borderColor = BORDER;
-                      e.currentTarget.style.background =
-                        "rgba(255,255,255,0.04)";
-                    }
-                  }}
-                >
-                  {slot}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Step3({
-  errors,
-  availability,
-  actor: actorProp,
-}: {
-  errors: Record<string, string>;
-  availability: AvailabilitySettings | null;
-  actor: ReturnType<typeof useActor>["actor"];
-}) {
-  const {
-    fullName,
-    email,
-    phone,
-    bestTime,
-    preferredDate,
-    preferredSlot,
-    meetingMethod,
-    setField,
-  } = useIntakeStore();
-
-  // Quick Book state
-  const [quickBookLoading, setQuickBookLoading] = useState(false);
-  const [quickBookToast, setQuickBookToast] = useState("");
-  const contactSectionRef = useRef<HTMLDivElement>(null);
-
-  async function handleQuickBook() {
-    if (!actorProp) return;
-    setQuickBookLoading(true);
-    setQuickBookToast("");
-    try {
-      const result = await (
-        actorProp as unknown as {
-          getNextAvailableSlot: () => Promise<{ date: string; time: string }>;
-        }
-      ).getNextAvailableSlot();
-
-      if (!result.date || !result.time) {
-        setQuickBookToast(
-          "No slots available in the next 60 days. Please check back later.",
-        );
-        return;
-      }
-
-      setField("preferredDate", result.date);
-      setField("preferredSlot", result.time);
-
-      // Scroll to contact fields
-      setTimeout(() => {
-        contactSectionRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-      }, 120);
-    } catch {
-      setQuickBookToast(
-        "Could not fetch next available slot. Please try manually.",
-      );
-    } finally {
-      setQuickBookLoading(false);
-    }
-  }
+function Step3({ errors }: { errors: Record<string, string> }) {
+  const { fullName, email, phone, bestTime, setField } = useIntakeStore();
 
   return (
     <div>
       <h2
         style={{
-          color: TEXT,
+          color: "#5EF08A",
           fontSize: "22px",
           fontWeight: 700,
           marginBottom: "8px",
+          fontFamily: "'JetBrains Mono', 'Courier New', monospace",
         }}
       >
-        Contact
+        <TypewriterText text="Contact" as="span" speed={45} />
       </h2>
       <p style={{ color: MUTED, fontSize: "14px", marginBottom: "28px" }}>
         How should we reach you?
       </p>
 
-      {/* Quick Book CTA */}
-      <div style={{ marginBottom: "24px" }}>
-        <button
-          type="button"
-          data-ocid="intake.quick_book.button"
-          onClick={handleQuickBook}
-          disabled={quickBookLoading}
-          style={{
-            width: "100%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "10px",
-            background: quickBookLoading
-              ? "rgba(94,240,138,0.08)"
-              : "rgba(94,240,138,0.10)",
-            border: `1.5px solid ${quickBookLoading ? "rgba(94,240,138,0.25)" : "rgba(94,240,138,0.45)"}`,
-            borderRadius: "12px",
-            padding: "13px 20px",
-            cursor: quickBookLoading ? "not-allowed" : "pointer",
-            transition: "all 0.2s ease",
-            boxShadow: quickBookLoading
-              ? "none"
-              : "0 0 20px rgba(94,240,138,0.12)",
-          }}
-          onMouseEnter={(e) => {
-            if (!quickBookLoading) {
-              e.currentTarget.style.background = "rgba(94,240,138,0.16)";
-              e.currentTarget.style.boxShadow = "0 0 28px rgba(94,240,138,0.2)";
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!quickBookLoading) {
-              e.currentTarget.style.background = "rgba(94,240,138,0.10)";
-              e.currentTarget.style.boxShadow =
-                "0 0 20px rgba(94,240,138,0.12)";
-            }
-          }}
-        >
-          {quickBookLoading ? (
-            <Loader2
-              size={18}
-              color={PRIMARY}
-              style={{ animation: "spin 1s linear infinite", flexShrink: 0 }}
-            />
-          ) : (
-            <span style={{ fontSize: "18px" }}>⚡</span>
-          )}
-          <div style={{ textAlign: "left" }}>
-            <p
-              style={{
-                color: PRIMARY,
-                fontWeight: 700,
-                fontSize: "14px",
-                margin: 0,
-              }}
-            >
-              {quickBookLoading
-                ? "Finding next slot…"
-                : "Quick Book — Next Available Slot"}
-            </p>
-            <p
-              style={{
-                color: MUTED,
-                fontSize: "12px",
-                margin: "2px 0 0",
-              }}
-            >
-              Auto-selects the earliest open time
-            </p>
-          </div>
-        </button>
-
-        {/* Toast feedback */}
-        {quickBookToast && (
-          <p
-            data-ocid="intake.quick_book.toast"
-            style={{
-              marginTop: "8px",
-              fontSize: "12px",
-              color: "#F87171",
-              background: "rgba(248,113,113,0.08)",
-              border: "1px solid rgba(248,113,113,0.25)",
-              borderRadius: "8px",
-              padding: "8px 12px",
-            }}
-          >
-            {quickBookToast}
-          </p>
-        )}
-      </div>
-
-      {/* Divider */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "12px",
-          marginBottom: "24px",
-        }}
-      >
-        <div style={{ flex: 1, height: "1px", background: BORDER }} />
-        <span style={{ color: MUTED, fontSize: "11px", fontWeight: 600 }}>
-          OR PICK MANUALLY
-        </span>
-        <div style={{ flex: 1, height: "1px", background: BORDER }} />
-      </div>
-
       {/* Contact fields */}
-      <div ref={contactSectionRef}>
+      <div>
         <div style={fieldWrap}>
           <label htmlFor="intake-fullName" style={labelStyle}>
             Full Name *
@@ -1086,103 +805,6 @@ function Step3({
           </select>
         </div>
       </div>
-
-      {/* Date & time picker */}
-      <DateTimePicker
-        availability={availability}
-        preferredDate={preferredDate}
-        preferredSlot={preferredSlot}
-        onDateChange={(d) => setField("preferredDate", d)}
-        onSlotChange={(s) => setField("preferredSlot", s)}
-      />
-
-      {/* Meeting Method toggle */}
-      <div style={{ marginBottom: "8px" }}>
-        <p
-          style={{
-            ...labelStyle,
-            marginBottom: "10px",
-          }}
-        >
-          Meeting Method
-        </p>
-        <div
-          data-ocid="intake.meetingMethod.toggle"
-          style={{
-            display: "flex",
-            gap: "10px",
-          }}
-        >
-          <button
-            type="button"
-            data-ocid="intake.meetingMethod.phone.button"
-            onClick={() => setField("meetingMethod", "phone")}
-            style={{
-              flex: 1,
-              padding: "12px 16px",
-              borderRadius: "10px",
-              border:
-                meetingMethod === "phone"
-                  ? "2px solid #F97316"
-                  : `1px solid ${BORDER}`,
-              background:
-                meetingMethod === "phone"
-                  ? "rgba(249,115,22,0.12)"
-                  : "rgba(255,255,255,0.03)",
-              color: meetingMethod === "phone" ? "#F97316" : TEXT,
-              fontWeight: meetingMethod === "phone" ? 700 : 500,
-              fontSize: "14px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "8px",
-              transition: "all 0.2s ease",
-              boxShadow:
-                meetingMethod === "phone"
-                  ? "0 0 14px rgba(249,115,22,0.2)"
-                  : "none",
-            }}
-          >
-            <span style={{ fontSize: "16px" }}>📞</span>
-            Phone Call
-          </button>
-          <button
-            type="button"
-            data-ocid="intake.meetingMethod.google_meet.button"
-            onClick={() => setField("meetingMethod", "google_meet")}
-            style={{
-              flex: 1,
-              padding: "12px 16px",
-              borderRadius: "10px",
-              border:
-                meetingMethod === "google_meet"
-                  ? "2px solid #3B82F6"
-                  : `1px solid ${BORDER}`,
-              background:
-                meetingMethod === "google_meet"
-                  ? "rgba(59,130,246,0.12)"
-                  : "rgba(255,255,255,0.03)",
-              color: meetingMethod === "google_meet" ? "#3B82F6" : TEXT,
-              fontWeight: meetingMethod === "google_meet" ? 700 : 500,
-              fontSize: "14px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "8px",
-              transition: "all 0.2s ease",
-              boxShadow:
-                meetingMethod === "google_meet"
-                  ? "0 0 14px rgba(59,130,246,0.2)"
-                  : "none",
-            }}
-          >
-            <span style={{ fontSize: "16px" }}>📹</span>
-            Google Meet
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -1196,9 +818,6 @@ function Step4() {
     fullName,
     email,
     phone,
-    preferredDate,
-    preferredSlot,
-    meetingMethod,
     reset,
   } = useIntakeStore();
   const { actor } = useActor();
@@ -1221,23 +840,46 @@ function Step4() {
         contact_name: fullName,
         contact_phone: phone,
         business_type: industry,
-        preferred_date: preferredDate,
-        preferred_time: preferredSlot ? formatHour24(preferredSlot) : "",
         website: websiteUrl,
-        meetingMethod,
       });
-      await (
-        actor as unknown as {
-          createLead: (
-            path: string,
-            name: string,
-            email: string,
-            business: string,
-            message: string,
-          ) => Promise<string>;
-        }
-      ).createLead("/intake", fullName, email, businessName, payload);
+      try {
+        await (
+          actor as unknown as {
+            createLead: (
+              path: string,
+              name: string,
+              email: string,
+              business: string,
+              message: string,
+            ) => Promise<string>;
+          }
+        ).createLead("/intake", fullName, email, businessName, payload);
+      } catch (error: unknown) {
+        setSubmitting(false);
+        setSubmitError(
+          "Something went wrong submitting your inquiry. Please try again or contact us directly.",
+        );
+        console.error("submitInquiry failed:", error);
+        return;
+      }
       setSubmitted(true);
+      // Feature 3: Send confirmation email to client (fail silently)
+      try {
+        const svcLabel =
+          SERVICE_OPTIONS.find((s) => s.id === serviceType)?.label ??
+          serviceType;
+        await (actor as unknown as backendInterface).helpRequest(
+          fullName,
+          email,
+          "We received your inquiry — Imperidome will be in touch shortly",
+          `Hi ${fullName},\n\nThank you for reaching out about ${svcLabel}. We've received your inquiry and our team will review it and follow up with you within 1 business day.\n\nIf you have any additional details to share, please feel free to reply to this email.\n\nWe look forward to speaking with you.\n\nWarm regards,\nThe Imperidome Team`,
+          "normal",
+          "",
+          "",
+        );
+      } catch (error) {
+        console.error("Intake confirmation email failed:", error);
+      }
     } catch {
       setSubmitError(
         "Something went wrong. Please try again or contact us directly.",
@@ -1268,20 +910,17 @@ function Step4() {
         </div>
         <h2
           style={{
-            color: TEXT,
+            color: "#5EF08A",
             fontSize: "26px",
             fontWeight: 700,
             marginBottom: "8px",
+            fontFamily: "'JetBrains Mono', 'Courier New', monospace",
           }}
         >
-          Booking Confirmed!
+          <TypewriterText text="Booking Confirmed!" as="span" speed={50} />
         </h2>
         <p style={{ color: MUTED, fontSize: "15px", marginBottom: "24px" }}>
-          We&apos;ll be in touch within 24 hours to confirm your
-          {meetingMethod === "google_meet"
-            ? " Google Meet link"
-            : " call details"}
-          .
+          We&apos;ll be in touch within 24 hours to confirm your call details.
         </p>
         <p style={{ color: MUTED, fontSize: "13px" }}>
           A confirmation has been sent to{" "}
@@ -1330,13 +969,14 @@ function Step4() {
       </div>
       <h2
         style={{
-          color: TEXT,
+          color: "#5EF08A",
           fontSize: "26px",
           fontWeight: 700,
           marginBottom: "8px",
+          fontFamily: "'JetBrains Mono', 'Courier New', monospace",
         }}
       >
-        Brief Submitted
+        <TypewriterText text="Brief Submitted" as="span" speed={50} />
       </h2>
       <p style={{ color: MUTED, fontSize: "15px", marginBottom: "32px" }}>
         We&apos;ll be in touch within 24 hours.
@@ -1382,90 +1022,6 @@ function Step4() {
               {email}
             </span>
           </div>
-          {preferredDate && (
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <span style={{ color: MUTED, fontSize: "13px" }}>Booking</span>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  flexWrap: "wrap",
-                  justifyContent: "flex-end",
-                }}
-              >
-                <span
-                  style={{
-                    color: PRIMARY,
-                    fontSize: "13px",
-                    fontWeight: 600,
-                  }}
-                >
-                  {preferredDate}
-                  {preferredSlot ? ` at ${preferredSlot}` : ""}
-                </span>
-                <span
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: 700,
-                    padding: "2px 8px",
-                    borderRadius: "20px",
-                    background:
-                      meetingMethod === "phone"
-                        ? "rgba(249,115,22,0.15)"
-                        : "rgba(59,130,246,0.15)",
-                    color: meetingMethod === "phone" ? "#F97316" : "#3B82F6",
-                    border:
-                      meetingMethod === "phone"
-                        ? "1px solid rgba(249,115,22,0.35)"
-                        : "1px solid rgba(59,130,246,0.35)",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {meetingMethod === "phone"
-                    ? "📞 Phone Call"
-                    : "📹 Google Meet"}
-                </span>
-              </div>
-            </div>
-          )}
-          {!preferredDate && (
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <span style={{ color: MUTED, fontSize: "13px" }}>Method</span>
-              <span
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  padding: "2px 8px",
-                  borderRadius: "20px",
-                  background:
-                    meetingMethod === "phone"
-                      ? "rgba(249,115,22,0.15)"
-                      : "rgba(59,130,246,0.15)",
-                  color: meetingMethod === "phone" ? "#F97316" : "#3B82F6",
-                  border:
-                    meetingMethod === "phone"
-                      ? "1px solid rgba(249,115,22,0.35)"
-                      : "1px solid rgba(59,130,246,0.35)",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {meetingMethod === "phone" ? "📞 Phone Call" : "📹 Google Meet"}
-              </span>
-            </div>
-          )}
         </div>
       </div>
 
@@ -1514,14 +1070,57 @@ function Step4() {
   );
 }
 
+// Celebration particle colors matching brand palette
+const PARTICLE_COLORS = ["#5EF08A", "#39FF14", "#FFFFFF", "#94F0B4"];
+
 export default function IntakePage() {
-  const { step, nextStep, prevStep } = useIntakeStore();
+  const { step, nextStep, prevStep, setField } = useIntakeStore();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const routerState = useRouterState();
   const locationState = (routerState.location.state ?? {}) as CartState;
+  const [showCelebration, setShowCelebration] = useState(false);
+  const celebrationFiredRef = useRef(false);
+
+  // ── Celebration on reaching last step ─────────────────────────────────────
+  useEffect(() => {
+    const TOTAL = STEPS.length;
+    if (step === TOTAL) {
+      if (!celebrationFiredRef.current) {
+        celebrationFiredRef.current = true;
+        setShowCelebration(true);
+        const timer = setTimeout(() => {
+          setShowCelebration(false);
+        }, 1200);
+        return () => clearTimeout(timer);
+      }
+    } else {
+      // Reset so celebration can fire again if user navigates back and returns
+      celebrationFiredRef.current = false;
+      setShowCelebration(false);
+    }
+  }, [step]);
+
+  // ── URL param pre-selection ───────────────────────────────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const service = params.get("service");
+    const validIds = [
+      "custom",
+      "speedy",
+      "ai-receptionist",
+      "cinematic",
+      "product-ads",
+      "audit",
+      "consultation",
+    ];
+    if (service && validIds.includes(service)) {
+      setField("serviceType", service);
+      useIntakeStore.setState({ step: 2 });
+    }
+  }, [setField]);
 
   // ── Visit tracking ────────────────────────────────────────────────────────
-  const { actor, isFetching } = useActor();
+
   useEffect(() => {
     const track = async () => {
       try {
@@ -1530,19 +1129,7 @@ export default function IntakePage() {
           sid = crypto.randomUUID();
           sessionStorage.setItem("_vis_sid", sid);
         }
-        let countryCode: string | null = null;
-        try {
-          const ctrl = new AbortController();
-          const timer = setTimeout(() => ctrl.abort(), 2000);
-          const res = await fetch("https://ipapi.co/country/", {
-            signal: ctrl.signal,
-          });
-          clearTimeout(timer);
-          const text = (await res.text()).trim();
-          if (/^[A-Z]{2}$/.test(text)) countryCode = text;
-        } catch {
-          // geolocation failed — use null
-        }
+        const countryCode: string | null = null;
         const publicActor = await createActorWithConfig(createActor);
         await (publicActor as backendInterface).recordVisit(
           window.location.pathname,
@@ -1556,48 +1143,6 @@ export default function IntakePage() {
     };
     track();
   }, []);
-
-  // ── Availability fetch ──────────────────────────────────────────────────────
-  const [availability, setAvailability] = useState<AvailabilitySettings | null>(
-    null,
-  );
-
-  useEffect(() => {
-    if (!actor || isFetching) return;
-    (actor as backendInterface)
-      .getAvailability()
-      .then((result) => {
-        if (result) {
-          // Map bigint hour fields from backend to local number type
-          const days = [
-            "monday",
-            "tuesday",
-            "wednesday",
-            "thursday",
-            "friday",
-            "saturday",
-            "sunday",
-          ] as const;
-          const mapped: AvailabilitySettings = {
-            blockedDates: result.blockedDates,
-            weeklySchedule: Object.fromEntries(
-              days.map((d) => [
-                d,
-                {
-                  isOpen: result.weeklySchedule[d].isOpen,
-                  startHour: Number(result.weeklySchedule[d].startHour),
-                  endHour: Number(result.weeklySchedule[d].endHour),
-                },
-              ]),
-            ) as WeeklySchedule,
-          };
-          setAvailability(mapped);
-        }
-      })
-      .catch(() => {
-        // Non-blocking — date/time picker still renders without availability gating
-      });
-  }, [actor, isFetching]);
 
   function validate(): boolean {
     const store = useIntakeStore.getState();
@@ -1621,27 +1166,6 @@ export default function IntakePage() {
   }
 
   function handleNext() {
-    if (step === 3) {
-      // Before advancing, append date/time to bestTime field so it travels with the lead
-      const store = useIntakeStore.getState();
-      if (store.preferredDate) {
-        const timeStr = store.preferredSlot
-          ? formatHour24(store.preferredSlot)
-          : "";
-        const suffix = timeStr
-          ? ` | Preferred date: ${store.preferredDate}, time: ${timeStr}`
-          : ` | Preferred date: ${store.preferredDate}`;
-        // Only append if not already present
-        if (!store.bestTime.includes("Preferred date:")) {
-          useIntakeStore
-            .getState()
-            .setField(
-              "bestTime",
-              (store.bestTime ? store.bestTime : "Anytime") + suffix,
-            );
-        }
-      }
-    }
     if (validate()) nextStep();
   }
 
@@ -1705,7 +1229,7 @@ export default function IntakePage() {
             zIndex: 1,
           }}
         >
-          <ProgressBar step={step} />
+          <ProgressBar step={step} showCelebration={showCelebration} />
 
           <div
             key={step}
@@ -1713,13 +1237,7 @@ export default function IntakePage() {
           >
             {step === 1 && <Step1 errors={errors} cart={locationState} />}
             {step === 2 && <Step2 errors={errors} />}
-            {step === 3 && (
-              <Step3
-                errors={errors}
-                availability={availability}
-                actor={actor}
-              />
-            )}
+            {step === 3 && <Step3 errors={errors} />}
             {step === 4 && <Step4 />}
           </div>
 
@@ -1787,6 +1305,15 @@ export default function IntakePage() {
         </div>
 
         <style>{`
+        @keyframes imperido-pulse-glow {
+          0%, 100% { box-shadow: 0 0 0px 0px rgba(94,240,138,0.0); }
+          50% { box-shadow: 0 0 10px 4px rgba(94,240,138,0.6); }
+        }
+        @keyframes imperido-celebrate-particle {
+          0%   { opacity: 1; transform: translateY(0) rotate(0deg) scale(1); }
+          60%  { opacity: 0.8; }
+          100% { opacity: 0; transform: translateY(-90px) rotate(60deg) scale(0.5); }
+        }
         @keyframes fadeSlideIn {
           from { opacity: 0; transform: translateY(12px); }
           to { opacity: 1; transform: translateY(0); }

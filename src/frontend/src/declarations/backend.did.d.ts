@@ -90,6 +90,11 @@ export interface Build {
   'category' : string,
   'siteUrl' : string,
 }
+export interface BusinessMetrics {
+  'activeBookings' : bigint,
+  'saasPlanStatus' : string,
+  'monthlyRevenueCents' : bigint,
+}
 export interface ClientFileMetadata {
   'id' : string,
   'objectKey' : string,
@@ -111,7 +116,9 @@ export interface ClientMessage {
 }
 export interface CrmClient {
   'id' : string,
+  'webhookSecret' : [] | [string],
   'hasAccount' : boolean,
+  'deletionRequested' : boolean,
   'source' : string,
   'name' : string,
   'milestoneUpdatedAt' : [] | [bigint],
@@ -119,10 +126,16 @@ export interface CrmClient {
   'created_at' : bigint,
   'briefSubmittedAt' : [] | [bigint],
   'email' : string,
+  'connectedAt' : [] | [bigint],
+  'stripeConnectAccountId' : [] | [string],
   'notes' : string,
   'currentMilestone' : bigint,
+  'platformFeePercentage' : number,
   'projectStatus' : string,
+  'deletionRequestedAt' : bigint,
   'phone' : string,
+  'stripeConnectStatus' : string,
+  'lastActivityAt' : [] | [bigint],
   'briefStatus' : [] | [string],
   'siteLinkLog' : Array<SiteLinkEntry>,
   'completionPaymentCharged' : boolean,
@@ -130,6 +143,9 @@ export interface CrmClient {
 }
 export interface DashboardMetrics {
   'totalProducts' : bigint,
+  'ordersByStatus' : Array<[string, bigint]>,
+  'totalOrders' : bigint,
+  'totalOrderValue' : bigint,
   'outstandingInvoices' : bigint,
   'recentActivity' : Array<string>,
   'totalClients' : bigint,
@@ -156,6 +172,17 @@ export interface EditRequest {
   'attachment_url' : [] | [string],
 }
 export type EditRequestId = bigint;
+export interface EmailCampaign {
+  'id' : EmailCampaignId,
+  'status' : string,
+  'subject' : string,
+  'scheduledDate' : [] | [bigint],
+  'body' : string,
+  'createdAt' : bigint,
+  'sentAt' : [] | [bigint],
+  'recipients' : Array<string>,
+}
+export type EmailCampaignId = bigint;
 export interface EmailLog {
   'id' : string,
   'status' : string,
@@ -242,6 +269,7 @@ export interface Order {
   'created_at' : Timestamp,
   'launch_target' : string,
   'client_id' : ClientId,
+  'amount' : number,
   'tier_code' : string,
 }
 export type OrderId = bigint;
@@ -268,12 +296,34 @@ export interface PortfolioItem {
 }
 export interface Product {
   'id' : ProductId,
+  'proofPoints' : [] | [string],
+  'show_questionnaire' : boolean,
+  'seoMetaTitle' : [] | [string],
+  'faqItems' : [] | [string],
   'active' : boolean,
+  'payment_type' : string,
   'price_monthly' : [] | [number],
+  'speedy_filter' : [] | [string],
+  'tagline' : [] | [string],
+  'plan_section' : [] | [string],
   'name' : string,
+  'tags' : Array<string>,
   'description' : string,
   'created_at' : Timestamp,
+  'closingCTA' : [] | [string],
+  'bodySections' : [] | [string],
+  'upgradePath' : [] | [string],
+  'imageUrl' : [] | [string],
   'product_type' : string,
+  'recommendedPlan' : [] | [string],
+  'heroSubheadline' : [] | [string],
+  'detailDescription' : [] | [string],
+  'seoMetaDescription' : [] | [string],
+  'featureBullets' : Array<string>,
+  'heroHeadline' : [] | [string],
+  'bestFor' : [] | [string],
+  'video_url_1' : string,
+  'video_url_2' : string,
   'price_onetime' : [] | [number],
   'tier_code' : [] | [string],
   'price_annual' : [] | [number],
@@ -349,6 +399,13 @@ export interface ShoppingItem {
   'productDescription' : string,
 }
 export interface SiteLinkEntry { 'url' : string, 'sentAt' : bigint }
+export interface SocialMediaConfig {
+  'instagramUrl' : string,
+  'youtubeUrl' : string,
+  'facebookUrl' : string,
+  'linkedinUrl' : string,
+  'tiktokUrl' : string,
+}
 export type Status = { 'depositReceived' : null } |
   { 'cancelled' : null } |
   { 'draftReady' : null } |
@@ -368,17 +425,27 @@ export type StripeSessionStatus = {
     'completed' : { 'userPrincipal' : [] | [string], 'response' : string }
   } |
   { 'failed' : { 'error' : string } };
+export interface SubAdmin {
+  'allowedTabs' : Array<string>,
+  'createdAt' : bigint,
+  'email' : string,
+}
 export interface Subscription {
   'id' : SubscriptionId,
   'status' : string,
+  'nextBillingDate' : bigint,
   'updated_at' : Timestamp,
   'plan_code' : string,
   'plan_name' : string,
   'billing_cycle' : string,
+  'clientEmail' : string,
   'created_at' : Timestamp,
+  'stripeCustomerId' : [] | [string],
   'stripe_subscription_id' : string,
   'client_id' : ClientId,
+  'reminderSentAt' : [] | [bigint],
   'next_payment_date' : Timestamp,
+  'paymentFailed' : boolean,
 }
 export type SubscriptionId = bigint;
 export type Timestamp = bigint;
@@ -408,6 +475,12 @@ export interface UserProfile {
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
   { 'guest' : null };
+export interface WebhookAuditEntry {
+  'received_at' : bigint,
+  'event_id' : string,
+  'processing_result' : string,
+  'event_type' : string,
+}
 export interface WeeklySchedule {
   'tuesday' : DaySchedule,
   'wednesday' : DaySchedule,
@@ -454,8 +527,13 @@ export interface _SERVICE {
   >,
   '_immutableObjectStorageUpdateGatewayPrincipals' : ActorMethod<[], undefined>,
   '_initializeAccessControl' : ActorMethod<[], undefined>,
+  'activateSubscription' : ActorMethod<
+    [string],
+    { 'ok' : string } |
+      { 'err' : string }
+  >,
   'addBuild' : ActorMethod<
-    [string, string, string, [] | [string], [] | [string], [] | [string]],
+    [string, string, [] | [string], [] | [string], [] | [string]],
     { 'ok' : Build } |
       { 'err' : string }
   >,
@@ -463,35 +541,50 @@ export interface _SERVICE {
     [string, string, string, string, Array<string>, [] | [string]],
     string
   >,
-  'addFleetCanister' : ActorMethod<[string, string, string], undefined>,
-  'addFleetSite' : ActorMethod<[string, string, string], undefined>,
-  'addFleetSoftware' : ActorMethod<[string, string, string], undefined>,
+  'addFleetCanister' : ActorMethod<[string, string], undefined>,
+  'addFleetSite' : ActorMethod<[string, string], undefined>,
+  'addFleetSoftware' : ActorMethod<[string, string], undefined>,
   'addMarqueeLogo' : ActorMethod<
-    [string, string, string],
+    [string, string],
     { 'ok' : MarqueeLogo } |
       { 'err' : string }
   >,
+  'addSubAdmin' : ActorMethod<
+    [string, Array<string>],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
   'adminUpdateClientProfile' : ActorMethod<
-    [string, string, string, string, string, string, string],
+    [string, string, string, string, string, string],
     { 'ok' : string } |
       { 'err' : string }
   >,
   'approvePurchaseRequest' : ActorMethod<
-    [string, bigint, string, string],
+    [bigint, string, string],
     { 'ok' : string } |
       { 'err' : string }
   >,
   'approveReview' : ActorMethod<
-    [string, ReviewId],
+    [ReviewId],
     { 'ok' : null } |
       { 'err' : string }
   >,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'assignMeetingToLead' : ActorMethod<
-    [string, string, string, string, string],
+    [string, string, string, string],
     { 'ok' : boolean, 'meetLink' : string }
   >,
-  'blockDate' : ActorMethod<[string, string], undefined>,
+  'blockDate' : ActorMethod<[string], undefined>,
+  'cancelEmailCampaign' : ActorMethod<
+    [bigint],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
+  'cancelSubscription' : ActorMethod<
+    [string],
+    { 'ok' : string } |
+      { 'err' : string }
+  >,
   'changePassword' : ActorMethod<
     [
       {
@@ -509,46 +602,36 @@ export interface _SERVICE {
       { 'error' : string }
   >,
   'clearGoogleCalendarConfig' : ActorMethod<
-    [string],
+    [],
     { 'ok' : null } |
       { 'err' : string }
   >,
   'clearGoogleSheetsConfig' : ActorMethod<
-    [string],
+    [],
     { 'ok' : null } |
       { 'err' : string }
   >,
   'clearNotificationLog' : ActorMethod<
-    [string],
+    [],
     { 'ok' : null } |
       { 'err' : string }
   >,
   'clearPendingPushNotifications' : ActorMethod<
-    [string],
+    [],
     { 'ok' : string } |
       { 'err' : string }
   >,
   'convertLeadToClient' : ActorMethod<
-    [
-      string,
-      string,
-      string,
-      string,
-      string,
-      string,
-      Array<string>,
-      [] | [string],
-    ],
+    [string, string, string, string, string, Array<string>, [] | [string]],
     string
   >,
   'createAdHocInvoiceSession' : ActorMethod<
-    [string, string, string, bigint, string, string],
+    [string, string, bigint, string, string],
     { 'ok' : string } |
       { 'err' : string }
   >,
   'createBlogPost' : ActorMethod<
     [
-      string,
       string,
       string,
       string,
@@ -564,25 +647,30 @@ export interface _SERVICE {
     UpsertResult
   >,
   'createCheckoutSession' : ActorMethod<
-    [Array<ShoppingItem>, string, string],
-    string
+    [Array<ShoppingItem>, string, string, string, string],
+    { 'ok' : string } |
+      { 'err' : string }
   >,
   'createCompletionPaymentSession' : ActorMethod<
-    [string, string, string, string],
+    [string, string, string],
     string
   >,
   'createDraftLead' : ActorMethod<
-    [string, string, string, string, string],
+    [string, string, string, string],
     { 'ok' : boolean, 'leadId' : string }
   >,
   'createEditRequest' : ActorMethod<
     [string, string, string, string],
     UpsertResult
   >,
+  'createEmailCampaign' : ActorMethod<
+    [string, string, Array<string>, [] | [bigint]],
+    { 'ok' : bigint } |
+      { 'err' : string }
+  >,
   'createLead' : ActorMethod<[string, string, string, string, string], string>,
   'createPortfolioItem' : ActorMethod<
     [
-      string,
       string,
       string,
       string,
@@ -596,6 +684,29 @@ export interface _SERVICE {
     { 'ok' : string } |
       { 'err' : string }
   >,
+  'createProduct' : ActorMethod<
+    [
+      string,
+      string,
+      string,
+      [] | [number],
+      [] | [number],
+      [] | [number],
+      [] | [string],
+      Array<string>,
+      [] | [string],
+      [] | [string],
+      [] | [string],
+      string,
+      string,
+      string,
+      boolean,
+      [] | [string],
+      [] | [string],
+    ],
+    { 'ok' : ProductId } |
+      { 'err' : string }
+  >,
   'createPurchaseRequest' : ActorMethod<
     [string, bigint, string],
     { 'ok' : string } |
@@ -606,65 +717,85 @@ export interface _SERVICE {
     { 'ok' : string } |
       { 'err' : string }
   >,
-  'declinePurchaseRequest' : ActorMethod<
-    [string, bigint, [] | [string]],
+  'createStripePortalSession' : ActorMethod<
+    [string],
     { 'ok' : string } |
       { 'err' : string }
   >,
-  'deleteBlogPost' : ActorMethod<[string, BlogPostId], undefined>,
+  'declinePurchaseRequest' : ActorMethod<
+    [bigint, [] | [string]],
+    { 'ok' : string } |
+      { 'err' : string }
+  >,
+  'deleteBlogPost' : ActorMethod<[BlogPostId], undefined>,
   'deleteBuild' : ActorMethod<
-    [string, string],
+    [string],
     { 'ok' : boolean } |
       { 'err' : string }
   >,
-  'deleteClient' : ActorMethod<
-    [string, string],
+  'deleteClient' : ActorMethod<[string], { 'ok' : null } | { 'err' : string }>,
+  'deleteClientFile' : ActorMethod<
+    [string],
+    { 'ok' : boolean } |
+      { 'err' : string }
+  >,
+  'deleteLead' : ActorMethod<[string], undefined>,
+  'deleteMarqueeLogo' : ActorMethod<
+    [string],
+    { 'ok' : boolean } |
+      { 'err' : string }
+  >,
+  'deletePortfolioItem' : ActorMethod<[string], UpsertResult>,
+  'deleteProduct' : ActorMethod<[bigint], { 'ok' : null } | { 'err' : string }>,
+  'deleteQuestionnaire' : ActorMethod<[QuestionnaireId], undefined>,
+  'deleteReferral' : ActorMethod<
+    [string],
     { 'ok' : null } |
       { 'err' : string }
   >,
-  'deleteClientFile' : ActorMethod<
-    [string, string],
-    { 'ok' : boolean } |
+  'deleteReview' : ActorMethod<
+    [ReviewId],
+    { 'ok' : null } |
       { 'err' : string }
   >,
-  'deleteLead' : ActorMethod<[string, string], undefined>,
-  'deleteMarqueeLogo' : ActorMethod<
-    [string, string],
-    { 'ok' : boolean } |
-      { 'err' : string }
-  >,
-  'deletePortfolioItem' : ActorMethod<[string, string], UpsertResult>,
-  'deleteQuestionnaire' : ActorMethod<[string, QuestionnaireId], undefined>,
   'editBuild' : ActorMethod<
-    [
-      string,
-      string,
-      string,
-      string,
-      [] | [string],
-      [] | [string],
-      [] | [string],
-    ],
+    [string, string, string, [] | [string], [] | [string], [] | [string]],
     { 'ok' : Build } |
       { 'err' : string }
   >,
-  'generateAdminOTP' : ActorMethod<[string], string>,
-  'generatePartnerLink' : ActorMethod<[string, string, string], string>,
-  'getAdHocClientInvoices' : ActorMethod<[string, string], Array<AdHocInvoice>>,
+  'generateAdminOTP' : ActorMethod<
+    [string],
+    { 'ok' : string } |
+      { 'err' : string }
+  >,
+  'generatePartnerLink' : ActorMethod<[string, string], string>,
+  'getAdHocClientInvoices' : ActorMethod<[string], Array<AdHocInvoice>>,
   'getAdminAllActivity' : ActorMethod<[], Array<ActivityLog>>,
-  'getAdminAllClients' : ActorMethod<[string], Array<UserProfile>>,
-  'getAdminAllOrders' : ActorMethod<[string], Array<Order>>,
-  'getAdminAllQuestionnaires' : ActorMethod<[string], Array<Questionnaire>>,
-  'getAdminNotifications' : ActorMethod<[string], Array<AdminNotification>>,
+  'getAdminAllClients' : ActorMethod<[], Array<UserProfile>>,
+  'getAdminAllOrders' : ActorMethod<[], Array<Order>>,
+  'getAdminAllQuestionnaires' : ActorMethod<[], Array<Questionnaire>>,
+  'getAdminBillingHistory' : ActorMethod<
+    [],
+    { 'ok' : Array<BillingHistory> } |
+      { 'err' : string }
+  >,
+  'getAdminContactEmail' : ActorMethod<[], string>,
+  'getAdminNotifications' : ActorMethod<[], Array<AdminNotification>>,
   'getAdminStats' : ActorMethod<[], AdminStats>,
   'getAllBlogPostsAdmin' : ActorMethod<[], Array<BlogPost>>,
+  'getAllEmailCampaigns' : ActorMethod<
+    [],
+    { 'ok' : Array<EmailCampaign> } |
+      { 'err' : string }
+  >,
   'getAllPortfolioAdmin' : ActorMethod<[], Array<PortfolioItem>>,
   'getAllProductsAdmin' : ActorMethod<[], Array<Product>>,
   'getAllSiteText' : ActorMethod<[], Array<[string, string]>>,
   'getApprovedReviews' : ActorMethod<[], Array<Review>>,
   'getAvailability' : ActorMethod<[], AvailabilitySettings>,
   'getBlogPostBySlug' : ActorMethod<[string], [] | [BlogPost]>,
-  'getBuilds' : ActorMethod<[string], Array<Build>>,
+  'getBuilds' : ActorMethod<[], Array<Build>>,
+  'getBusinessMetrics' : ActorMethod<[], BusinessMetrics>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getCanisterCycles' : ActorMethod<
     [string],
@@ -673,7 +804,13 @@ export interface _SERVICE {
   >,
   'getCategoryVisibility' : ActorMethod<[], Array<[string, boolean]>>,
   'getClientBriefStatus' : ActorMethod<[string], [] | [string]>,
+  'getClientBusinessMetrics' : ActorMethod<
+    [string],
+    { 'ok' : BusinessMetrics } |
+      { 'err' : string }
+  >,
   'getClientByEmail' : ActorMethod<[string], [] | [CrmClient]>,
+  'getClientByPrincipal' : ActorMethod<[Principal], [] | [UserProfile]>,
   'getClientFileUrl' : ActorMethod<
     [string, string],
     { 'ok' : string } |
@@ -685,25 +822,32 @@ export interface _SERVICE {
     { 'ok' : [] | [bigint] } |
       { 'err' : string }
   >,
+  'getClientOrderVolumes' : ActorMethod<[], Array<[string, number]>>,
   'getClientOrders' : ActorMethod<[Principal], Array<Order>>,
   'getClientPurchaseRequests' : ActorMethod<[string], Array<PurchaseRequest>>,
-  'getClients' : ActorMethod<[string], Array<CrmClient>>,
+  'getClients' : ActorMethod<[], Array<CrmClient>>,
+  'getConnectedClients' : ActorMethod<[], Array<CrmClient>>,
   'getConversionStats' : ActorMethod<
-    [string, [] | [bigint], [] | [bigint]],
+    [[] | [bigint], [] | [bigint]],
     {
       'convertedLeads' : bigint,
       'totalLeads' : bigint,
       'conversionRate' : number,
     }
   >,
-  'getCountryBreakdown' : ActorMethod<
-    [string],
-    Array<[string, bigint, number]>
-  >,
+  'getCountryBreakdown' : ActorMethod<[], Array<[string, bigint, number]>>,
   'getCycles' : ActorMethod<[], bigint>,
-  'getDailyVisitorChart' : ActorMethod<[string], Array<[string, bigint]>>,
+  'getDailyVisitorChart' : ActorMethod<[], Array<[string, bigint]>>,
   'getDashboardMetrics' : ActorMethod<[], DashboardMetrics>,
-  'getEmailLogs' : ActorMethod<[string], Array<EmailLog>>,
+  'getEmailHealth' : ActorMethod<
+    [],
+    {
+      'totalFailures' : bigint,
+      'lastFailureTimestamp' : bigint,
+      'last24hFailures' : bigint,
+    }
+  >,
+  'getEmailLogs' : ActorMethod<[], Array<EmailLog>>,
   'getEmailTemplates' : ActorMethod<[], Array<EmailTemplate>>,
   'getFilesForClient' : ActorMethod<
     [string, string],
@@ -711,22 +855,29 @@ export interface _SERVICE {
   >,
   'getFleetSites' : ActorMethod<[], Array<FleetCanister>>,
   'getFleetSoftware' : ActorMethod<[], Array<FleetCanister>>,
+  'getGlobalTaxRate' : ActorMethod<[], number>,
   'getGoogleCalendarConfig' : ActorMethod<
-    [string],
+    [],
     { 'ok' : GoogleCalendarConfig } |
       { 'err' : string }
   >,
   'getGoogleSheetsConfig' : ActorMethod<
-    [string],
+    [],
     { 'ok' : GoogleSheetsConfig } |
       { 'err' : string }
   >,
-  'getLeads' : ActorMethod<[string], Array<Lead>>,
-  'getLiveVisitorCount' : ActorMethod<[string], bigint>,
+  'getLeads' : ActorMethod<[], Array<Lead>>,
+  'getLiveVisitorCount' : ActorMethod<[], bigint>,
+  'getLogoUrl' : ActorMethod<[], string>,
   'getMarqueeLogos' : ActorMethod<[], Array<MarqueeLogo>>,
   'getMessages' : ActorMethod<[string, string], Array<ClientMessage>>,
   'getMyActivity' : ActorMethod<[], Array<ActivityLog>>,
   'getMyAdHocInvoices' : ActorMethod<[], Array<AdHocInvoice>>,
+  'getMyAdminPermissions' : ActorMethod<
+    [],
+    { 'ok' : Array<string> } |
+      { 'err' : string }
+  >,
   'getMyBillingHistory' : ActorMethod<[], Array<BillingHistory>>,
   'getMyEditRequests' : ActorMethod<[], Array<EditRequest>>,
   'getMyInvoices' : ActorMethod<[], Array<Invoice>>,
@@ -744,84 +895,92 @@ export interface _SERVICE {
     { 'date' : string, 'time' : string }
   >,
   'getNotificationLog' : ActorMethod<
-    [string],
+    [],
     { 'ok' : Array<NotificationLogEntry> } |
       { 'err' : string }
   >,
   'getOrCreateMyReferralCode' : ActorMethod<[], string>,
   'getPendingPushNotifications' : ActorMethod<
-    [string],
+    [],
     { 'ok' : Array<PendingNotification> } |
       { 'err' : string }
   >,
-  'getPendingReviews' : ActorMethod<[string], Array<Review>>,
+  'getPendingReviews' : ActorMethod<[], Array<Review>>,
+  'getPendingSubscriptions' : ActorMethod<[], Array<Subscription>>,
   'getPortalShopProductIds' : ActorMethod<[], Array<bigint>>,
   'getPortalShopProducts' : ActorMethod<[], Array<Product>>,
+  'getProductImageUrl' : ActorMethod<[bigint], [] | [string]>,
   'getProducts' : ActorMethod<[], Array<Product>>,
   'getProductsByType' : ActorMethod<[string], Array<Product>>,
   'getPublicAvailability' : ActorMethod<[], AvailabilitySettings>,
   'getPublicBuilds' : ActorMethod<[], Array<Build>>,
   'getPublicBuildsCount' : ActorMethod<[], bigint>,
+  'getPublicSocialMediaConfig' : ActorMethod<[], SocialMediaConfig>,
   'getPublishedBlogPosts' : ActorMethod<[], Array<BlogPost>>,
   'getPublishedPortfolio' : ActorMethod<[], Array<PortfolioItem>>,
   'getPurchaseRequests' : ActorMethod<
-    [string],
+    [],
     { 'ok' : Array<PurchaseRequest> } |
       { 'err' : string }
   >,
   'getPushSubscription' : ActorMethod<
-    [string],
+    [],
     { 'ok' : [] | [PushSubscription] } |
       { 'err' : string }
   >,
   'getQuestionDefinitions' : ActorMethod<[string], Array<QuestionDefinition>>,
   'getQuestionnaireByClientId' : ActorMethod<[ClientId], [] | [Questionnaire]>,
-  'getReferralStats' : ActorMethod<[string], Array<ReferralStat>>,
-  'getRejectedReviews' : ActorMethod<[string], Array<Review>>,
-  'getRescheduleHistory' : ActorMethod<[string, string], Array<bigint>>,
+  'getReferralStats' : ActorMethod<[], Array<ReferralStat>>,
+  'getRejectedReviews' : ActorMethod<[], Array<Review>>,
+  'getReminderLeadDays' : ActorMethod<[], bigint>,
+  'getRescheduleHistory' : ActorMethod<[string], Array<bigint>>,
   'getRescheduleLeadByToken' : ActorMethod<
     [string],
     [] | [{ 'isExpired' : boolean, 'lead' : Lead }]
   >,
+  'getSiteBaseUrl' : ActorMethod<[], string>,
   'getSiteLinkLog' : ActorMethod<
-    [string, string],
+    [string],
     { 'ok' : Array<SiteLinkEntry> } |
       { 'err' : string }
   >,
   'getSiteText' : ActorMethod<[string], [] | [string]>,
-  'getStripeCharges' : ActorMethod<
-    [string],
-    { 'ok' : string } |
+  'getSocialMediaConfig' : ActorMethod<
+    [],
+    { 'ok' : SocialMediaConfig } |
       { 'err' : string }
   >,
+  'getStripeCharges' : ActorMethod<[], { 'ok' : string } | { 'err' : string }>,
+  'getStripeConfiguration' : ActorMethod<[], [] | [StripeConfiguration]>,
   'getStripeCustomers' : ActorMethod<
-    [string],
+    [],
     { 'ok' : string } |
       { 'err' : string }
   >,
   'getStripeDashboardData' : ActorMethod<
-    [string],
+    [],
     { 'ok' : string } |
       { 'err' : string }
   >,
-  'getStripePayouts' : ActorMethod<
-    [string],
-    { 'ok' : string } |
-      { 'err' : string }
-  >,
+  'getStripePayouts' : ActorMethod<[], { 'ok' : string } | { 'err' : string }>,
   'getStripePublishableKey' : ActorMethod<[], string>,
   'getStripeSessionStatus' : ActorMethod<[string], StripeSessionStatus>,
   'getStripeSubscriptions' : ActorMethod<
-    [string],
+    [],
     { 'ok' : string } |
       { 'err' : string }
   >,
   'getStripeTestMode' : ActorMethod<[], boolean>,
-  'getTopPages' : ActorMethod<[string], Array<[string, bigint, number]>>,
-  'getUnreadMessageCounts' : ActorMethod<[string], Array<[string, bigint]>>,
+  'getSubAdmins' : ActorMethod<
+    [],
+    { 'ok' : Array<[string, SubAdmin]> } |
+      { 'err' : string }
+  >,
+  'getTopPages' : ActorMethod<[], Array<[string, bigint, number]>>,
+  'getUnreadMessageCounts' : ActorMethod<[], Array<[string, bigint]>>,
   'getVapidPublicKey' : ActorMethod<[], string>,
   'getVisitorStats' : ActorMethod<
-    [string],
+    [],
     {
       'todayUnique' : bigint,
       'weekUnique' : bigint,
@@ -833,8 +992,9 @@ export interface _SERVICE {
       'allTimeSessions' : bigint,
     }
   >,
+  'getWebhookAuditLog' : ActorMethod<[], Array<WebhookAuditEntry>>,
   'handleStripeWebhook' : ActorMethod<
-    [string, string],
+    [string, string, string],
     { 'ok' : string } |
       { 'err' : string }
   >,
@@ -852,9 +1012,9 @@ export interface _SERVICE {
     [{ 'email' : string, 'passwordHash' : Uint8Array }],
     LoginResult
   >,
-  'markAllNotificationsRead' : ActorMethod<[string], undefined>,
+  'markAllNotificationsRead' : ActorMethod<[], undefined>,
   'markCompletionPaymentCharged' : ActorMethod<
-    [string, string],
+    [string],
     { 'ok' : null } |
       { 'err' : string }
   >,
@@ -864,14 +1024,16 @@ export interface _SERVICE {
     { 'ok' : boolean } |
       { 'err' : string }
   >,
-  'markNotificationRead' : ActorMethod<[string, string], undefined>,
-  'markQuestionnaireReviewed' : ActorMethod<
-    [string, QuestionnaireId],
-    undefined
-  >,
-  'publishBlogPost' : ActorMethod<[string, BlogPostId], undefined>,
-  'publishPortfolioItem' : ActorMethod<[string, string], UpsertResult>,
+  'markNotificationRead' : ActorMethod<[string], undefined>,
+  'markQuestionnaireReviewed' : ActorMethod<[QuestionnaireId], undefined>,
+  'publishBlogPost' : ActorMethod<[BlogPostId], undefined>,
+  'publishPortfolioItem' : ActorMethod<[string], UpsertResult>,
   'recordVisit' : ActorMethod<[string, bigint, string, [] | [string]], boolean>,
+  'registerAdminPrincipal' : ActorMethod<
+    [],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
   'registerUser' : ActorMethod<
     [
       {
@@ -884,45 +1046,67 @@ export interface _SERVICE {
     UpsertResult
   >,
   'rejectReview' : ActorMethod<
-    [string, ReviewId],
+    [ReviewId],
     { 'ok' : null } |
       { 'err' : string }
   >,
-  'removeFleetCanister' : ActorMethod<[string, string], undefined>,
-  'removeFleetSite' : ActorMethod<[string, string], undefined>,
-  'removeFleetSoftware' : ActorMethod<[string, string], undefined>,
+  'removeAdminPrincipal' : ActorMethod<
+    [Principal],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
+  'removeFleetCanister' : ActorMethod<[string], undefined>,
+  'removeFleetSite' : ActorMethod<[string], undefined>,
+  'removeFleetSoftware' : ActorMethod<[string], undefined>,
+  'removeProductImage' : ActorMethod<
+    [bigint],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
   'removePushSubscription' : ActorMethod<
-    [string],
+    [],
     { 'ok' : string } |
       { 'err' : string }
   >,
+  'removeSubAdmin' : ActorMethod<
+    [string],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
   'reorderMarqueeLogos' : ActorMethod<
-    [Array<string>, string],
+    [Array<string>],
     { 'ok' : boolean } |
       { 'err' : string }
   >,
+  'requestAccountDeletion' : ActorMethod<
+    [],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
   'requestPasswordReset' : ActorMethod<[string], string>,
+  'rescheduleEmailCampaign' : ActorMethod<
+    [bigint, bigint],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
   'rescheduleLead' : ActorMethod<
     [string, string, string, string],
     { 'ok' : boolean, 'message' : string }
   >,
-  'resendEmail' : ActorMethod<[string, string, string], boolean>,
+  'reseedCatalog' : ActorMethod<[], { 'ok' : string } | { 'err' : string }>,
+  'resendEmail' : ActorMethod<[string, string], boolean>,
   'resendSiteLink' : ActorMethod<
-    [string, string, string],
+    [string, string],
     { 'ok' : null } |
       { 'err' : string }
   >,
   'resetPasswordWithToken' : ActorMethod<[string, Uint8Array], string>,
-  'saveEmailTemplate' : ActorMethod<
-    [string, string, string, string],
-    undefined
-  >,
+  'saveEmailTemplate' : ActorMethod<[string, string, string], undefined>,
   'savePushSubscription' : ActorMethod<
-    [string, string, string, string],
+    [string, string, string],
     { 'ok' : string } |
       { 'err' : string }
   >,
-  'sendAccountDeletionRequest' : ActorMethod<[], undefined>,
   'sendDepositInvoice' : ActorMethod<
     [Principal, string, bigint, string, Timestamp],
     string
@@ -932,38 +1116,82 @@ export interface _SERVICE {
     { 'ok' : ClientMessage } |
       { 'err' : string }
   >,
+  'sendNowEmailCampaign' : ActorMethod<
+    [bigint],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
   'sendOrderStatusEmail' : ActorMethod<[Principal, Status, string], undefined>,
   'sendRescheduleLink' : ActorMethod<
-    [string, string],
+    [string],
     { 'message' : string, 'success' : boolean }
   >,
   'sendSiteLink' : ActorMethod<
-    [string, string, string],
+    [string, string],
     { 'ok' : string } |
       { 'err' : string }
   >,
-  'setAvailability' : ActorMethod<[string, AvailabilitySettings], undefined>,
+  'sendUpcomingBillingReminders' : ActorMethod<
+    [],
+    { 'ok' : bigint } |
+      { 'err' : string }
+  >,
+  'setAdminEmail' : ActorMethod<[string], { 'ok' : null } | { 'err' : string }>,
+  'setAvailability' : ActorMethod<[AvailabilitySettings], undefined>,
+  'setClientWebhookSecret' : ActorMethod<
+    [string, string],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
+  'setGlobalTaxRate' : ActorMethod<
+    [number],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
   'setGoogleCalendarConfig' : ActorMethod<
-    [GoogleCalendarConfig, string],
+    [GoogleCalendarConfig],
     { 'ok' : null } |
       { 'err' : string }
   >,
   'setGoogleSheetsConfig' : ActorMethod<
-    [GoogleSheetsConfig, string],
+    [GoogleSheetsConfig],
     { 'ok' : null } |
       { 'err' : string }
   >,
-  'setStripeConfiguration' : ActorMethod<
-    [StripeConfiguration, string],
-    undefined
+  'setLogoUrl' : ActorMethod<[string], { 'ok' : null } | { 'err' : string }>,
+  'setReminderLeadDays' : ActorMethod<
+    [bigint],
+    { 'ok' : null } |
+      { 'err' : string }
   >,
-  'setStripePublishableKey' : ActorMethod<[string, string], undefined>,
-  'setStripeSecretKey' : ActorMethod<[string, string], undefined>,
-  'setStripeTestMode' : ActorMethod<[boolean, string], undefined>,
-  'setStripeWebhookSecret' : ActorMethod<[string, string], undefined>,
+  'setSiteAuditFallbackPrice' : ActorMethod<
+    [bigint],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
+  'setSiteBaseUrl' : ActorMethod<
+    [string],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
+  'setSocialMediaConfig' : ActorMethod<
+    [SocialMediaConfig],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
+  'setStripeConfiguration' : ActorMethod<[StripeConfiguration], undefined>,
+  'setStripePublishableKey' : ActorMethod<[string], undefined>,
+  'setStripeSecretKey' : ActorMethod<[string], undefined>,
+  'setStripeTestMode' : ActorMethod<[boolean], undefined>,
+  'setStripeWebhookSecret' : ActorMethod<[string], undefined>,
   'setVapidKeys' : ActorMethod<
-    [string, string, string],
+    [string, string],
     { 'ok' : string } |
+      { 'err' : string }
+  >,
+  'setWebhookSharedSecret' : ActorMethod<
+    [string],
+    { 'ok' : null } |
       { 'err' : string }
   >,
   'submitCancellationRequest' : ActorMethod<[string], UpsertResult>,
@@ -974,20 +1202,19 @@ export interface _SERVICE {
       { 'err' : string }
   >,
   'togglePortalShopProduct' : ActorMethod<
-    [string, bigint],
+    [bigint],
     { 'ok' : string } |
       { 'err' : string }
   >,
-  'toggleProductStatus' : ActorMethod<[string, string], UpsertResult>,
+  'toggleProductStatus' : ActorMethod<[string], UpsertResult>,
   'trackReferralClick' : ActorMethod<[string], undefined>,
   'trackReferralConversion' : ActorMethod<[string, string, string], undefined>,
   'transform' : ActorMethod<[TransformationInput], TransformationOutput>,
-  'unblockDate' : ActorMethod<[string, string], undefined>,
-  'unpublishBlogPost' : ActorMethod<[string, BlogPostId], undefined>,
-  'unpublishPortfolioItem' : ActorMethod<[string, string], UpsertResult>,
+  'unblockDate' : ActorMethod<[string], { 'ok' : null } | { 'err' : string }>,
+  'unpublishBlogPost' : ActorMethod<[BlogPostId], undefined>,
+  'unpublishPortfolioItem' : ActorMethod<[string], UpsertResult>,
   'updateBlogPost' : ActorMethod<
     [
-      string,
       BlogPostId,
       string,
       string,
@@ -1003,32 +1230,40 @@ export interface _SERVICE {
     ],
     undefined
   >,
-  'updateCategoryVisibility' : ActorMethod<
-    [string, string, boolean],
-    UpsertResult
-  >,
+  'updateCategoryVisibility' : ActorMethod<[string, boolean], UpsertResult>,
   'updateClientBriefStatus' : ActorMethod<[string], UpsertResult>,
-  'updateClientHasAccount' : ActorMethod<
-    [string, boolean, string],
-    UpsertResult
-  >,
+  'updateClientHasAccount' : ActorMethod<[string, boolean], UpsertResult>,
   'updateClientMilestone' : ActorMethod<
-    [string, string, bigint],
+    [string, bigint],
     { 'ok' : null } |
       { 'err' : string }
   >,
-  'updateClientNotes' : ActorMethod<[string, string, string], UpsertResult>,
-  'updateClientStatus' : ActorMethod<[string, string, string], UpsertResult>,
-  'updateLeadStatus' : ActorMethod<[string, string, string], UpsertResult>,
+  'updateClientNotes' : ActorMethod<[string, string], UpsertResult>,
+  'updateClientPlatformFee' : ActorMethod<
+    [string, number],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
+  'updateClientStatus' : ActorMethod<[string, string], UpsertResult>,
+  'updateClientStripeAccountId' : ActorMethod<
+    [string, string, string],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
+  'updateEmailCampaign' : ActorMethod<
+    [bigint, string, string, Array<string>, [] | [bigint]],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
+  'updateLeadStatus' : ActorMethod<[string, string], UpsertResult>,
   'updateMarqueeLogo' : ActorMethod<
-    [string, string, string, string],
+    [string, string, string],
     { 'ok' : MarqueeLogo } |
       { 'err' : string }
   >,
-  'updateOrderStatus' : ActorMethod<[string, string, string], UpsertResult>,
+  'updateOrderStatus' : ActorMethod<[string, string], UpsertResult>,
   'updatePortfolioItem' : ActorMethod<
     [
-      string,
       string,
       string,
       string,
@@ -1042,9 +1277,51 @@ export interface _SERVICE {
     ],
     UpsertResult
   >,
-  'updateProductPrice' : ActorMethod<
-    [string, string, [] | [number], [] | [number], [] | [number]],
+  'updateProductDescription' : ActorMethod<[string, string], UpsertResult>,
+  'updateProductDetailContent' : ActorMethod<
+    [
+      string,
+      [] | [string],
+      [] | [string],
+      [] | [string],
+      [] | [string],
+      [] | [string],
+      [] | [string],
+      [] | [string],
+      [] | [string],
+      [] | [string],
+    ],
     UpsertResult
+  >,
+  'updateProductImage' : ActorMethod<[string, string], UpsertResult>,
+  'updateProductPaymentType' : ActorMethod<[string, string], boolean>,
+  'updateProductPlanSection' : ActorMethod<
+    [ProductId, [] | [string]],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
+  'updateProductPrice' : ActorMethod<
+    [string, [] | [number], [] | [number], [] | [number]],
+    UpsertResult
+  >,
+  'updateProductRichFields' : ActorMethod<
+    [
+      string,
+      [] | [string],
+      Array<string>,
+      [] | [string],
+      [] | [string],
+      [] | [string],
+      string,
+      string,
+      boolean,
+    ],
+    UpsertResult
+  >,
+  'updateProductSpeedyFilter' : ActorMethod<
+    [ProductId, [] | [string]],
+    { 'ok' : null } |
+      { 'err' : string }
   >,
   'updateProfile' : ActorMethod<
     [
@@ -1060,17 +1337,26 @@ export interface _SERVICE {
     UpsertResult
   >,
   'updateQuestionDefinitions' : ActorMethod<
-    [string, string, Array<QuestionDefinition>],
+    [string, Array<QuestionDefinition>],
     { 'ok' : null } |
       { 'err' : string }
   >,
-  'updateSiteText' : ActorMethod<[string, string, string], boolean>,
+  'updateSiteText' : ActorMethod<[string, string], boolean>,
+  'updateSubAdminTabs' : ActorMethod<
+    [string, Array<string>],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
   'uploadFileToClient' : ActorMethod<
-    [string, string, Uint8Array, string, string],
+    [string, Uint8Array, string, string],
     { 'ok' : ClientFileMetadata } |
       { 'err' : string }
   >,
-  'verifyAdminOTP' : ActorMethod<[string, string], string>,
+  'verifyAdminOTP' : ActorMethod<
+    [string, string],
+    { 'ok' : string } |
+      { 'err' : string }
+  >,
   'verifyAndRecordPurchase' : ActorMethod<
     [string, string, string, Array<string>],
     { 'ok' : string } |

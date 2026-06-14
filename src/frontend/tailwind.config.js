@@ -19,8 +19,14 @@ export default {
       fontFamily: {
         sans: ["Plus Jakarta Sans", "Arial", "sans-serif"],
         display: ["Plus Jakarta Sans", "Arial", "sans-serif"],
+        mono: ["'Courier New'", "Courier", "monospace"],
       },
       colors: {
+        matrix: {
+          bg: "#0A0B14",
+          green: "#5EF08A",
+          dim: "rgba(94,240,138,0.15)",
+        },
         navy: "oklch(var(--navy))",
         "accent-blue": "oklch(var(--accent-blue))",
         "success-green": "oklch(var(--success-green))",

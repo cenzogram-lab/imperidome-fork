@@ -39,6 +39,16 @@ type AvailabilitySettings__905216026 =
     timezone : ?Text;
     weeklySchedule : WeeklySchedule__905542794
   };
+type BillingHistoryRecord__916264657 =
+  {
+    amountCents : Nat;
+    clientEmail : Text;
+    createdAt : Int;
+    id : Text;
+    serviceName : Text;
+    status : Text;
+    subscriptionId : Text
+  };
 type BillingHistory__158551636 =
   {
     amount : Float;
@@ -92,6 +102,16 @@ type Build__713870829 =
     siteUrl : Text;
     thumbnailUrl : Text
   };
+type CartPurchase__564871642 =
+  {
+    amountCents : Nat;
+    clientEmail : Text;
+    createdAt : Time__688418391;
+    id : Text;
+    serviceName : Text;
+    status : Text;
+    stripeSessionId : Text
+  };
 type ClientFileMetadata__846853807 =
   {
     clientEmail : Text;
@@ -113,6 +133,28 @@ type ClientMessage__913388841 =
     senderEmail : Text;
     senderName : Text
   };
+type CrmClientOld__336813380 =
+  {
+    activeServices : [Text];
+    briefStatus : ?Text;
+    briefSubmittedAt : ?Int;
+    completionPaymentCharged : Bool;
+    created_at : Int;
+    currentMilestone : Nat;
+    deletionRequested : Bool;
+    deletionRequestedAt : Int;
+    email : Text;
+    hasAccount : Bool;
+    id : Text;
+    milestoneUpdatedAt : ?Int;
+    name : Text;
+    notes : Text;
+    onboardingBriefId : ?Text;
+    phone : Text;
+    projectStatus : Text;
+    siteLinkLog : [SiteLinkEntry__1033428396];
+    source : Text
+  };
 type CrmClientV0__658242545 =
   {
     activeServices : [Text];
@@ -132,7 +174,7 @@ type CrmClientV0__658242545 =
     projectStatus : Text;
     source : Text
   };
-type CrmClient__731363100 =
+type CrmClientV1__2536135 =
   {
     activeServices : [Text];
     briefStatus : ?Text;
@@ -152,8 +194,37 @@ type CrmClient__731363100 =
     siteLinkLog : [SiteLinkEntry__1033428396];
     source : Text
   };
-type Data__791452850<K, V> =
-  {var count : Nat__490723111; kvs : [var ?(K, V)]};
+type CrmClient__731363100 =
+  {
+    activeServices : [Text];
+    briefStatus : ?Text;
+    briefSubmittedAt : ?Int;
+    completionPaymentCharged : Bool;
+    connectedAt : ?Int;
+    created_at : Int;
+    currentMilestone : Nat;
+    deletionRequested : Bool;
+    deletionRequestedAt : Int;
+    email : Text;
+    hasAccount : Bool;
+    id : Text;
+    lastActivityAt : ?Int;
+    milestoneUpdatedAt : ?Int;
+    name : Text;
+    notes : Text;
+    onboardingBriefId : ?Text;
+    phone : Text;
+    platformFeePercentage : Float;
+    projectStatus : Text;
+    siteLinkLog : [SiteLinkEntry__1033428396];
+    source : Text;
+    stripeConnectAccountId : ?Text;
+    stripeConnectStatus : Text;
+    webhookSecret : ?Text
+  };
+type Data__628993992<T> = {var count : Nat__1040412405; elements : [var ?T]};
+type Data__80296667<K, V> =
+  {var count : Nat__1040412405; kvs : [var ?(K, V)]};
 type DaySchedule__841151278 = {endHour : Nat; isOpen : Bool; startHour : Nat};
 type EditRequestId__1064816119 = Nat;
 type EditRequest__842627481 =
@@ -169,6 +240,18 @@ type EditRequest__842627481 =
     request_type : Text;
     status : Text;
     updated_at : Timestamp__672038077
+  };
+type EmailCampaignId__1037635664 = Nat;
+type EmailCampaign__810444874 =
+  {
+    body : Text;
+    createdAt : Int;
+    id : EmailCampaignId__1037635664;
+    recipients : [Text];
+    scheduledDate : ?Int;
+    sentAt : ?Int;
+    status : Text;
+    subject : Text
   };
 type EmailLog__577630079 =
   {
@@ -197,8 +280,12 @@ type GoogleCalendarConfig__227346125 =
     titleTemplate : Text
   };
 type GoogleSheetsConfig__719633891 = {scriptUrl : Text; sheetId : Text};
-type Internal__8484328<K, V> =
-  {children : [var ?Node__46230540<K, V>]; data : Data__791452850<K, V>};
+type Int__616954475 = Int;
+type Int__837511138 = Int__616954475;
+type Internal__1007892817<T> =
+  {children : [var ?Node__918630472<T>]; data : Data__628993992<T>};
+type Internal__41346355<K, V> =
+  {children : [var ?Node__1000929467<K, V>]; data : Data__80296667<K, V>};
 type InvoiceId__400649173 = Nat;
 type Invoice__772203955 =
   {
@@ -305,17 +392,20 @@ type Lead__21276013 =
     rescheduleToken : Text;
     status : Text
   };
-type Leaf__809889148<K, V> = {data : Data__791452850<K, V>};
-type Map__158565046<K, V> = Map__297112838<K, V>;
-type Map__297112838<K, V> =
-  {var root : Node__46230540<K, V>; var size : Nat__490723111};
-type Map__605269027<K, V> = Map__158565046<K, V>;
+type Leaf__693487502<T> = {data : Data__628993992<T>};
+type Leaf__712614010<K, V> = {data : Data__80296667<K, V>};
+type Map__222667396<K, V> = Map__912772452<K, V>;
+type Map__709709801<K, V> =
+  {var root : Node__1000929467<K, V>; var size : Nat__1040412405};
+type Map__912772452<K, V> = Map__709709801<K, V>;
 type MarqueeLogo__75021648 =
   {addedAt : Int; id : Text; logoLabel : Text; logoUrl : Text; order : Nat};
-type Nat__490723111 = Nat__920180692;
+type Nat__1040412405 = Nat__920180692;
 type Nat__920180692 = Nat;
-type Node__46230540<K, V> =
-  {#internal : Internal__8484328<K, V>; #leaf : Leaf__809889148<K, V>};
+type Node__1000929467<K, V> =
+  {#internal : Internal__41346355<K, V>; #leaf : Leaf__712614010<K, V>};
+type Node__918630472<T> =
+  {#internal : Internal__1007892817<T>; #leaf : Leaf__693487502<T>};
 type NotificationLogEntry__1302302 =
   {
     body : Text;
@@ -326,8 +416,20 @@ type NotificationLogEntry__1302302 =
     url : Text
   };
 type OrderId__81195289 = Nat;
+type OrderV0__726833133 =
+  {
+    client_id : ClientId__894050839;
+    created_at : Timestamp__672038077;
+    delivery_window : Text;
+    id : OrderId__81195289;
+    launch_target : Text;
+    status : Status__867666888;
+    tier_code : Text;
+    updated_at : Timestamp__672038077
+  };
 type Order__762448211 =
   {
+    amount : Float;
     client_id : ClientId__894050839;
     created_at : Timestamp__672038077;
     delivery_window : Text;
@@ -381,18 +483,153 @@ type ProductV1__742818732 =
     price_onetime : ?Float;
     product_type : Text
   };
-type Product__853085059 =
+type ProductV2__397824925 =
   {
     active : Bool;
+    bestFor : ?Text;
     created_at : Timestamp__672038077;
     description : Text;
+    featureBullets : [Text];
     id : ProductId__779996770;
+    imageUrl : ?Text;
     name : Text;
+    payment_type : Text;
     price_annual : ?Float;
     price_monthly : ?Float;
     price_onetime : ?Float;
     product_type : Text;
-    tier_code : ?Text
+    recommendedPlan : ?Text;
+    tagline : ?Text;
+    tags : [Text];
+    tier_code : ?Text;
+    upgradePath : ?Text
+  };
+type ProductV3__623214266 =
+  {
+    active : Bool;
+    bestFor : ?Text;
+    created_at : Timestamp__672038077;
+    description : Text;
+    detailDescription : ?Text;
+    featureBullets : [Text];
+    id : ProductId__779996770;
+    imageUrl : ?Text;
+    name : Text;
+    payment_type : Text;
+    price_annual : ?Float;
+    price_monthly : ?Float;
+    price_onetime : ?Float;
+    product_type : Text;
+    recommendedPlan : ?Text;
+    show_questionnaire : Bool;
+    tagline : ?Text;
+    tags : [Text];
+    tier_code : ?Text;
+    upgradePath : ?Text;
+    video_url_1 : Text;
+    video_url_2 : Text
+  };
+type ProductV4__627508541 =
+  {
+    active : Bool;
+    bestFor : ?Text;
+    bodySections : ?Text;
+    closingCTA : ?Text;
+    created_at : Timestamp__672038077;
+    description : Text;
+    detailDescription : ?Text;
+    faqItems : ?Text;
+    featureBullets : [Text];
+    heroHeadline : ?Text;
+    heroSubheadline : ?Text;
+    id : ProductId__779996770;
+    imageUrl : ?Text;
+    name : Text;
+    payment_type : Text;
+    price_annual : ?Float;
+    price_monthly : ?Float;
+    price_onetime : ?Float;
+    product_type : Text;
+    proofPoints : ?Text;
+    recommendedPlan : ?Text;
+    seoMetaDescription : ?Text;
+    seoMetaTitle : ?Text;
+    show_questionnaire : Bool;
+    tagline : ?Text;
+    tags : [Text];
+    tier_code : ?Text;
+    upgradePath : ?Text;
+    video_url_1 : Text;
+    video_url_2 : Text
+  };
+type ProductV5__809688258 =
+  {
+    active : Bool;
+    bestFor : ?Text;
+    bodySections : ?Text;
+    closingCTA : ?Text;
+    created_at : Timestamp__672038077;
+    description : Text;
+    detailDescription : ?Text;
+    faqItems : ?Text;
+    featureBullets : [Text];
+    heroHeadline : ?Text;
+    heroSubheadline : ?Text;
+    id : ProductId__779996770;
+    imageUrl : ?Text;
+    name : Text;
+    payment_type : Text;
+    plan_section : ?Text;
+    price_annual : ?Float;
+    price_monthly : ?Float;
+    price_onetime : ?Float;
+    product_type : Text;
+    proofPoints : ?Text;
+    recommendedPlan : ?Text;
+    seoMetaDescription : ?Text;
+    seoMetaTitle : ?Text;
+    show_questionnaire : Bool;
+    tagline : ?Text;
+    tags : [Text];
+    tier_code : ?Text;
+    upgradePath : ?Text;
+    video_url_1 : Text;
+    video_url_2 : Text
+  };
+type Product__853085059 =
+  {
+    active : Bool;
+    bestFor : ?Text;
+    bodySections : ?Text;
+    closingCTA : ?Text;
+    created_at : Timestamp__672038077;
+    description : Text;
+    detailDescription : ?Text;
+    faqItems : ?Text;
+    featureBullets : [Text];
+    heroHeadline : ?Text;
+    heroSubheadline : ?Text;
+    id : ProductId__779996770;
+    imageUrl : ?Text;
+    name : Text;
+    payment_type : Text;
+    plan_section : ?Text;
+    price_annual : ?Float;
+    price_monthly : ?Float;
+    price_onetime : ?Float;
+    product_type : Text;
+    proofPoints : ?Text;
+    recommendedPlan : ?Text;
+    seoMetaDescription : ?Text;
+    seoMetaTitle : ?Text;
+    show_questionnaire : Bool;
+    speedy_filter : ?Text;
+    tagline : ?Text;
+    tags : [Text];
+    tier_code : ?Text;
+    upgradePath : ?Text;
+    video_url_1 : Text;
+    video_url_2 : Text
   };
 type PurchaseRequest__152559268 =
   {
@@ -451,6 +688,14 @@ type Review__422344017 =
     submittedAt : Int
   };
 type SiteLinkEntry__1033428396 = {sentAt : Int; url : Text};
+type SocialMediaConfig__181004964 =
+  {
+    facebookUrl : Text;
+    instagramUrl : Text;
+    linkedinUrl : Text;
+    tiktokUrl : Text;
+    youtubeUrl : Text
+  };
 type Status__867666888 =
   {
     #buildInProgress;
@@ -465,22 +710,48 @@ type Status__867666888 =
     #questionnairePending;
     #revisionsInProgress
   };
-type StripeConfiguration__96897619 =
+type StripeConfiguration__87721349 =
   {allowedCountries : [Text]; secretKey : Text};
+type SubAdmin__615376366 =
+  {allowedTabs : [Text]; createdAt : Int; email : Text};
 type SubscriptionId__825880366 = Nat;
-type Subscription__231062474 =
+type SubscriptionV0__598368041 =
   {
     billing_cycle : Text;
+    clientEmail : Text;
     client_id : ClientId__894050839;
     created_at : Timestamp__672038077;
     id : SubscriptionId__825880366;
     next_payment_date : Timestamp__672038077;
+    paymentFailed : Bool;
     plan_code : Text;
     plan_name : Text;
+    reminderSentAt : ?Int;
     status : Text;
+    stripeCustomerId : ?Text;
     stripe_subscription_id : Text;
     updated_at : Timestamp__672038077
   };
+type Subscription__231062474 =
+  {
+    billing_cycle : Text;
+    clientEmail : Text;
+    client_id : ClientId__894050839;
+    created_at : Timestamp__672038077;
+    id : SubscriptionId__825880366;
+    nextBillingDate : Int;
+    next_payment_date : Timestamp__672038077;
+    paymentFailed : Bool;
+    plan_code : Text;
+    plan_name : Text;
+    reminderSentAt : ?Int;
+    status : Text;
+    stripeCustomerId : ?Text;
+    stripe_subscription_id : Text;
+    updated_at : Timestamp__672038077
+  };
+type Time__298180599 = Int__837511138;
+type Time__688418391 = Time__298180599;
 type Timestamp__672038077 = Int;
 type UserProfile__491224006 =
   {
@@ -494,9 +765,16 @@ type UserProfile__491224006 =
     phone : Text;
     role : Text
   };
-type UserRole__1054455867 = {#admin; #guest; #user};
+type UserRole__1073662873 = {#admin; #guest; #user};
 type VisitEvent__14683284 =
   {countryCode : ?Text; pagePath : Text; sessionId : Text; timestamp : Int};
+type WebhookAuditEntry__796056777 =
+  {
+    event_id : Text;
+    event_type : Text;
+    processing_result : Text;
+    received_at : Int
+  };
 type WeeklySchedule__905542794 =
   {
     friday : DaySchedule__841151278;
@@ -529,42 +807,67 @@ actor {
   stable RESET_RATE_LIMIT : Nat;
   stable RESET_WINDOW_NS : Int;
   stable var SELF_CANISTER_ID : Text;
-  stable _adminEmail : Text;
-  stable _adminEmailShort : Text;
+  stable var _adminEmail : Text;
+  stable var _adminPrincipals : [Principal];
   stable var _adminSeeded : Bool;
-  stable _knownCategories : [Text];
+  stable var _billingReminderTimerId : Nat;
+  stable var _dispatchTimerId : Nat;
+  stable var _emailCampaignIdCounter : Nat;
+  stable var _emailFailureTimestamps : [Int];
+  stable var _knownCategories : [Text];
+  stable var _logoUrl : Text;
   stable var _migrationAccountWipe : Bool;
   stable var _migrationAdminElevation : Bool;
   stable var _migrationBlogFeaturedImageCaption : Bool;
   stable var _migrationBlogSeoFields : Bool;
+  stable var _migrationCampaignStatusBackfill : Bool;
   stable var _migrationCompletionPaymentCharged : Bool;
   stable var _migrationLeadConvertedAt : Bool;
   stable var _migrationLeadMeetingFields : Bool;
   stable var _migrationLeadRescheduleFields : Bool;
   stable var _migrationLeadRescheduleHistory : Bool;
   stable var _migrationLeadRescheduleLinkSentAt : Bool;
+  stable var _migrationPlanSectionFix : Bool;
+  stable var _migrationPlatformFeeFields : Bool;
   stable var _migrationPortfolioImageCaption : Bool;
   stable var _migrationPortfolioSeoFields : Bool;
+  stable var _migrationProductRichFields : Bool;
+  stable var _productImages : [(Nat, Text)];
   stable var _purchaseRequestIdCounter : Nat;
   stable var _questionDefsSeedDone : Bool;
   stable var _schemaVersion : Nat;
+  stable var _siteAuditFallbackPrice : Int;
+  stable var _siteBaseUrl : Text;
   stable var _stableActivities : [ActivityLog__439802922];
   stable var _stableAdHocInvoices : [AdHocInvoice__939863957];
   stable var _stableAdminNotifications : [AdminNotification__695518885];
   stable var _stableAdminOtps : [(Text, AdminOtp__641273090)];
   stable var _stableAvailabilitySettings : ?AvailabilitySettings__905216026;
   stable var _stableBillingHistory : [BillingHistory__158551636];
+  stable var _stableBillingHistoryRecords :
+    [(Text, BillingHistoryRecord__916264657)];
   stable var _stableBlogPosts : [BlogPost__543622485];
   stable var _stableBuilds : [BuildV0__866641954];
   stable var _stableBuildsLatest : [Build__713870829];
   stable var _stableBuildsNew : [BuildV1__1037633325];
-  stable var _stableCatalog : [(ProductId__779996770, Product__853085059)];
+  stable var _stableCartPurchases : [(Text, CartPurchase__564871642)];
+  stable var _stableCatalog : [(ProductId__779996770, ProductV2__397824925)];
+  stable var _stableCatalogNew :
+    [(ProductId__779996770, ProductV4__627508541)];
+  stable var _stableCatalogV3 :
+    [(ProductId__779996770, ProductV3__623214266)];
+  stable var _stableCatalogV5Old :
+    [(ProductId__779996770, ProductV5__809688258)];
+  stable var _stableCatalogV6 : [(ProductId__779996770, Product__853085059)];
   stable var _stableCategoryVisibility : [(Text, Bool)];
   stable var _stableClientFiles : [ClientFileMetadata__846853807];
   stable var _stableClientMessages : [ClientMessage__913388841];
   stable var _stableClients : [(Text, CrmClientV0__658242545)];
-  stable var _stableClientsNew : [(Text, CrmClient__731363100)];
+  stable var _stableClientsNew : [(Text, CrmClientV1__2536135)];
+  stable var _stableClientsV2 : [(Text, CrmClientOld__336813380)];
+  stable var _stableClientsV3 : [(Text, CrmClient__731363100)];
   stable var _stableEditRequests : [EditRequest__842627481];
+  stable var _stableEmailCampaigns : [EmailCampaign__810444874];
   stable var _stableEmailFiredSessions : [(Text, Int)];
   stable var _stableEmailFiredSessionsV1 : [Text];
   stable var _stableEmailLogs : [EmailLog__577630079];
@@ -584,15 +887,20 @@ actor {
   stable var _stableLeadsV5 : [(Text, Lead__21276013)];
   stable var _stableMarqueeLogos : [MarqueeLogo__75021648];
   stable var _stableNotificationLog : [NotificationLogEntry__1302302];
-  stable var _stableOrders : [Order__762448211];
+  stable var _stableOrders : [OrderV0__726833133];
+  stable var _stableOrdersV0 : [OrderV0__726833133];
+  stable var _stableOtpRateLimits : [(Text, [Int])];
   stable var _stablePasswordResetTokens : [PasswordResetToken__20946470];
   stable var _stablePendingPushNotifications :
     [PendingNotification__275886244];
   stable var _stablePortalShopProducts : [Nat];
   stable var _stablePortfolio : [(Text, PortfolioItemV0__468649299)];
   stable var _stablePortfolioNew : [(Text, PortfolioItem__950518858)];
+  stable var _stableProcessedEventIds : [Text];
   stable var _stableProducts : [(Nat, ProductV1__742818732)];
   stable var _stablePurchaseRequests : [PurchaseRequest__152559268];
+  stable var _stablePurchasesInProgress :
+    {var root : Node__918630472<Text>; var size : Nat__1040412405};
   stable var _stablePushSubscription : ?PushSubscription__1071553013;
   stable var _stableQuestionDefs : [(Text, [QuestionDefinition__638419058])];
   stable var _stableQuestionnaires : [Questionnaire__629295770];
@@ -603,113 +911,155 @@ actor {
   stable var _stableResetRequestTimes : [(Text, [Int])];
   stable var _stableReviews : [(ReviewId__768921902, Review__422344017)];
   stable var _stableSiteText : [(Text, Text)];
-  stable var _stableSubscriptions : [Subscription__231062474];
+  stable var _stableSocialMediaConfig : ?SocialMediaConfig__181004964;
+  stable var _stableSubAdmins : [(Text, SubAdmin__615376366)];
+  stable var _stableSubscriptionReminders : [(Text, ?Int)];
+  stable var _stableSubscriptions : [SubscriptionV0__598368041];
   stable var _stableUserProfiles : [UserProfile__491224006];
   stable var _stableVapidPrivateKey : Text;
   stable var _stableVapidPublicKey : Text;
   stable var _stableVisitEvents : [VisitEvent__14683284];
+  stable var _stableVisitRateLimits : [(Text, Int)];
+  stable var _stableWebhookAuditLog : [WebhookAuditEntry__796056777];
+  stable var _webhookSharedSecret : Text;
   stable accessControlState :
     {
       var adminAssigned : Bool;
-      userRoles : Map__605269027<Principal, UserRole__1054455867>
+      userRoles : Map__222667396<Principal, UserRole__1073662873>
     };
   stable activities :
     {
       var root :
-        Node__46230540<ActivityId__1050191648, ActivityLog__439802922>;
-      var size : Nat__490723111
+        Node__1000929467<ActivityId__1050191648, ActivityLog__439802922>;
+      var size : Nat__1040412405
     };
   stable billingHistory :
     {
       var root :
-        Node__46230540<BillingId__834551210, BillingHistory__158551636>;
-      var size : Nat__490723111
+        Node__1000929467<BillingId__834551210, BillingHistory__158551636>;
+      var size : Nat__1040412405
+    };
+  stable billingHistoryRecords :
+    {
+      var root : Node__1000929467<Text, BillingHistoryRecord__916264657>;
+      var size : Nat__1040412405
     };
   stable blogPosts :
     {
-      var root : Node__46230540<BlogPostId__971830642, BlogPost__543622485>;
-      var size : Nat__490723111
+      var root : Node__1000929467<BlogPostId__971830642, BlogPost__543622485>;
+      var size : Nat__1040412405
+    };
+  stable cartPurchases :
+    {
+      var root : Node__1000929467<Text, CartPurchase__564871642>;
+      var size : Nat__1040412405
     };
   stable categoryVisibility :
-    {var root : Node__46230540<Text, Bool>; var size : Nat__490723111};
+    {var root : Node__1000929467<Text, Bool>; var size : Nat__1040412405};
   stable var clientFiles : [ClientFileMetadata__846853807];
   stable var clientMessages : [ClientMessage__913388841];
   stable editRequests :
     {
       var root :
-        Node__46230540<EditRequestId__1064816119, EditRequest__842627481>;
-      var size : Nat__490723111
+        Node__1000929467<EditRequestId__1064816119, EditRequest__842627481>;
+      var size : Nat__1040412405
     };
+  stable emailCampaigns :
+    {
+      var root :
+        Node__1000929467<EmailCampaignId__1037635664,
+                          EmailCampaign__810444874>;
+      var size : Nat__1040412405
+    };
+  stable var emailFailureCount : Nat;
   stable emailTemplates :
     {
-      var root : Node__46230540<Text, EmailTemplate__505785345>;
-      var size : Nat__490723111
+      var root : Node__1000929467<Text, EmailTemplate__505785345>;
+      var size : Nat__1040412405
     };
+  stable var globalTaxRatePercent : Float;
   stable invoices :
     {
-      var root : Node__46230540<InvoiceId__400649173, Invoice__772203955>;
-      var size : Nat__490723111
+      var root : Node__1000929467<InvoiceId__400649173, Invoice__772203955>;
+      var size : Nat__1040412405
     };
+  stable var lastEmailFailureTimestamp : Int;
   stable leadRateLimits :
-    {var root : Node__46230540<Principal, [Int]>; var size : Nat__490723111};
+    {
+      var root : Node__1000929467<Principal, [Int]>;
+      var size : Nat__1040412405
+    };
   stable var leads :
     {
-      var root : Node__46230540<Text, LeadV0__790934471>;
-      var size : Nat__490723111
+      var root : Node__1000929467<Text, LeadV0__790934471>;
+      var size : Nat__1040412405
     };
   stable marqueeLogos :
     {
-      var root : Node__46230540<Text, MarqueeLogo__75021648>;
-      var size : Nat__490723111
+      var root : Node__1000929467<Text, MarqueeLogo__75021648>;
+      var size : Nat__1040412405
     };
   stable orders :
     {
-      var root : Node__46230540<OrderId__81195289, Order__762448211>;
-      var size : Nat__490723111
+      var root : Node__1000929467<OrderId__81195289, Order__762448211>;
+      var size : Nat__1040412405
     };
+  stable otpRateLimits :
+    {var root : Node__1000929467<Text, [Int]>; var size : Nat__1040412405};
   stable principalToEmail :
-    {var root : Node__46230540<Principal, Text>; var size : Nat__490723111};
+    {
+      var root : Node__1000929467<Principal, Text>;
+      var size : Nat__1040412405
+    };
   stable productCatalog :
     {
-      var root : Node__46230540<ProductId__779996770, Product__853085059>;
-      var size : Nat__490723111
+      var root : Node__1000929467<ProductId__779996770, Product__853085059>;
+      var size : Nat__1040412405
     };
   stable products :
     {
-      var root : Node__46230540<ProductId__779996770, ProductV1__742818732>;
-      var size : Nat__490723111
+      var root : Node__1000929467<ProductId__779996770, ProductV1__742818732>;
+      var size : Nat__1040412405
     };
   stable questionDefsMap :
     {
-      var root : Node__46230540<Text, [QuestionDefinition__638419058]>;
-      var size : Nat__490723111
+      var root : Node__1000929467<Text, [QuestionDefinition__638419058]>;
+      var size : Nat__1040412405
     };
   stable questionnaires :
     {
       var root :
-        Node__46230540<QuestionnaireId__365725399, Questionnaire__629295770>;
-      var size : Nat__490723111
+        Node__1000929467<QuestionnaireId__365725399, Questionnaire__629295770>;
+      var size : Nat__1040412405
     };
+  stable var reminderLeadDays : Nat;
   stable resetRequestTimes :
-    {var root : Node__46230540<Text, [Int]>; var size : Nat__490723111};
+    {var root : Node__1000929467<Text, [Int]>; var size : Nat__1040412405};
   stable slugIndex :
     {
-      var root : Node__46230540<Text, BlogPostId__971830642>;
-      var size : Nat__490723111
+      var root : Node__1000929467<Text, BlogPostId__971830642>;
+      var size : Nat__1040412405
     };
-  stable var stripeConfig : ?StripeConfiguration__96897619;
+  stable var stripeConfig : ?StripeConfiguration__87721349;
   stable var stripePublishableKey : Text;
   stable var stripeTestMode : Bool;
   stable var stripeWebhookSecret : Text;
+  stable var subAdminMap :
+    {
+      var root : Node__1000929467<Text, SubAdmin__615376366>;
+      var size : Nat__1040412405
+    };
   stable subscriptions :
     {
       var root :
-        Node__46230540<SubscriptionId__825880366, Subscription__231062474>;
-      var size : Nat__490723111
+        Node__1000929467<SubscriptionId__825880366, Subscription__231062474>;
+      var size : Nat__1040412405
     };
   stable userProfiles :
     {
-      var root : Node__46230540<Text, UserProfile__491224006>;
-      var size : Nat__490723111
-    }
+      var root : Node__1000929467<Text, UserProfile__491224006>;
+      var size : Nat__1040412405
+    };
+  stable visitRateLimits :
+    {var root : Node__1000929467<Text, Int>; var size : Nat__1040412405}
 };

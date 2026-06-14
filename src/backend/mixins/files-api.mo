@@ -6,7 +6,8 @@ import FilesLib "../lib/files";
 // FilesApiMixin — exposes the public API surface for client file delivery.
 // Implemented with full logic; state injected via mixin parameters.
 mixin (
-  clientFiles : { var value : [FileTypes.ClientFileMetadata] }
+  clientFiles        : { var value : [FileTypes.ClientFileMetadata] },
+  _configAdminEmail  : Text
 ) {
   public type ClientFileMetadata = FileTypes.ClientFileMetadata;
   public type FileResult = { #ok : ClientFileMetadata; #err : Text };
@@ -21,9 +22,7 @@ mixin (
     fileName    : Text,
     fileLabel   : Text
   ) : async FileResult {
-    if (not Text.equal(adminEmail, "vincenzo@imperidome.com")) {
-      return #err("Unauthorized");
-    };
+    return #err("File storage not yet implemented");
     let objectKey = Time.now().toText() # "_" # fileName;
     let metadata : ClientFileMetadata = {
       id            = "file_" # Time.now().toText();
@@ -43,7 +42,7 @@ mixin (
     callerEmail : Text,
     clientEmail : Text
   ) : async [ClientFileMetadata] {
-    if (not Text.equal(callerEmail, "vincenzo@imperidome.com") and
+    if (not Text.equal(callerEmail, _configAdminEmail) and
         not Text.equal(callerEmail, clientEmail)) {
       return [];
     };
@@ -55,7 +54,7 @@ mixin (
     adminEmail : Text,
     fileId     : Text
   ) : async BoolResult {
-    if (not Text.equal(adminEmail, "vincenzo@imperidome.com")) {
+    if (not Text.equal(adminEmail, _configAdminEmail)) {
       return #err("Unauthorized");
     };
     switch (FilesLib.findById(clientFiles.value, fileId)) {
@@ -74,11 +73,11 @@ mixin (
     switch (FilesLib.findById(clientFiles.value, fileId)) {
       case null { return #err("File not found") };
       case (?f) {
-        if (not Text.equal(callerEmail, "vincenzo@imperidome.com") and
+        if (not Text.equal(callerEmail, _configAdminEmail) and
             not Text.equal(callerEmail, f.clientEmail)) {
           return #err("Unauthorized");
         };
-        #ok(f.objectKey)
+        #ok("/files/" # f.objectKey)
       };
     };
   };

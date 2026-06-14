@@ -6,7 +6,7 @@
 
 export interface BlobUploadHandle {
   withUploadProgress(callback: (progress: number) => void): BlobUploadHandle;
-  getDirectURL(): string;
+  getDirectURL(): string | Promise<string>;
 }
 
 class LocalBlobHandle implements BlobUploadHandle {
@@ -22,7 +22,7 @@ class LocalBlobHandle implements BlobUploadHandle {
     return this;
   }
 
-  getDirectURL(): string {
+  getDirectURL(): string | Promise<string> {
     // Simulate progress
     if (this.progressCallback) {
       setTimeout(() => this.progressCallback?.(0.5), 50);

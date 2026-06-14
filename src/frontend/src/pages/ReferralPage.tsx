@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { EditableText } from "../components/EditableText";
 import { Footer } from "../components/Footer";
 import { Navbar } from "../components/Navbar";
+import TypewriterText from "../components/TypewriterText";
 import { useActor } from "../hooks/useActor";
 import { getSession } from "../hooks/useSession";
 
@@ -46,9 +47,6 @@ const HOW_IT_WORKS = [
   },
 ];
 
-// ---------------------------------------------------------------------------
-// Personal referral code section shown to logged-in users
-// ---------------------------------------------------------------------------
 function PersonalReferralSection() {
   const { actor, isFetching } = useActor();
   const [referralCode, setReferralCode] = useState<string | null>(null);
@@ -56,36 +54,29 @@ function PersonalReferralSection() {
   const [error, setError] = useState<string | null>(null);
   const [codeCopied, setCodeCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
-
   const session = getSession();
   const userEmail = session?.email ?? "";
-
   const referralLink = referralCode
     ? `${window.location.origin}/register?ref=${encodeURIComponent(referralCode)}`
     : null;
 
   useEffect(() => {
     if (!actor || isFetching || !userEmail) return;
-
     async function fetchCode() {
       if (!actor || !userEmail) return;
       setLoading(true);
       setError(null);
       try {
         const result = await actor.getMyReferralCode(userEmail);
-        // Result is optional Text returned as array: [string] | []
-        if (Array.isArray(result) && result.length > 0) {
+        if (Array.isArray(result) && result.length > 0)
           setReferralCode(result[0]);
-        } else {
-          setReferralCode(null);
-        }
+        else setReferralCode(null);
       } catch {
         setError("Unable to load your referral code. Please try again later.");
       } finally {
         setLoading(false);
       }
     }
-
     fetchCode();
   }, [actor, isFetching, userEmail]);
 
@@ -100,7 +91,6 @@ function PersonalReferralSection() {
         setTimeout(() => setLinkCopied(false), 2000);
       }
     } catch {
-      // Fallback for older browsers
       const textarea = document.createElement("textarea");
       textarea.value = text;
       textarea.style.cssText = "position:fixed;left:-9999px;top:-9999px;";
@@ -117,7 +107,7 @@ function PersonalReferralSection() {
           setTimeout(() => setLinkCopied(false), 2000);
         }
       } catch {
-        // Silent fail
+        /* silent */
       }
       document.body.removeChild(textarea);
     }
@@ -131,19 +121,20 @@ function PersonalReferralSection() {
     >
       <div className="max-w-2xl mx-auto">
         <div
-          className="rounded-xl p-8"
-          style={{
-            backgroundColor: "rgba(17,19,34,0.9)",
-            border: "2px solid #5EF08A",
-            fontFamily: "Arial, Inter, sans-serif",
-          }}
+          className="rounded-xl p-8 matrix-card"
+          style={{ border: "2px solid #5EF08A" }}
         >
-          <h2 className="text-xl font-bold mb-2" style={{ color: "#EEF0F8" }}>
-            Your Personal Referral Code
+          <h2
+            className="text-xl font-bold mb-2 text-white"
+            style={{ fontFamily: "'Courier New', monospace" }}
+          >
+            <TypewriterText text="Your Personal Referral Code" speed={50} />
           </h2>
-          <p className="text-sm mb-6" style={{ color: "#7A7D90" }}>
-            Share your code or link with anyone — when they sign up, you both
-            benefit.
+          <p className="text-sm mb-6 text-[#7A7D90]">
+            <TypewriterText
+              text="Share your code or link with anyone — when they sign up, you both benefit."
+              speed={35}
+            />
           </p>
 
           {loading && (
@@ -203,7 +194,6 @@ function PersonalReferralSection() {
             <div
               style={{ display: "flex", flexDirection: "column", gap: "16px" }}
             >
-              {/* Referral code box */}
               <div>
                 <p
                   style={{
@@ -214,16 +204,13 @@ function PersonalReferralSection() {
                     textTransform: "uppercase",
                     color: "#7A7D90",
                     marginBottom: "8px",
+                    fontFamily: "'Courier New', monospace",
                   }}
                 >
                   Your Referral Code
                 </p>
                 <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                  }}
+                  style={{ display: "flex", alignItems: "center", gap: "10px" }}
                 >
                   <div
                     style={{
@@ -279,8 +266,6 @@ function PersonalReferralSection() {
                   </button>
                 </div>
               </div>
-
-              {/* Referral link box */}
               {referralLink && (
                 <div>
                   <p
@@ -292,6 +277,7 @@ function PersonalReferralSection() {
                       textTransform: "uppercase",
                       color: "#7A7D90",
                       marginBottom: "8px",
+                      fontFamily: "'Courier New', monospace",
                     }}
                   >
                     Your Shareable Link
@@ -381,19 +367,13 @@ function PersonalReferralSection() {
           )}
         </div>
       </div>
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-      `}</style>
+      <style>
+        {"@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }"}
+      </style>
     </section>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Login prompt for unauthenticated visitors
-// ---------------------------------------------------------------------------
 function LoginPromptSection() {
   return (
     <section
@@ -402,14 +382,7 @@ function LoginPromptSection() {
       data-ocid="referral.login_prompt.section"
     >
       <div className="max-w-2xl mx-auto">
-        <div
-          className="rounded-xl p-8 text-center"
-          style={{
-            backgroundColor: "rgba(17,19,34,0.7)",
-            border: "1px solid #1C1F33",
-            fontFamily: "Arial, Inter, sans-serif",
-          }}
-        >
+        <div className="rounded-xl p-8 text-center matrix-card">
           <div
             style={{
               width: "48px",
@@ -425,12 +398,20 @@ function LoginPromptSection() {
           >
             <LogIn size={20} color="#5EF08A" />
           </div>
-          <h3 className="text-lg font-bold mb-2" style={{ color: "#EEF0F8" }}>
-            Sign in to see your referral code
+          <h3
+            className="text-lg font-bold mb-2 text-white"
+            style={{ fontFamily: "'Courier New', monospace" }}
+          >
+            <TypewriterText
+              text="Sign in to see your referral code"
+              speed={45}
+            />
           </h3>
-          <p className="text-sm mb-6" style={{ color: "#7A7D90" }}>
-            Log in to your Imperidome account to access your personal referral
-            code and shareable link.
+          <p className="text-sm mb-6 text-[#7A7D90]">
+            <TypewriterText
+              text="Log in to your Imperidome account to access your personal referral code and shareable link."
+              speed={30}
+            />
           </p>
           <a
             href="/login"
@@ -459,9 +440,6 @@ function LoginPromptSection() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main page
-// ---------------------------------------------------------------------------
 export default function ReferralPage() {
   const session = getSession();
   const isLoggedIn = !!session?.email;
@@ -479,21 +457,15 @@ export default function ReferralPage() {
       >
         <div className="max-w-3xl mx-auto">
           <h1
-            className="text-4xl md:text-5xl font-bold mb-4"
-            style={{ color: "#FFFFFF", fontFamily: "Arial, Inter, sans-serif" }}
+            className="text-4xl md:text-5xl font-bold mb-4 text-white"
+            style={{ fontFamily: "'Courier New', monospace" }}
           >
-            <EditableText
-              textKey="referral.hero_heading"
-              defaultText="The Imperidome Referral Program"
-            />
+            <TypewriterText text="The Imperidome Referral Program" speed={35} />
           </h1>
-          <p
-            className="text-xl"
-            style={{ color: "#e5e7eb", fontFamily: "Arial, Inter, sans-serif" }}
-          >
-            <EditableText
-              textKey="referral.hero_subheading"
-              defaultText="Get Rewarded for Spreading the Word."
+          <p className="text-xl text-[#9DA0B3]">
+            <TypewriterText
+              text="Get Rewarded for Spreading the Word."
+              speed={45}
             />
           </p>
         </div>
@@ -501,88 +473,60 @@ export default function ReferralPage() {
 
       {/* Reward Cards */}
       <section
-        className="py-16 px-6"
-        style={{ backgroundColor: "#0A0B14" }}
+        className="py-16 px-6 bg-[#0A0B14]"
         data-ocid="referral.cards.section"
       >
         <div className="max-w-4xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Card 1 */}
             <div
-              className="rounded-lg p-8"
-              style={{
-                backgroundColor: "rgba(17,19,34,0.7)",
-                border: "2px solid #5EF08A",
-                fontFamily: "Arial, Inter, sans-serif",
-              }}
+              className="rounded-lg p-8 matrix-card"
+              style={{ border: "2px solid #5EF08A" }}
               data-ocid="referral.card.1"
             >
               <div
-                className="text-xs font-semibold uppercase tracking-wider mb-4"
-                style={{ color: "#5EF08A" }}
+                className="text-xs font-semibold uppercase tracking-wider mb-4 text-[#5EF08A]"
+                style={{ fontFamily: "'Courier New', monospace" }}
               >
-                <EditableText
-                  textKey="referral.reward_card_1_label"
-                  defaultText="Tier 3+ Referral"
-                />
+                <TypewriterText text="Tier 3+ Referral" speed={55} />
               </div>
               <h2
-                className="text-2xl font-bold mb-4"
-                style={{ color: "#EEF0F8" }}
+                className="text-2xl font-bold mb-4 text-white"
+                style={{ fontFamily: "'Courier New', monospace" }}
               >
-                <EditableText
-                  textKey="referral.reward_card_1_title"
-                  defaultText="1 Free Month"
-                />
+                <TypewriterText text="1 Free Month" speed={55} />
               </h2>
-              <p className="text-base" style={{ color: "#EEF0F8" }}>
-                <EditableText
-                  textKey="referral.reward_card_1_description"
-                  defaultText="Reward: 1 free month of your current plan."
+              <p className="text-base text-[#EEF0F8]">
+                <TypewriterText
+                  text="Reward: 1 free month of your current plan."
+                  speed={35}
                 />
               </p>
             </div>
-
-            {/* Card 2 */}
             <div
-              className="rounded-lg p-8"
-              style={{
-                backgroundColor: "rgba(17,19,34,0.7)",
-                border: "2px solid #5EF08A",
-                fontFamily: "Arial, Inter, sans-serif",
-              }}
+              className="rounded-lg p-8 matrix-card"
+              style={{ border: "2px solid #5EF08A" }}
               data-ocid="referral.card.2"
             >
               <div
-                className="text-xs font-semibold uppercase tracking-wider mb-4"
-                style={{ color: "#5EF08A" }}
+                className="text-xs font-semibold uppercase tracking-wider mb-4 text-[#5EF08A]"
+                style={{ fontFamily: "'Courier New', monospace" }}
               >
-                <EditableText
-                  textKey="referral.reward_card_2_label"
-                  defaultText="Tier 1-2 Referral"
-                />
+                <TypewriterText text="Tier 1-2 Referral" speed={55} />
               </div>
               <h2
-                className="text-2xl font-bold mb-4"
-                style={{ color: "#EEF0F8" }}
+                className="text-2xl font-bold mb-4 text-white"
+                style={{ fontFamily: "'Courier New', monospace" }}
               >
-                <EditableText
-                  textKey="referral.reward_card_2_title"
-                  defaultText="$50 Account Credit"
-                />
+                <TypewriterText text="$50 Account Credit" speed={55} />
               </h2>
-              <p className="text-base" style={{ color: "#EEF0F8" }}>
-                <EditableText
-                  textKey="referral.reward_card_2_description"
-                  defaultText="Reward: $50 account credit."
-                />
+              <p className="text-base text-[#EEF0F8]">
+                <TypewriterText text="Reward: $50 account credit." speed={45} />
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Personal referral code — shown to logged-in users, login prompt otherwise */}
       {isLoggedIn ? <PersonalReferralSection /> : <LoginPromptSection />}
 
       {/* Program Details */}
@@ -593,27 +537,17 @@ export default function ReferralPage() {
       >
         <div className="max-w-2xl mx-auto text-center">
           <p
-            className="text-xs font-semibold uppercase tracking-wider mb-4"
-            style={{ color: "#7A7D90", fontFamily: "Arial, Inter, sans-serif" }}
+            className="text-xs font-semibold uppercase tracking-wider mb-4 text-[#7A7D90]"
+            style={{ fontFamily: "'Courier New', monospace" }}
           >
-            <EditableText
-              textKey="referral.program_details_label"
-              defaultText="Program Details"
-            />
+            <TypewriterText text="Program Details" speed={50} />
           </p>
           <ul
             className="flex flex-col gap-2"
             style={{ listStyle: "none", padding: 0, margin: 0 }}
           >
             {PROGRAM_DETAILS.map(({ text, key }) => (
-              <li
-                key={key}
-                className="text-sm"
-                style={{
-                  color: "#7A7D90",
-                  fontFamily: "Arial, Inter, sans-serif",
-                }}
-              >
+              <li key={key} className="text-sm text-[#7A7D90]">
                 <EditableText textKey={key} defaultText={text} />
               </li>
             ))}
@@ -623,37 +557,27 @@ export default function ReferralPage() {
 
       {/* How It Works */}
       <section
-        className="py-16 px-6"
-        style={{ backgroundColor: "#0A0B14" }}
+        className="py-16 px-6 bg-[#0A0B14]"
         data-ocid="referral.how_it_works.section"
       >
         <div className="max-w-2xl mx-auto text-center">
           <h2
-            className="text-3xl font-bold mb-12"
-            style={{ color: "#EEF0F8", fontFamily: "Arial, Inter, sans-serif" }}
+            className="text-3xl font-bold mb-12 text-white"
+            style={{ fontFamily: "'Courier New', monospace" }}
           >
-            <EditableText
-              textKey="referral.how_it_works_heading"
-              defaultText="How It Works"
-            />
+            <TypewriterText text="How It Works" speed={50} />
           </h2>
           <div className="flex flex-col gap-8">
-            {HOW_IT_WORKS.map(({ step, text, stepKey, textKey }) => (
+            {HOW_IT_WORKS.map(({ step, text, stepKey, textKey: _textKey }) => (
               <div key={stepKey} className="flex items-start gap-5 text-left">
                 <div
-                  className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg"
+                  className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg"
                   style={{ backgroundColor: "#5EF08A", color: "#061209" }}
                 >
                   <EditableText textKey={stepKey} defaultText={step} />
                 </div>
-                <p
-                  className="text-lg pt-1"
-                  style={{
-                    color: "#EEF0F8",
-                    fontFamily: "Arial, Inter, sans-serif",
-                  }}
-                >
-                  <EditableText textKey={textKey} defaultText={text} />
+                <p className="text-lg pt-1 text-[#EEF0F8]">
+                  <TypewriterText text={text} speed={35} />
                 </p>
               </div>
             ))}
@@ -669,17 +593,10 @@ export default function ReferralPage() {
       >
         <a
           href="/register"
-          className="inline-block px-10 py-4 rounded-lg text-white font-semibold text-lg transition-opacity hover:opacity-90"
-          style={{
-            backgroundColor: "#5EF08A",
-            fontFamily: "Arial, Inter, sans-serif",
-          }}
+          className="inline-block px-10 py-4 rounded-lg font-semibold text-lg transition-opacity hover:opacity-90 matrix-btn"
           data-ocid="referral.start_referring.button"
         >
-          <EditableText
-            textKey="referral.cta_button"
-            defaultText="Start Referring"
-          />
+          <TypewriterText text="Start Referring" speed={55} />
         </a>
       </section>
 

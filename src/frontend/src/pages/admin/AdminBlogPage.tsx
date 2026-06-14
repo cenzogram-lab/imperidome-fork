@@ -1,17 +1,17 @@
 import { Image, Pencil, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { backendInterface } from "../../backend";
-import type { BlogPost } from "../../backend";
+import type { CSSProperties, ChangeEvent } from "react";
+import { toast } from "sonner";
+import type { backendInterface } from "../../backend.d";
+import type { BlogPost } from "../../backend.d";
+import TypewriterText from "../../components/TypewriterText";
 import { useActor } from "../../hooks/useActor";
-import { getSession, useSession } from "../../hooks/useSession";
+import { useSession } from "../../hooks/useSession";
 import AdminLayout from "./AdminLayout";
 
-function getAdminEmail(): string {
-  const s = getSession();
-  return s?.email ?? localStorage.getItem("imperidome_admin_email") ?? "";
-}
-
 function formatDate(ts: bigint): string {
+  if (ts === 0n) return "—";
+  if (Number.isNaN(Number(ts))) return "—";
   const ms = Number(ts) / 1_000_000;
   return new Date(ms).toLocaleDateString("en-US", {
     month: "short",
@@ -57,6 +57,7 @@ export default function AdminBlogPage() {
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<bigint | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -68,8 +69,12 @@ export default function AdminBlogPage() {
     actor
       .getAllBlogPostsAdmin()
       .then((data) => {
-        const sorted = [...data].sort(
-          (a, b) => Number(b.created_at) - Number(a.created_at),
+        const sorted = [...data].sort((a, b) =>
+          b.created_at > a.created_at
+            ? 1
+            : b.created_at < a.created_at
+              ? -1
+              : 0,
         );
         setPosts(sorted);
         setLoadError(false);
@@ -119,18 +124,10 @@ export default function AdminBlogPage() {
     setAuthor(post.author);
     setExcerpt(post.excerpt);
     setFeaturedImageUrl(post.featured_image_url ?? null);
-    setFeaturedImageCaption(
-      (post as BlogPost & { featuredImageCaption?: string })
-        .featuredImageCaption ?? "",
-    );
+    setFeaturedImageCaption(post.featuredImageCaption ?? "");
     setStatus(post.status as "draft" | "published");
-    setSeoMetaDescription(
-      (post as BlogPost & { seoMetaDescription?: string }).seoMetaDescription ??
-        "",
-    );
-    setSeoMetaKeywords(
-      (post as BlogPost & { seoMetaKeywords?: string }).seoMetaKeywords ?? "",
-    );
+    setSeoMetaDescription(post.seoMetaDescription ?? "");
+    setSeoMetaKeywords(post.seoMetaKeywords ?? "");
     setSaveError("");
     setSaveSuccess(false);
     setEditorBody(post.body);
@@ -142,18 +139,35 @@ export default function AdminBlogPage() {
     setEditingPost(null);
   }
 
-  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleImageUpload(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingImage(true);
+    setImageUploadError(null);
     try {
-      const { createBlobFromBytes } = await import("../../lib/blobStorage");
+      const icpBlobStorage = (
+        window as Window & {
+          __icpBlobStorage?: {
+            ExternalBlob: {
+              fromBytes: (bytes: Uint8Array) => { getDirectURL: () => string };
+            };
+          };
+        }
+      ).__icpBlobStorage;
+      if (!icpBlobStorage) {
+        setImageUploadError("Image upload not available in this environment");
+        return;
+      }
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const blob = createBlobFromBytes(bytes);
-      const url = blob.getDirectURL();
+      const externalBlob = icpBlobStorage.ExternalBlob.fromBytes(bytes);
+      const url = externalBlob.getDirectURL();
       setFeaturedImageUrl(url);
-    } catch {
-      /* silently ignore */
+    } catch (err) {
+      setImageUploadError(
+        err instanceof Error
+          ? err.message
+          : "Image upload failed — please try again",
+      );
     } finally {
       setUploadingImage(false);
     }
@@ -177,9 +191,9 @@ export default function AdminBlogPage() {
     const body = editorBody;
     setSaving(true);
     try {
+      let result: unknown;
       if (editingPost) {
-        await (actor as backendInterface).updateBlogPost(
-          getAdminEmail(),
+        result = await (actor as backendInterface).updateBlogPost(
           editingPost.id,
           title.trim(),
           slug.trim(),
@@ -194,8 +208,7 @@ export default function AdminBlogPage() {
           seoMetaKeywords.trim() ? seoMetaKeywords.trim() : null,
         );
       } else {
-        await (actor as backendInterface).createBlogPost(
-          getAdminEmail(),
+        result = await (actor as backendInterface).createBlogPost(
           title.trim(),
           slug.trim(),
           category,
@@ -208,6 +221,12 @@ export default function AdminBlogPage() {
           seoMetaDescription.trim() ? seoMetaDescription.trim() : null,
           seoMetaKeywords.trim() ? seoMetaKeywords.trim() : null,
         );
+      }
+      if (result && typeof result === "object" && "err" in result) {
+        const errMsg =
+          (result as { err: string }).err || "Failed to save post.";
+        toast.error(errMsg);
+        return;
       }
       setSaveSuccess(true);
       fetchPosts();
@@ -231,21 +250,33 @@ export default function AdminBlogPage() {
 
   async function handleTogglePublish(post: BlogPost) {
     if (!actor) return;
+    // Snapshot current posts for rollback on failure
+    const previousPosts = posts;
+    // Optimistic update — flip the status immediately
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === post.id
+          ? { ...p, status: p.status === "published" ? "draft" : "published" }
+          : p,
+      ),
+    );
     try {
       if (post.status === "published") {
-        await (actor as backendInterface).unpublishBlogPost(
-          getAdminEmail(),
-          post.id,
-        );
+        await (actor as backendInterface).unpublishBlogPost(post.id);
       } else {
-        await (actor as backendInterface).publishBlogPost(
-          getAdminEmail(),
-          post.id,
-        );
+        await (actor as backendInterface).publishBlogPost(post.id);
       }
       fetchPosts();
     } catch {
-      /* ignore */
+      // Revert the optimistic update
+      setPosts(previousPosts);
+      // Show error banner (same style as deleteError)
+      setDeleteError(
+        post.status === "published"
+          ? "Failed to unpublish post — please try again."
+          : "Failed to publish post — please try again.",
+      );
+      setTimeout(() => setDeleteError(null), 5000);
     }
   }
 
@@ -253,7 +284,7 @@ export default function AdminBlogPage() {
     if (!actor) return;
     setDeleteError(null);
     try {
-      await (actor as backendInterface).deleteBlogPost(getAdminEmail(), id);
+      await (actor as backendInterface).deleteBlogPost(id);
       setDeleteConfirmId(null);
       fetchPosts();
     } catch (err) {
@@ -266,7 +297,7 @@ export default function AdminBlogPage() {
     }
   }
 
-  const DARK_CARD: React.CSSProperties = {
+  const DARK_CARD: CSSProperties = {
     background: "rgba(17,19,34,0.7)",
     backdropFilter: "blur(12px)",
     border: "1px solid #1C1F33",
@@ -274,26 +305,27 @@ export default function AdminBlogPage() {
     padding: "24px",
   };
 
-  const inputStyle: React.CSSProperties = {
+  const inputStyle: CSSProperties = {
     width: "100%",
-    padding: "10px 12px",
+    padding: "8px 12px",
     borderRadius: "6px",
-    border: "1px solid #1C1F33",
+    border: "1px solid rgba(94,240,138,0.3)",
     fontSize: "14px",
     color: "#EEF0F8",
-    background: "rgba(19,21,36,1)",
+    background: "rgba(0,0,0,0.6)",
     boxSizing: "border-box",
     outline: "none",
-    fontFamily: "inherit",
+    fontFamily: "'Courier New', monospace",
   };
 
-  const labelStyle: React.CSSProperties = {
+  const labelStyle: CSSProperties = {
     display: "block",
-    fontSize: "12px",
+    fontSize: "0.75rem",
     fontWeight: 600,
-    color: "#7A7D90",
+    color: "#5EF08A",
+    fontFamily: "'Courier New', monospace",
     textTransform: "uppercase",
-    letterSpacing: "0.05em",
+    letterSpacing: "0.1em",
     marginBottom: "6px",
   };
 
@@ -337,7 +369,7 @@ export default function AdminBlogPage() {
                 color: "#EEF0F8",
               }}
             >
-              Blog Posts
+              <TypewriterText className="matrix-heading" text="Blog Posts" />
             </h2>
             <div
               style={{
@@ -430,7 +462,7 @@ export default function AdminBlogPage() {
                 style={{
                   overflowX: "auto",
                   WebkitOverflowScrolling:
-                    "touch" as React.CSSProperties["WebkitOverflowScrolling"],
+                    "touch" as CSSProperties["WebkitOverflowScrolling"],
                 }}
               >
                 <table
@@ -793,12 +825,16 @@ export default function AdminBlogPage() {
               onChange={(e) => setCategory(e.target.value)}
               style={inputStyle}
             >
-              <option>Tips</option>
-              <option>Guides</option>
-              <option>Agency News</option>
-              <option>Client Stories</option>
-              <option>SEO</option>
-              <option>Other</option>
+              {[
+                "All",
+                ...[
+                  ...new Set(posts.map((p) => p.category).filter(Boolean)),
+                ].sort(),
+              ].map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
             </select>
           </div>
           <div>
@@ -937,6 +973,52 @@ export default function AdminBlogPage() {
             onChange={handleImageUpload}
             style={{ display: "none" }}
           />
+          {/* Paste-URL fallback — works even when upload extension is unavailable */}
+          <div style={{ marginTop: "10px" }}>
+            <input
+              type="text"
+              data-ocid="admin.blog.image.url_input"
+              placeholder="or paste a URL..."
+              value={featuredImageUrl ?? ""}
+              onChange={(e) =>
+                setFeaturedImageUrl(e.target.value.trim() || null)
+              }
+              style={{
+                width: "100%",
+                padding: "8px 12px",
+                borderRadius: "6px",
+                border: "1px solid rgba(94,240,138,0.3)",
+                fontSize: "13px",
+                color: "#5EF08A",
+                background: "rgba(0,0,0,0.6)",
+                boxSizing: "border-box",
+                outline: "none",
+                fontFamily: "'Courier New', monospace",
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = "#5EF08A";
+                e.currentTarget.style.boxShadow =
+                  "0 0 0 2px rgba(94,240,138,0.15)";
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = "rgba(94,240,138,0.3)";
+                e.currentTarget.style.boxShadow = "none";
+              }}
+            />
+          </div>
+          {imageUploadError && (
+            <p
+              data-ocid="admin.blog.image.error_state"
+              style={{
+                margin: "6px 0 0",
+                fontSize: "12px",
+                color: "#f87171",
+                fontWeight: 500,
+              }}
+            >
+              {imageUploadError}
+            </p>
+          )}
         </div>
 
         <div>
@@ -1108,7 +1190,7 @@ export default function AdminBlogPage() {
             disabled={saving}
             style={{
               background: saving ? "rgba(94,240,138,0.5)" : "#5EF08A",
-              color: "#061209",
+              color: "#0A0B14",
               border: "none",
               borderRadius: "7px",
               padding: "11px 28px",

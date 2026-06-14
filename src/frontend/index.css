@@ -2,13 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-@font-face {
-  font-family: "Plus Jakarta Sans";
-  src: url("/assets/fonts/PlusJakartaSans-VariableFont_wght.woff2") format("woff2");
-  font-weight: 100 900;
-  font-style: normal;
-  font-display: swap;
-}
+/* @font-face removed — Google Fonts loads Plus Jakarta Sans via index.html */
 
 @layer base {
   :root {

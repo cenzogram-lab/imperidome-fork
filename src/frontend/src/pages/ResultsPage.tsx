@@ -4,6 +4,7 @@ import type { backendInterface } from "../backend";
 import { EditableText } from "../components/EditableText";
 import { Footer } from "../components/Footer";
 import { Navbar } from "../components/Navbar";
+import TypewriterText from "../components/TypewriterText";
 import { createActorWithConfig } from "../config";
 import { useActor } from "../hooks/useActor";
 
@@ -29,19 +30,7 @@ export default function ResultsPage() {
           sid = crypto.randomUUID();
           sessionStorage.setItem("_vis_sid", sid);
         }
-        let countryCode: string | null = null;
-        try {
-          const ctrl = new AbortController();
-          const timer = setTimeout(() => ctrl.abort(), 2000);
-          const res = await fetch("https://ipapi.co/country/", {
-            signal: ctrl.signal,
-          });
-          clearTimeout(timer);
-          const text = (await res.text()).trim();
-          if (/^[A-Z]{2}$/.test(text)) countryCode = text;
-        } catch {
-          // geolocation failed — use null
-        }
+        const countryCode: string | null = null;
         const publicActor = await createActorWithConfig(createActor);
         await (publicActor as backendInterface).recordVisit(
           "/results",
@@ -50,11 +39,12 @@ export default function ResultsPage() {
           countryCode,
         );
       } catch {
-        // silent
+        /* silent */
       }
     };
     track();
   }, []);
+
   const [items, setItems] = useState<PortfolioItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,37 +73,25 @@ export default function ResultsPage() {
       <div className="h-[68px]" aria-hidden="true" />
 
       <main className="pb-24">
-        {/* Page header */}
-        <section
-          className="pt-16 pb-10 text-center px-6"
-          style={{ backgroundColor: "#0A0B14" }}
-        >
+        <section className="pt-16 pb-10 text-center px-6 bg-[#0A0B14]">
           <h1
-            className="font-extrabold text-[40px] leading-tight"
-            style={{ color: "#EEF0F8" }}
+            className="font-extrabold text-[40px] leading-tight text-white"
+            style={{ fontFamily: "'Courier New', monospace" }}
           >
-            <EditableText
-              textKey="our-builds.hero.heading"
-              defaultText="Our Builds"
-            />
+            <TypewriterText text="Our Builds" speed={60} />
           </h1>
-          <p
-            className="mt-3 text-[18px] max-w-xl mx-auto"
-            style={{ color: "#7A7D90" }}
-          >
-            <EditableText
-              textKey="our-builds.hero.subtext"
-              defaultText="Real sites built by Imperidome for real businesses."
+          <p className="mt-3 text-[18px] max-w-xl mx-auto text-[#7A7D90]">
+            <TypewriterText
+              text="Real sites built by Imperidome for real businesses."
+              speed={35}
             />
           </p>
         </section>
 
-        {/* Divider */}
         <div className="max-w-[1200px] mx-auto px-6">
           <hr className="border-[#1C1F33] mb-12" />
         </div>
 
-        {/* States */}
         {loading && (
           <div
             className="flex justify-center items-center py-24"
@@ -128,11 +106,10 @@ export default function ResultsPage() {
 
         {!loading && error && (
           <div
-            className="max-w-[600px] mx-auto px-6 py-6 rounded-xl text-center"
-            style={{ backgroundColor: "#FEF2F2", color: "#991B1B" }}
+            className="max-w-[600px] mx-auto px-6 py-6 rounded-xl text-center matrix-card"
             data-ocid="results.error_state"
           >
-            <p className="font-semibold text-[15px]">{error}</p>
+            <p className="font-semibold text-[15px] text-[#F87171]">{error}</p>
           </div>
         )}
 
@@ -141,10 +118,10 @@ export default function ResultsPage() {
             className="text-center py-24 px-6"
             data-ocid="results.empty_state"
           >
-            <p className="text-[17px] italic" style={{ color: "#7A7D90" }}>
-              <EditableText
-                textKey="our-builds.empty.text"
-                defaultText="Portfolio coming soon — check back shortly."
+            <p className="text-[17px] italic text-[#7A7D90]">
+              <TypewriterText
+                text="Portfolio coming soon — check back shortly."
+                speed={40}
               />
             </p>
           </div>
@@ -159,14 +136,8 @@ export default function ResultsPage() {
               <article
                 key={item.id}
                 data-ocid={`results.card.${index + 1}`}
-                className="rounded-[12px] overflow-hidden flex flex-col"
-                style={{
-                  background: "rgba(17,19,34,0.7)",
-                  backdropFilter: "blur(12px)",
-                  border: "1px solid #1C1F33",
-                }}
+                className="matrix-card rounded-[12px] overflow-hidden flex flex-col"
               >
-                {/* Thumbnail */}
                 <div className="relative w-full" style={{ height: "200px" }}>
                   <img
                     src={item.thumbnail_url}
@@ -186,18 +157,13 @@ export default function ResultsPage() {
                     </span>
                   )}
                 </div>
-
-                {/* Card body */}
                 <div className="p-5 flex flex-col flex-1">
-                  {/* Client name */}
                   <span
-                    className="font-bold text-[16px] truncate"
-                    style={{ color: "#EEF0F8" }}
+                    className="font-bold text-[16px] truncate text-[#EEF0F8]"
+                    style={{ fontFamily: "'Courier New', monospace" }}
                   >
-                    {item.client_name}
+                    <TypewriterText text={item.client_name} speed={50} />
                   </span>
-
-                  {/* Category badge — only rendered when present */}
                   {item.tier_code && (
                     <span
                       className="mt-1.5 self-start"
@@ -217,8 +183,6 @@ export default function ResultsPage() {
                       {item.tier_code}
                     </span>
                   )}
-
-                  {/* Description — only rendered when present */}
                   {item.description && (
                     <p
                       className="mt-2"
@@ -236,8 +200,6 @@ export default function ResultsPage() {
                       {item.description}
                     </p>
                   )}
-
-                  {/* View Site link */}
                   <div className="mt-auto pt-4">
                     <a
                       href={item.site_url}

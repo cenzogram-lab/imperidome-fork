@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { backendInterface } from "../backend";
+import TypewriterText from "../components/TypewriterText";
 import { useActor } from "../hooks/useActor";
 
 const DARK = {
@@ -347,7 +348,11 @@ export default function ForgotPasswordPage() {
                   transition: "background-color 0.15s",
                 }}
               >
-                {isLoading ? "Sending…" : "Send Reset Link"}
+                <TypewriterText
+                  text={isLoading ? "Sending…" : "Send Reset Link"}
+                  speed={30}
+                  key={isLoading ? "sending" : "idle"}
+                />
               </button>
             </form>
 

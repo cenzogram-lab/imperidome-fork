@@ -7,10 +7,11 @@
  * Dark aesthetic with neon green (#39FF14) accents.
  */
 
+import { useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "motion/react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
-import type { backendInterface } from "../backend";
+import type { backendInterface } from "../backend.d";
 import { useActor } from "../hooks/useActor";
 import { getSession } from "../hooks/useSession";
 
@@ -58,6 +59,11 @@ type Priority = "Low" | "Normal" | "Urgent";
 const PRIORITY_OPTIONS: Priority[] = ["Low", "Normal", "Urgent"];
 
 export function HelpWidget() {
+  // Computed FIRST — before any hooks — so the isAdmin check never causes a conditional hook call
+  const isAdmin =
+    typeof window !== "undefined" &&
+    window.location.pathname.startsWith("/admin");
+
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -176,19 +182,31 @@ export function HelpWidget() {
     }
   }
 
+  const navigate = useNavigate();
+  const [bookHover, setBookHover] = useState(false);
+  const [inquireHover, setInquireHover] = useState(false);
+
   const isSending = formState === "sending";
+
+  // Safety gate AFTER all hooks — never render in the admin panel
+  if (isAdmin) return null;
 
   return (
     <>
-      {/* Floating trigger button — bottom-left */}
+      {/* Floating trigger cluster — bottom-left: [?] [Book a call] [Inquire] */}
       <div
         style={{
           position: "fixed",
           bottom: "24px",
           left: "24px",
           zIndex: 9990,
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: "10px",
         }}
       >
+        {/* Existing help "?" button */}
         <button
           type="button"
           data-ocid="help_widget.open_modal_button"
@@ -204,10 +222,10 @@ export function HelpWidget() {
             width: "48px",
             height: "48px",
             borderRadius: "50%",
-            border: `1.5px solid ${open ? NEON : "rgba(57,255,20,0.35)"}`,
-            backgroundColor: "rgba(10,10,10,0.88)",
-            backdropFilter: "blur(12px)",
-            WebkitBackdropFilter: "blur(12px)",
+            border: "1px solid rgba(94,240,138,0.35)",
+            backgroundColor: "rgba(10,12,22,0.9)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
@@ -219,6 +237,7 @@ export function HelpWidget() {
             boxShadow: open ? NEON_GLOW : "0 2px 12px rgba(0,0,0,0.6)",
             transition:
               "border-color 0.2s, box-shadow 0.2s, color 0.2s, transform 0.15s",
+            flexShrink: 0,
           }}
           onMouseEnter={(e) => {
             (e.currentTarget as HTMLButtonElement).style.transform =
@@ -233,6 +252,70 @@ export function HelpWidget() {
           }}
         >
           {open ? "✕" : "?"}
+        </button>
+
+        {/* "Book a call" pill button */}
+        <button
+          type="button"
+          data-ocid="help_widget.book_call_button"
+          aria-label="Book a call"
+          onClick={() => navigate({ to: "/book" })}
+          onMouseEnter={() => setBookHover(true)}
+          onMouseLeave={() => setBookHover(false)}
+          style={{
+            height: "48px",
+            padding: "0 18px",
+            borderRadius: "24px",
+            border: "1px solid rgba(94,240,138,0.35)",
+            backgroundColor: "rgba(10,12,22,0.9)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            color: bookHover ? NEON : "rgba(57,255,20,0.7)",
+            fontFamily: "monospace",
+            fontSize: "13px",
+            letterSpacing: "0.06em",
+            cursor: "pointer",
+            boxShadow: bookHover ? NEON_GLOW : "0 2px 12px rgba(0,0,0,0.6)",
+            transform: bookHover ? "scale(1.05)" : "scale(1)",
+            transition:
+              "border-color 0.2s, box-shadow 0.2s, color 0.2s, transform 0.15s",
+            flexShrink: 0,
+            whiteSpace: "nowrap",
+          }}
+        >
+          Book a call
+        </button>
+
+        {/* "Inquire" pill button */}
+        <button
+          type="button"
+          data-ocid="help_widget.inquire_button"
+          aria-label="Inquire"
+          onClick={() => navigate({ to: "/intake" })}
+          onMouseEnter={() => setInquireHover(true)}
+          onMouseLeave={() => setInquireHover(false)}
+          style={{
+            height: "48px",
+            padding: "0 18px",
+            borderRadius: "24px",
+            border: "1px solid rgba(94,240,138,0.35)",
+            backgroundColor: "rgba(10,12,22,0.9)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            color: inquireHover ? NEON : "rgba(57,255,20,0.7)",
+            fontFamily: "monospace",
+            fontSize: "13px",
+            letterSpacing: "0.06em",
+            cursor: "pointer",
+            boxShadow: inquireHover ? NEON_GLOW : "0 2px 12px rgba(0,0,0,0.6)",
+            transform: inquireHover ? "scale(1.05)" : "scale(1)",
+            transition:
+              "border-color 0.2s, box-shadow 0.2s, color 0.2s, transform 0.15s",
+            flexShrink: 0,
+            whiteSpace: "nowrap",
+          }}
+        >
+          Inquire
         </button>
       </div>
 

@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { CSSProperties, FormEvent } from "react";
 import type { backendInterface } from "../../backend.d";
+import { ADMIN_EMAIL_KEY } from "../../constants";
 import { useActor } from "../../hooks/useActor";
 import { getSession } from "../../hooks/useSession";
 import AdminLayout from "./AdminLayout";
 
 function getAdminEmail(): string {
   const s = getSession();
-  return s?.email ?? localStorage.getItem("imperidome_admin_email") ?? "";
+  return s?.email ?? localStorage.getItem(ADMIN_EMAIL_KEY) ?? "";
 }
 
 interface FleetCanister {
@@ -21,6 +23,14 @@ interface CycleData {
   error: boolean;
   errorMessage: string | null;
 }
+
+interface BusinessMetrics {
+  monthlyRevenueCents: bigint;
+  activeBookings: bigint;
+  saasPlanStatus: string;
+}
+
+type MetricsState = BusinessMetrics | null | "loading" | "error";
 
 type FleetTab = "sites" | "software";
 
@@ -80,6 +90,7 @@ interface FleetPanelProps {
   ) => Promise<unknown>;
   removeCanister: (adminEmail: string, canisterId: string) => Promise<unknown>;
   ocidPrefix: string;
+  showMetrics?: boolean;
 }
 
 function FleetPanel({
@@ -88,9 +99,11 @@ function FleetPanel({
   addCanister,
   removeCanister,
   ocidPrefix,
+  showMetrics = false,
 }: FleetPanelProps) {
   const [canisters, setCanisters] = useState<FleetCanister[]>([]);
   const [cycles, setCycles] = useState<Record<string, CycleData>>({});
+  const [metrics, setMetrics] = useState<Record<string, MetricsState>>({});
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
   const [addName, setAddName] = useState("");
@@ -98,7 +111,11 @@ function FleetPanel({
   const [addError, setAddError] = useState<string | null>(null);
   const [addLoading, setAddLoading] = useState(false);
   const [addSuccess, setAddSuccess] = useState(false);
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [playbookOpen, setPlaybookOpen] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   const fetchCycles = useCallback(
     async (canisterList: FleetCanister[]) => {
@@ -137,10 +154,12 @@ function FleetPanel({
                 typeof result.err === "string"
                   ? result.err
                   : String(result.err);
-              console.error(
-                `[Fleet] getCanisterCycles #err for ${c.id}:`,
-                errMsg,
-              );
+              if (import.meta.env.DEV) {
+                console.error(
+                  `[Fleet] getCanisterCycles #err for ${c.id}:`,
+                  errMsg,
+                );
+              }
               return {
                 id: c.id,
                 balance: null,
@@ -149,10 +168,12 @@ function FleetPanel({
               };
             }
             const shape = JSON.stringify(raw);
-            console.error(
-              `[Fleet] Unexpected response shape for ${c.id}:`,
-              shape,
-            );
+            if (import.meta.env.DEV) {
+              console.error(
+                `[Fleet] Unexpected response shape for ${c.id}:`,
+                shape,
+              );
+            }
             return {
               id: c.id,
               balance: null,
@@ -161,7 +182,12 @@ function FleetPanel({
             };
           } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e);
-            console.error(`[Fleet] getCanisterCycles threw for ${c.id}:`, msg);
+            if (import.meta.env.DEV) {
+              console.error(
+                `[Fleet] getCanisterCycles threw for ${c.id}:`,
+                msg,
+              );
+            }
             return { id: c.id, balance: null, error: true, errorMessage: msg };
           }
         }),
@@ -182,12 +208,65 @@ function FleetPanel({
     [actor],
   );
 
+  const fetchMetrics = useCallback(
+    async (canisterList: FleetCanister[]) => {
+      if (!actor || canisterList.length === 0) return;
+      setMetrics((prev) => {
+        const next = { ...prev };
+        for (const c of canisterList) next[c.id] = "loading";
+        return next;
+      });
+      const results = await Promise.all(
+        canisterList.map(async (c) => {
+          try {
+            const raw = await withTimeout(
+              (actor as unknown as backendInterface).getClientBusinessMetrics(
+                c.id,
+              ) as Promise<unknown>,
+              10_000,
+              c.id,
+            );
+            const result = raw as {
+              __kind__: string;
+              ok?: BusinessMetrics;
+              err?: string;
+            };
+            if (result.__kind__ === "ok" && result.ok) {
+              return { id: c.id, value: result.ok as BusinessMetrics };
+            }
+            if (import.meta.env.DEV) {
+              console.error(
+                `[Fleet] getClientBusinessMetrics #err for ${c.id}:`,
+                result.err,
+              );
+            }
+            return { id: c.id, value: "error" as const };
+          } catch (e: unknown) {
+            if (import.meta.env.DEV) {
+              console.error(
+                `[Fleet] getClientBusinessMetrics threw for ${c.id}:`,
+                e,
+              );
+            }
+            return { id: c.id, value: "error" as const };
+          }
+        }),
+      );
+      setMetrics((prev) => {
+        const next = { ...prev };
+        for (const r of results) next[r.id] = r.value;
+        return next;
+      });
+    },
+    [actor],
+  );
+
   const loadFleet = useCallback(async () => {
     if (!actor) return;
     setListLoading(true);
     setListError(null);
     try {
-      const list = await getFleet(getAdminEmail());
+      const list = await getFleet("");
       setCanisters(list);
       const loadingMap: Record<string, CycleData> = {};
       for (const c of list) {
@@ -200,13 +279,16 @@ function FleetPanel({
       }
       setCycles(loadingMap);
       setListLoading(false);
-      await fetchCycles(list);
+      await Promise.all([
+        fetchCycles(list),
+        ...(showMetrics ? [fetchMetrics(list)] : []),
+      ]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setListError(`Failed to load fleet: ${msg}`);
       setListLoading(false);
     }
-  }, [actor, getFleet, fetchCycles]);
+  }, [actor, getFleet, fetchCycles, fetchMetrics, showMetrics]);
 
   useEffect(() => {
     if (!actor) return;
@@ -216,30 +298,47 @@ function FleetPanel({
   useEffect(() => {
     if (!actor) return;
     intervalRef.current = setInterval(() => {
-      if (canisters.length > 0) fetchCycles(canisters);
+      if (document.visibilityState !== "visible") return;
+      if (canisters.length > 0) {
+        fetchCycles(canisters);
+        if (showMetrics) fetchMetrics(canisters);
+      }
     }, 30_000);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [actor, canisters, fetchCycles]);
+  }, [actor, canisters, fetchCycles, fetchMetrics, showMetrics]);
 
   async function handleRemove(canisterId: string) {
-    if (!actor) return;
-    const canister = canisters.find((c) => c.id === canisterId);
-    const label = canister?.name ?? canisterId;
-    const confirmed = window.confirm(`Remove ${label} from the fleet?`);
-    if (!confirmed) return;
+    setConfirmRemoveId(canisterId);
+  }
+
+  async function handleConfirmRemove() {
+    if (!actor || !confirmRemoveId) return;
+    const id = confirmRemoveId;
+    setConfirmRemoveId(null);
+    setIsRemoving(true);
     try {
-      await removeCanister(getAdminEmail(), canisterId);
+      const adminEmail = getAdminEmail();
+      if (!adminEmail) {
+        setListError("Admin session not found.");
+        setIsRemoving(false);
+        return;
+      }
+      await removeCanister(adminEmail, id);
       await loadFleet();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setListError(`Failed to remove canister: ${msg}`);
+    } finally {
+      setIsRemoving(false);
     }
   }
 
-  async function handleAddSubmit(e: React.FormEvent) {
+  async function handleAddSubmit(e: FormEvent) {
     e.preventDefault();
+    const adminEmail = getAdminEmail();
+    if (!adminEmail) return;
     setAddError(null);
     if (!addName.trim()) {
       setAddError("Name / Label is required.");
@@ -266,7 +365,7 @@ function FleetPanel({
     setAddLoading(true);
     try {
       const result = await addCanister(
-        getAdminEmail(),
+        adminEmail,
         addName.trim(),
         addId.trim(),
       );
@@ -288,7 +387,7 @@ function FleetPanel({
     }
   }
 
-  const cardStyle: React.CSSProperties = {
+  const cardStyle: CSSProperties = {
     background: "rgba(17,19,34,0.7)",
     backdropFilter: "blur(12px)",
     borderRadius: "12px",
@@ -361,6 +460,9 @@ function FleetPanel({
                   "Canister ID",
                   "Status",
                   "Cycles",
+                  ...(showMetrics
+                    ? ["Monthly Revenue", "Active Bookings", "SaaS Plan"]
+                    : []),
                   "Actions",
                 ].map((col) => (
                   <th
@@ -385,7 +487,7 @@ function FleetPanel({
               {canisters.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={showMetrics ? 8 : 5}
                     data-ocid={`${ocidPrefix}.empty_state`}
                     style={{
                       padding: "40px 20px",
@@ -573,25 +675,193 @@ function FleetPanel({
                             </span>
                           )}
                       </td>
+                      {showMetrics &&
+                        (() => {
+                          const m = metrics[canister.id];
+                          const spinnerStyle: CSSProperties = {
+                            width: "14px",
+                            height: "14px",
+                            border: "2px solid #1C1F33",
+                            borderTop: "2px solid #5EF08A",
+                            borderRadius: "50%",
+                            display: "inline-block",
+                            animation: "spin 0.8s linear infinite",
+                          };
+                          const mutedStyle: CSSProperties = {
+                            color: "#7A7D90",
+                            fontSize: "14px",
+                          };
+                          const revenueCell = (
+                            <td
+                              key="rev"
+                              style={{
+                                padding: "16px 20px",
+                                fontSize: "14px",
+                                fontWeight: 600,
+                                color: "#EEF0F8",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {m === "loading" ? (
+                                <span style={spinnerStyle} />
+                              ) : m === "error" || m === null ? (
+                                <span style={mutedStyle}>—</span>
+                              ) : (
+                                `${(Number(m.monthlyRevenueCents) / 100).toFixed(2)}`
+                              )}
+                            </td>
+                          );
+                          const bookingsCell = (
+                            <td
+                              key="bk"
+                              style={{
+                                padding: "16px 20px",
+                                fontSize: "14px",
+                                fontWeight: 600,
+                                color: "#EEF0F8",
+                              }}
+                            >
+                              {m === "loading" ? (
+                                <span style={spinnerStyle} />
+                              ) : m === "error" || m === null ? (
+                                <span style={mutedStyle}>—</span>
+                              ) : (
+                                String(m.activeBookings)
+                              )}
+                            </td>
+                          );
+                          const plan =
+                            m !== "loading" && m !== "error" && m !== null
+                              ? m.saasPlanStatus.toLowerCase()
+                              : "";
+                          const planColor =
+                            plan === "active"
+                              ? { bg: "rgba(94,240,138,0.15)", text: "#5EF08A" }
+                              : plan === "trial"
+                                ? {
+                                    bg: "rgba(245,158,11,0.15)",
+                                    text: "#F59E0B",
+                                  }
+                                : plan === "inactive" || plan === "cancelled"
+                                  ? {
+                                      bg: "rgba(239,68,68,0.15)",
+                                      text: "#EF4444",
+                                    }
+                                  : {
+                                      bg: "rgba(122,125,144,0.15)",
+                                      text: "#7A7D90",
+                                    };
+                          const planCell = (
+                            <td key="plan" style={{ padding: "16px 20px" }}>
+                              {m === "loading" ? (
+                                <span style={spinnerStyle} />
+                              ) : m === "error" || m === null ? (
+                                <span style={mutedStyle}>—</span>
+                              ) : (
+                                <span
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    background: planColor.bg,
+                                    color: planColor.text,
+                                    fontSize: "12px",
+                                    fontWeight: 600,
+                                    padding: "4px 10px",
+                                    borderRadius: "20px",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {m.saasPlanStatus}
+                                </span>
+                              )}
+                            </td>
+                          );
+                          return (
+                            <>
+                              {revenueCell}
+                              {bookingsCell}
+                              {planCell}
+                            </>
+                          );
+                        })()}
                       <td style={{ padding: "16px 20px" }}>
-                        <button
-                          type="button"
-                          data-ocid={`${ocidPrefix}.delete_button.${rowNum}`}
-                          onClick={() => handleRemove(canister.id)}
-                          style={{
-                            border: "1px solid rgba(255,255,255,0.2)",
-                            color: "white",
-                            background: "transparent",
-                            borderRadius: "6px",
-                            padding: "7px 16px",
-                            fontSize: "13px",
-                            fontWeight: 600,
-                            cursor: "pointer",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          Remove
-                        </button>
+                        {confirmRemoveId === canister.id ? (
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              flexWrap: "nowrap",
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: "12px",
+                                color: "#f87171",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              Remove?
+                            </span>
+                            <button
+                              type="button"
+                              data-ocid={`${ocidPrefix}.confirm_button.${rowNum}`}
+                              onClick={handleConfirmRemove}
+                              disabled={isRemoving}
+                              style={{
+                                border: "1px solid rgba(239,68,68,0.5)",
+                                color: "#f87171",
+                                background: "rgba(239,68,68,0.1)",
+                                borderRadius: "6px",
+                                padding: "5px 12px",
+                                fontSize: "12px",
+                                fontWeight: 700,
+                                cursor: isRemoving ? "not-allowed" : "pointer",
+                                whiteSpace: "nowrap",
+                                opacity: isRemoving ? 0.6 : 1,
+                              }}
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              type="button"
+                              data-ocid={`${ocidPrefix}.cancel_button.${rowNum}`}
+                              onClick={() => setConfirmRemoveId(null)}
+                              style={{
+                                border: "1px solid rgba(255,255,255,0.15)",
+                                color: "#7A7D90",
+                                background: "transparent",
+                                borderRadius: "6px",
+                                padding: "5px 12px",
+                                fontSize: "12px",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            data-ocid={`${ocidPrefix}.delete_button.${rowNum}`}
+                            onClick={() => handleRemove(canister.id)}
+                            style={{
+                              border: "1px solid rgba(255,255,255,0.2)",
+                              color: "white",
+                              background: "transparent",
+                              borderRadius: "6px",
+                              padding: "7px 16px",
+                              fontSize: "13px",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            Remove
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -663,9 +933,10 @@ function FleetPanel({
                 placeholder="e.g. Acme Corp Website"
                 style={{
                   width: "100%",
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid #1C1F33",
+                  background: "rgba(0,0,0,0.6)",
+                  border: "1px solid rgba(94,240,138,0.3)",
                   color: "#EEF0F8",
+                  fontFamily: "'Courier New', monospace",
                   borderRadius: "6px",
                   padding: "8px 12px",
                   fontSize: "14px",
@@ -698,13 +969,13 @@ function FleetPanel({
                 placeholder="e.g. xxxxx-xxxxx-aaaaa-bbbbb-cai"
                 style={{
                   width: "100%",
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid #1C1F33",
+                  background: "rgba(0,0,0,0.6)",
+                  border: "1px solid rgba(94,240,138,0.3)",
                   color: "#EEF0F8",
+                  fontFamily: "'Courier New', monospace",
                   borderRadius: "6px",
                   padding: "8px 12px",
                   fontSize: "14px",
-                  fontFamily: "monospace",
                   outline: "none",
                   boxSizing: "border-box",
                 }}
@@ -746,45 +1017,290 @@ function FleetPanel({
             </div>
           )}
 
-          <button
-            type="submit"
-            data-ocid={`${ocidPrefix}.submit_button`}
-            disabled={addLoading}
+          <div
             style={{
-              background: addLoading ? "rgba(94,240,138,0.5)" : "#5EF08A",
-              color: "#061209",
-              fontWeight: 700,
-              border: "none",
-              borderRadius: "6px",
-              padding: "10px 24px",
-              fontSize: "14px",
-              cursor: addLoading ? "not-allowed" : "pointer",
-              display: "inline-flex",
+              display: "flex",
               alignItems: "center",
-              gap: "8px",
+              gap: "12px",
+              flexWrap: "wrap",
             }}
           >
-            {addLoading ? (
-              <>
-                <span
-                  style={{
-                    width: "14px",
-                    height: "14px",
-                    border: "2px solid rgba(6,18,9,0.3)",
-                    borderTop: "2px solid #061209",
-                    borderRadius: "50%",
-                    display: "inline-block",
-                    animation: "spin 0.8s linear infinite",
-                  }}
-                />
-                Adding...
-              </>
-            ) : (
-              "Add to Fleet"
-            )}
-          </button>
+            <button
+              type="submit"
+              data-ocid={`${ocidPrefix}.submit_button`}
+              disabled={addLoading}
+              style={{
+                background: addLoading ? "rgba(94,240,138,0.5)" : "#5EF08A",
+                color: "#061209",
+                fontWeight: 700,
+                fontFamily: "'Courier New', monospace",
+                border: "none",
+                borderRadius: "6px",
+                padding: "10px 24px",
+                fontSize: "14px",
+                cursor: addLoading ? "not-allowed" : "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              {addLoading ? (
+                <>
+                  <span
+                    style={{
+                      width: "14px",
+                      height: "14px",
+                      border: "2px solid rgba(6,18,9,0.3)",
+                      borderTop: "2px solid #061209",
+                      borderRadius: "50%",
+                      display: "inline-block",
+                      animation: "spin 0.8s linear infinite",
+                    }}
+                  />
+                  Adding...
+                </>
+              ) : (
+                "Add to Fleet"
+              )}
+            </button>
+
+            <button
+              type="button"
+              data-ocid={`${ocidPrefix}.open_modal_button`}
+              onClick={() => setPlaybookOpen(true)}
+              style={{
+                background: "transparent",
+                color: "#5EF08A",
+                fontWeight: 600,
+                fontFamily: "'Courier New', monospace",
+                border: "1px solid rgba(94,240,138,0.45)",
+                borderRadius: "6px",
+                padding: "10px 20px",
+                fontSize: "14px",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                backdropFilter: "blur(4px)",
+                transition: "border-color 0.2s, background 0.2s",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background =
+                  "rgba(94,240,138,0.08)";
+                (e.currentTarget as HTMLButtonElement).style.borderColor =
+                  "rgba(94,240,138,0.7)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background =
+                  "transparent";
+                (e.currentTarget as HTMLButtonElement).style.borderColor =
+                  "rgba(94,240,138,0.45)";
+              }}
+            >
+              📋 Integration Playbook
+            </button>
+          </div>
         </form>
       </div>
+
+      {/* Integration Playbook Modal */}
+      {playbookOpen && (
+        <dialog
+          open
+          data-ocid={`${ocidPrefix}.dialog`}
+          aria-label="Integration Playbook"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+            background: "transparent",
+            border: "none",
+            maxWidth: "100vw",
+            maxHeight: "100vh",
+            margin: 0,
+            width: "100%",
+            height: "100%",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setPlaybookOpen(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setPlaybookOpen(false);
+              setCopySuccess(false);
+            }
+          }}
+        >
+          {/* Backdrop */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "rgba(0,0,0,0.75)",
+              backdropFilter: "blur(6px)",
+            }}
+          />
+
+          {/* Modal panel */}
+          <div
+            style={{
+              position: "relative",
+              zIndex: 1,
+              background: "rgba(6,18,9,0.95)",
+              border: "1px solid rgba(94,240,138,0.35)",
+              borderRadius: "12px",
+              padding: "32px",
+              maxWidth: "640px",
+              width: "100%",
+              boxShadow:
+                "0 0 48px rgba(94,240,138,0.15), 0 24px 64px rgba(0,0,0,0.6)",
+            }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: "20px",
+              }}
+            >
+              <div>
+                <h2
+                  style={{
+                    fontSize: "18px",
+                    fontWeight: 700,
+                    color: "#5EF08A",
+                    fontFamily: "'Courier New', monospace",
+                    margin: 0,
+                    marginBottom: "4px",
+                  }}
+                >
+                  📋 Integration Playbook
+                </h2>
+                <p
+                  style={{
+                    color: "#7A7D90",
+                    fontSize: "13px",
+                    margin: 0,
+                    fontFamily: "'Courier New', monospace",
+                  }}
+                >
+                  Copy this master prompt into Caffeine when spinning up a new
+                  client canister.
+                </p>
+              </div>
+              <button
+                type="button"
+                data-ocid={`${ocidPrefix}.close_button`}
+                aria-label="Close Integration Playbook"
+                onClick={() => setPlaybookOpen(false)}
+                style={{
+                  background: "transparent",
+                  border: "1px solid rgba(94,240,138,0.3)",
+                  borderRadius: "6px",
+                  color: "#7A7D90",
+                  cursor: "pointer",
+                  fontSize: "16px",
+                  width: "32px",
+                  height: "32px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  transition: "color 0.2s, border-color 0.2s",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.color =
+                    "#EEF0F8";
+                  (e.currentTarget as HTMLButtonElement).style.borderColor =
+                    "rgba(94,240,138,0.6)";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.color =
+                    "#7A7D90";
+                  (e.currentTarget as HTMLButtonElement).style.borderColor =
+                    "rgba(94,240,138,0.3)";
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Prompt text box */}
+            <div
+              style={{
+                background: "rgba(0,0,0,0.5)",
+                border: "1px solid rgba(94,240,138,0.2)",
+                borderRadius: "8px",
+                padding: "20px",
+                marginBottom: "20px",
+                fontFamily: "'Courier New', monospace",
+                fontSize: "13px",
+                color: "#C8D0D8",
+                lineHeight: "1.7",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              }}
+            >
+              {`Please integrate this new site with my Imperidome Master Hub. Task 1: Add a stable variable _agencyPlanStatus: Text = "Active". Task 2: Add the necessary Motoko cross-canister query snippet to expose Total Monthly Revenue (sum of current month's confirmed bookings + active gift cards), Active Bookings count (future confirmed dates), and the Plan Status. Task 3: Whitelist this exact Master Hub Canister ID: [YOUR_ACTUAL_IMPERIDOME_ID_HERE] so only my agency can read this data.`}
+            </div>
+
+            {/* Copy button */}
+            <button
+              type="button"
+              data-ocid={`${ocidPrefix}.confirm_button`}
+              onClick={() => {
+                const promptText = `Please integrate this new site with my Imperidome Master Hub. Task 1: Add a stable variable _agencyPlanStatus: Text = "Active". Task 2: Add the necessary Motoko cross-canister query snippet to expose Total Monthly Revenue (sum of current month's confirmed bookings + active gift cards), Active Bookings count (future confirmed dates), and the Plan Status. Task 3: Whitelist this exact Master Hub Canister ID: [YOUR_ACTUAL_IMPERIDOME_ID_HERE] so only my agency can read this data.`;
+                navigator.clipboard
+                  .writeText(promptText)
+                  .then(() => {
+                    setCopySuccess(true);
+                    setTimeout(() => setCopySuccess(false), 2500);
+                  })
+                  .catch(() => {
+                    // Fallback for environments without clipboard API
+                    const ta = document.createElement("textarea");
+                    ta.value = promptText;
+                    ta.style.position = "fixed";
+                    ta.style.opacity = "0";
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand("copy");
+                    document.body.removeChild(ta);
+                    setCopySuccess(true);
+                    setTimeout(() => setCopySuccess(false), 2500);
+                  });
+              }}
+              style={{
+                background: copySuccess
+                  ? "rgba(94,240,138,0.2)"
+                  : "rgba(94,240,138,0.1)",
+                color: copySuccess ? "#5EF08A" : "#5EF08A",
+                fontWeight: 700,
+                fontFamily: "'Courier New', monospace",
+                border: "1px solid rgba(94,240,138,0.5)",
+                borderRadius: "6px",
+                padding: "10px 24px",
+                fontSize: "14px",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                width: "100%",
+                justifyContent: "center",
+                transition: "background 0.2s",
+              }}
+            >
+              {copySuccess ? "✓ Copied to Clipboard!" : "📋 Copy to Clipboard"}
+            </button>
+          </div>
+        </dialog>
+      )}
     </>
   );
 }
@@ -801,18 +1317,16 @@ export default function AdminFleetPage() {
     [actor],
   );
   const addFleetSite = useCallback(
-    (adminEmail: string, name: string, canisterId: string) =>
+    (_adminEmail: string, name: string, canisterId: string) =>
       (actor as backendInterface).addFleetSite(
-        adminEmail,
         name,
         canisterId,
       ) as Promise<unknown>,
     [actor],
   );
   const removeFleetSite = useCallback(
-    (adminEmail: string, canisterId: string) =>
+    (_adminEmail: string, canisterId: string) =>
       (actor as backendInterface).removeFleetSite(
-        adminEmail,
         canisterId,
       ) as Promise<unknown>,
     [actor],
@@ -827,18 +1341,16 @@ export default function AdminFleetPage() {
     [actor],
   );
   const addFleetSoftware = useCallback(
-    (adminEmail: string, name: string, canisterId: string) =>
+    (_adminEmail: string, name: string, canisterId: string) =>
       (actor as backendInterface).addFleetSoftware(
-        adminEmail,
         name,
         canisterId,
       ) as Promise<unknown>,
     [actor],
   );
   const removeFleetSoftware = useCallback(
-    (adminEmail: string, canisterId: string) =>
+    (_adminEmail: string, canisterId: string) =>
       (actor as backendInterface).removeFleetSoftware(
-        adminEmail,
         canisterId,
       ) as Promise<unknown>,
     [actor],
@@ -886,7 +1398,7 @@ export default function AdminFleetPage() {
           marginBottom: "28px",
           overflowX: "auto",
           WebkitOverflowScrolling: "touch",
-          scrollbarWidth: "none" as React.CSSProperties["scrollbarWidth"],
+          scrollbarWidth: "none" as CSSProperties["scrollbarWidth"],
         }}
         className="fleet-tab-bar-desktop"
       >
@@ -1061,6 +1573,7 @@ export default function AdminFleetPage() {
           addCanister={addFleetSite}
           removeCanister={removeFleetSite}
           ocidPrefix="fleet.sites"
+          showMetrics
         />
       )}
 

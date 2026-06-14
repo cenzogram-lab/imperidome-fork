@@ -1,18 +1,22 @@
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import type { EmailLog } from "../../backend.d";
+import type { EmailLog, backendInterface } from "../../backend.d";
+import TypewriterText from "../../components/TypewriterText";
+import { ADMIN_EMAIL_KEY } from "../../constants";
 import { useActor } from "../../hooks/useActor";
 import { getSession } from "../../hooks/useSession";
 import AdminLayout from "./AdminLayout";
 
 function getAdminEmail(): string {
   const s = getSession();
-  return s?.email ?? localStorage.getItem("imperidome_admin_email") ?? "";
+  return s?.email ?? localStorage.getItem(ADMIN_EMAIL_KEY) ?? "";
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatTimestamp(ts: bigint): string {
+  if (ts === 0n) return "—";
+  if (Number.isNaN(Number(ts))) return "—";
   const ms = Number(ts) / 1_000_000;
   const d = new Date(ms);
   if (Number.isNaN(d.getTime())) return "—";
@@ -84,28 +88,26 @@ export default function AdminEmailLogsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 50;
 
   const fetchLogs = useCallback(async () => {
     if (!actor) return;
     const adminEmail = getAdminEmail();
+    if (!adminEmail) return;
     setError(null);
     try {
-      const data = await (
-        actor as unknown as {
-          getEmailLogs(adminEmail: string): Promise<EmailLog[]>;
-        }
-      ).getEmailLogs(adminEmail);
-      // Sort newest first
+      const data = await (actor as backendInterface).getEmailLogs();
       const sorted = [...data].sort((a, b) =>
-        Number(b.timestamp - a.timestamp),
+        b.timestamp > a.timestamp ? 1 : b.timestamp < a.timestamp ? -1 : 0,
       );
       setLogs(sorted);
+      setCurrentPage(1);
     } catch {
       setError("Failed to load email logs.");
     }
   }, [actor]);
 
-  // Initial load
   useEffect(() => {
     if (!actor || isFetching) return;
     setLoading(true);
@@ -135,7 +137,7 @@ export default function AdminEmailLogsPage() {
       `}</style>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        {/* ── Page Header ──────────────────────────────────────────────────── */}
+        {/* Page Header */}
         <div
           style={{
             display: "flex",
@@ -147,16 +149,12 @@ export default function AdminEmailLogsPage() {
         >
           <div>
             <h2
-              style={{
-                color: "#EEF0F8",
-                fontWeight: 700,
-                fontSize: 22,
-                margin: "0 0 4px",
-              }}
+              className="matrix-heading"
+              style={{ fontWeight: 700, fontSize: 22, margin: "0 0 4px" }}
             >
-              Email Logs
+              <TypewriterText text="Email Logs" speed={40} />
             </h2>
-            <p style={{ color: "#7A7D90", fontSize: 13, margin: 0 }}>
+            <p className="matrix-muted" style={{ fontSize: 13, margin: 0 }}>
               All outgoing email activity
             </p>
           </div>
@@ -166,27 +164,16 @@ export default function AdminEmailLogsPage() {
             data-ocid="email_logs.refresh.button"
             onClick={handleRefresh}
             disabled={refreshing || loading}
+            className="matrix-btn"
             style={{
               display: "inline-flex",
               alignItems: "center",
               gap: 7,
-              background: "rgba(94,240,138,0.1)",
-              border: "1px solid rgba(94,240,138,0.25)",
-              color: "#5EF08A",
-              borderRadius: 6,
               padding: "8px 16px",
               fontSize: 13,
               fontWeight: 600,
               cursor: refreshing || loading ? "not-allowed" : "pointer",
               opacity: refreshing || loading ? 0.6 : 1,
-              transition: "all 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              if (!refreshing && !loading)
-                e.currentTarget.style.background = "rgba(94,240,138,0.2)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "rgba(94,240,138,0.1)";
             }}
           >
             <RefreshCw
@@ -201,7 +188,7 @@ export default function AdminEmailLogsPage() {
           </button>
         </div>
 
-        {/* ── Error ────────────────────────────────────────────────────────── */}
+        {/* Error */}
         {error && (
           <div
             data-ocid="email_logs.error_state"
@@ -218,23 +205,14 @@ export default function AdminEmailLogsPage() {
           </div>
         )}
 
-        {/* ── Table ────────────────────────────────────────────────────────── */}
+        {/* Table */}
         <div
           data-ocid="email_logs.table"
-          style={{
-            background: "rgba(17,19,34,0.7)",
-            backdropFilter: "blur(12px)",
-            border: "1px solid #1C1F33",
-            borderRadius: 8,
-            overflowX: "auto",
-          }}
+          className="matrix-card"
+          style={{ overflowX: "auto" }}
         >
           <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              minWidth: 640,
-            }}
+            style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}
           >
             <thead>
               <tr>
@@ -246,12 +224,13 @@ export default function AdminEmailLogsPage() {
                       padding: "12px 16px",
                       fontSize: 11,
                       fontWeight: 700,
-                      color: "#7A7D90",
+                      color: "rgba(94,240,138,0.7)",
                       textTransform: "uppercase",
                       letterSpacing: "0.06em",
-                      borderBottom: "1px solid #1C1F33",
+                      borderBottom: "1px solid rgba(94,240,138,0.15)",
                       whiteSpace: "nowrap",
-                      background: "rgba(14,16,32,0.6)",
+                      background: "rgba(0,0,0,0.3)",
+                      fontFamily: "'Courier New', monospace",
                     }}
                   >
                     {col}
@@ -296,7 +275,7 @@ export default function AdminEmailLogsPage() {
                       </div>
                       <p
                         style={{
-                          color: "#EEF0F8",
+                          color: "#5EF08A",
                           fontWeight: 600,
                           fontSize: 15,
                           margin: 0,
@@ -305,12 +284,8 @@ export default function AdminEmailLogsPage() {
                         No email logs yet.
                       </p>
                       <p
-                        style={{
-                          color: "#7A7D90",
-                          fontSize: 13,
-                          margin: 0,
-                          maxWidth: 280,
-                        }}
+                        className="matrix-muted"
+                        style={{ fontSize: 13, margin: 0, maxWidth: 280 }}
                       >
                         Email delivery records will appear here once the system
                         sends its first email.
@@ -319,70 +294,139 @@ export default function AdminEmailLogsPage() {
                   </td>
                 </tr>
               ) : (
-                logs.map((log, idx) => (
-                  <tr
-                    key={log.id}
-                    className="logs-row"
-                    data-ocid={`email_logs.row.${idx + 1}`}
-                    style={{ borderBottom: "1px solid #1C1F33" }}
-                  >
-                    {/* Timestamp */}
-                    <td style={{ padding: "13px 16px", whiteSpace: "nowrap" }}>
-                      <span style={{ color: "#9DA0B3", fontSize: 13 }}>
-                        {formatTimestamp(log.timestamp)}
-                      </span>
-                    </td>
-
-                    {/* Recipient Email */}
-                    <td style={{ padding: "13px 16px" }}>
-                      <span
-                        style={{
-                          color: "#EEF0F8",
-                          fontSize: 13,
-                          fontWeight: 500,
-                        }}
+                (() => {
+                  const visibleLogs = logs.slice(
+                    (currentPage - 1) * PAGE_SIZE,
+                    currentPage * PAGE_SIZE,
+                  );
+                  return visibleLogs.map((log, idx) => (
+                    <tr
+                      key={log.id}
+                      className="logs-row"
+                      data-ocid={`email_logs.row.${idx + 1}`}
+                      style={{
+                        borderBottom: "1px solid rgba(94,240,138,0.08)",
+                      }}
+                    >
+                      <td
+                        style={{ padding: "13px 16px", whiteSpace: "nowrap" }}
                       >
-                        {log.recipientEmail || "—"}
-                      </span>
-                    </td>
-
-                    {/* Template Name */}
-                    <td style={{ padding: "13px 16px" }}>
-                      <span
-                        style={{
-                          color: "#7A7D90",
-                          fontSize: 12,
-                          background: "rgba(122,125,144,0.1)",
-                          border: "1px solid rgba(122,125,144,0.2)",
-                          borderRadius: 4,
-                          padding: "2px 8px",
-                          fontFamily: "monospace",
-                        }}
+                        <span className="matrix-muted" style={{ fontSize: 13 }}>
+                          {formatTimestamp(log.timestamp)}
+                        </span>
+                      </td>
+                      <td style={{ padding: "13px 16px" }}>
+                        <span
+                          style={{
+                            color: "#5EF08A",
+                            fontSize: 13,
+                            fontWeight: 500,
+                          }}
+                        >
+                          {log.recipientEmail || "—"}
+                        </span>
+                      </td>
+                      <td style={{ padding: "13px 16px" }}>
+                        <span
+                          style={{
+                            color: "rgba(94,240,138,0.7)",
+                            fontSize: 12,
+                            background: "rgba(94,240,138,0.06)",
+                            border: "1px solid rgba(94,240,138,0.15)",
+                            borderRadius: 4,
+                            padding: "2px 8px",
+                            fontFamily: "'Courier New', monospace",
+                          }}
+                        >
+                          {log.templateName || "—"}
+                        </span>
+                      </td>
+                      <td
+                        style={{ padding: "13px 16px", whiteSpace: "nowrap" }}
                       >
-                        {log.templateName || "—"}
-                      </span>
-                    </td>
-
-                    {/* Status */}
-                    <td style={{ padding: "13px 16px", whiteSpace: "nowrap" }}>
-                      <StatusBadge status={log.status} />
-                    </td>
-                  </tr>
-                ))
+                        <StatusBadge status={log.status} />
+                      </td>
+                    </tr>
+                  ));
+                })()
               )}
             </tbody>
           </table>
         </div>
 
-        {/* ── Record count ─────────────────────────────────────────────────── */}
-        {!loading && !error && logs.length > 0 && (
-          <p
+        {/* Pagination */}
+        {!loading && !error && logs.length > PAGE_SIZE && (
+          <div
             style={{
-              color: "#7A7D90",
-              fontSize: 12,
-              textAlign: "right",
-              margin: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              flexWrap: "wrap",
             }}
+          >
+            <p className="matrix-muted" style={{ fontSize: 12, margin: 0 }}>
+              Page {currentPage} of{" "}
+              {Math.max(1, Math.ceil(logs.length / PAGE_SIZE))} &mdash;{" "}
+              {logs.length} records
+            </p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                type="button"
+                data-ocid="email_logs.pagination_prev"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="matrix-btn"
+                style={{
+                  padding: "6px 14px",
+                  fontSize: 12,
+                  opacity: currentPage === 1 ? 0.4 : 1,
+                  cursor: currentPage === 1 ? "not-allowed" : "pointer",
+                }}
+              >
+                ← Previous
+              </button>
+              <button
+                type="button"
+                data-ocid="email_logs.pagination_next"
+                onClick={() =>
+                  setCurrentPage((p) =>
+                    Math.min(
+                      Math.max(1, Math.ceil(logs.length / PAGE_SIZE)),
+                      p + 1,
+                    ),
+                  )
+                }
+                disabled={
+                  currentPage >= Math.max(1, Math.ceil(logs.length / PAGE_SIZE))
+                }
+                className="matrix-btn"
+                style={{
+                  padding: "6px 14px",
+                  fontSize: 12,
+                  opacity:
+                    currentPage >=
+                    Math.max(1, Math.ceil(logs.length / PAGE_SIZE))
+                      ? 0.4
+                      : 1,
+                  cursor:
+                    currentPage >=
+                    Math.max(1, Math.ceil(logs.length / PAGE_SIZE))
+                      ? "not-allowed"
+                      : "pointer",
+                }}
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Record count — shown when logs fit on one page */}
+        {!loading && !error && logs.length > 0 && logs.length <= PAGE_SIZE && (
+          <p
+            className="matrix-muted"
+            style={{ fontSize: 12, textAlign: "right", margin: 0 }}
           >
             {logs.length} {logs.length === 1 ? "record" : "records"}
           </p>

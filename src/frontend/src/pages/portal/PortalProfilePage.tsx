@@ -1,13 +1,13 @@
 import { Eye, EyeOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { backendInterface } from "../../backend";
+import type { CSSProperties, FormEvent } from "react";
+import type { backendInterface } from "../../backend.d";
 import { EditableText } from "../../components/EditableText";
+import { PROFILE_KEY } from "../../constants";
 import { useActor } from "../../hooks/useActor";
 import { useSession } from "../../hooks/useSession";
 import { hashPassword } from "../../lib/hashPassword";
 import PortalLayout from "./PortalLayout";
-
-const PROFILE_KEY = "imperidome_profile";
 
 interface StoredProfile {
   lastName?: string;
@@ -15,19 +15,6 @@ interface StoredProfile {
   businessName?: string;
   businessType?: string;
 }
-
-const BUSINESS_TYPE_OPTIONS = [
-  "Not sure yet",
-  "Speedy Site",
-  "Tier 1 — Digital Presence",
-  "Tier 2 — Authority Site",
-  "Tier 3A — Booking Pro",
-  "Tier 3B — Restaurant Pro",
-  "Tier 4A — Digital Storefront",
-  "Tier 4B — Restaurant Empire",
-  "Tier 4C — Membership Engine",
-  "Tier 5 — Enterprise Scale",
-];
 
 function getStoredProfile(): StoredProfile {
   try {
@@ -115,12 +102,29 @@ export default function PortalProfilePage() {
   const { actor } = useActor();
 
   // ── Personal information state ──
-  const stored = getStoredProfile();
   const [firstName, setFirstName] = useState(session?.firstName ?? "");
-  const [lastName, setLastName] = useState(stored.lastName ?? "");
-  const [phone, setPhone] = useState(stored.phone ?? "");
-  const [businessName, setBusinessName] = useState(stored.businessName ?? "");
-  const [businessType, setBusinessType] = useState(stored.businessType ?? "");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [businessName, setBusinessName] = useState("");
+  const [businessType, setBusinessType] = useState("");
+  const [businessTypeOptions, setBusinessTypeOptions] = useState<string[]>([
+    "Not sure yet",
+  ]);
+  const [profileLoading, setProfileLoading] = useState(true);
+
+  useEffect(() => {
+    if (!actor) return;
+    (actor as unknown as backendInterface)
+      .getProducts()
+      .then((products) => {
+        setBusinessTypeOptions([
+          "Not sure yet",
+          ...products.map((p) => p.name),
+        ]);
+      })
+      .catch(() => {})
+      .finally(() => setProfileLoading(false));
+  }, [actor]);
   const [profileSuccess, setProfileSuccess] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSaving, setProfileSaving] = useState(false);
@@ -138,6 +142,7 @@ export default function PortalProfilePage() {
   // ── Danger zone state ──
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletionSubmitted, setDeletionSubmitted] = useState(false);
+  const [deletionLoading, setDeletionLoading] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -151,19 +156,24 @@ export default function PortalProfilePage() {
   // only when the backend returns null or the call fails.
   useEffect(() => {
     if (!actor || !session?.email) return;
-    const fallback = getStoredProfile();
     (actor as backendInterface)
       .getMyProfile(session.email)
       .then((profile) => {
         if (profile) {
-          setLastName(profile.lastName ?? fallback.lastName ?? "");
-          setPhone(profile.phone ?? fallback.phone ?? "");
-          setBusinessName(profile.businessName ?? fallback.businessName ?? "");
-          setBusinessType(profile.businessType ?? fallback.businessType ?? "");
+          // Backend is source of truth — use its values
+          setLastName(profile.lastName ?? "");
+          setPhone(profile.phone ?? "");
+          setBusinessName(profile.businessName ?? "");
+          setBusinessType(profile.businessType ?? "");
         }
       })
       .catch(() => {
-        // Backend unavailable — localStorage values already in state
+        // Backend unavailable — fall back to localStorage as last resort
+        const fallback = getStoredProfile();
+        setLastName(fallback.lastName ?? "");
+        setPhone(fallback.phone ?? "");
+        setBusinessName(fallback.businessName ?? "");
+        setBusinessType(fallback.businessType ?? "");
       });
   }, [actor, session?.email]);
 
@@ -176,8 +186,10 @@ export default function PortalProfilePage() {
   }, [session]);
 
   // ── Handlers ──
-  async function handleSaveProfile(e: React.FormEvent) {
+  async function handleSaveProfile(e: FormEvent) {
     e.preventDefault();
+    const email = session?.email ?? "";
+    if (!email) return;
     setProfileSaving(true);
     setProfileError(null);
     const profileData: StoredProfile = {
@@ -187,21 +199,33 @@ export default function PortalProfilePage() {
       businessType,
     };
     try {
-      await (actor as backendInterface).updateProfile({
-        email: session?.email ?? "",
+      const result = await (actor as backendInterface).updateProfile({
+        email,
         firstName,
         lastName,
         phone,
         businessName,
         businessType,
       });
-      saveStoredProfile(profileData);
-      if (session) {
-        setSession({ ...session, firstName });
+      if ("err" in result) {
+        setProfileError(
+          typeof result.err === "string"
+            ? result.err
+            : "Failed to save profile. Please try again.",
+        );
+      } else {
+        // 'ok' in result || 'okAlreadyAdvanced' in result
+        saveStoredProfile(profileData);
+        if (session) {
+          setSession({ ...session, firstName });
+        }
+        setProfileSuccess(true);
+        if (profileFadeRef.current) clearTimeout(profileFadeRef.current);
+        profileFadeRef.current = setTimeout(
+          () => setProfileSuccess(false),
+          3000,
+        );
       }
-      setProfileSuccess(true);
-      if (profileFadeRef.current) clearTimeout(profileFadeRef.current);
-      profileFadeRef.current = setTimeout(() => setProfileSuccess(false), 3000);
     } catch {
       setProfileError("Failed to save profile. Please try again.");
     } finally {
@@ -209,8 +233,9 @@ export default function PortalProfilePage() {
     }
   }
 
-  async function handleChangePassword(e: React.FormEvent) {
+  async function handleChangePassword(e: FormEvent) {
     e.preventDefault();
+    if (!session?.email) return;
     setPasswordError("");
     setPasswordSuccess(false);
 
@@ -230,20 +255,29 @@ export default function PortalProfilePage() {
     try {
       const currentPasswordHash = await hashPassword(currentPassword);
       const newPasswordHash = await hashPassword(newPassword);
-      await (actor as backendInterface).changePassword({
+      const result = await (actor as backendInterface).changePassword({
         email: session?.email ?? "",
         currentPasswordHash,
         newPasswordHash,
       });
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      setPasswordSuccess(true);
-      if (passwordFadeRef.current) clearTimeout(passwordFadeRef.current);
-      passwordFadeRef.current = setTimeout(
-        () => setPasswordSuccess(false),
-        3000,
-      );
+      if ("err" in result) {
+        setPasswordError(
+          typeof result.err === "string"
+            ? result.err
+            : "Current password is incorrect.",
+        );
+      } else {
+        // 'ok' in result || 'okAlreadyAdvanced' in result
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        setPasswordSuccess(true);
+        if (passwordFadeRef.current) clearTimeout(passwordFadeRef.current);
+        passwordFadeRef.current = setTimeout(
+          () => setPasswordSuccess(false),
+          3000,
+        );
+      }
     } catch {
       setPasswordError("Current password is incorrect.");
     } finally {
@@ -252,17 +286,20 @@ export default function PortalProfilePage() {
   }
 
   async function handleSubmitDeletion() {
+    setDeletionLoading(true);
     try {
-      await (actor as backendInterface).sendAccountDeletionRequest();
+      await (actor as backendInterface).requestAccountDeletion();
       setDeletionSubmitted(true);
       setShowDeleteModal(false);
     } catch {
       // Keep modal open and surface the error so the user can retry
       setProfileError("Failed to submit deletion request. Please try again.");
+    } finally {
+      setDeletionLoading(false);
     }
   }
 
-  const inputStyle: React.CSSProperties = {
+  const inputStyle: CSSProperties = {
     width: "100%",
     padding: "10px 12px",
     border: "1px solid #1C1F33",
@@ -273,19 +310,73 @@ export default function PortalProfilePage() {
     boxSizing: "border-box",
   };
 
-  const labelStyle: React.CSSProperties = {
+  const labelStyle: CSSProperties = {
     fontSize: "14px",
     fontWeight: 500,
     color: "#EEF0F8",
   };
 
-  const cardStyle: React.CSSProperties = {
+  const cardStyle: CSSProperties = {
     background: "rgba(17,19,34,0.7)",
     borderRadius: "8px",
     padding: "24px",
     border: "1px solid #1C1F33",
     width: "100%",
   };
+
+  if (profileLoading) {
+    return (
+      <PortalLayout pageTitle="Profile">
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "20px",
+            maxWidth: "800px",
+          }}
+        >
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              style={{
+                background: "rgba(94,240,138,0.05)",
+                borderRadius: "8px",
+                padding: "24px",
+                border: "1px solid rgba(94,240,138,0.1)",
+                animation: "pulse 1.5s ease-in-out infinite",
+              }}
+            >
+              <div
+                style={{
+                  height: "18px",
+                  width: "160px",
+                  borderRadius: "6px",
+                  background: "rgba(94,240,138,0.08)",
+                  marginBottom: "20px",
+                }}
+              />
+              {[1, 2].map((j) => (
+                <div
+                  key={j}
+                  style={{
+                    height: "40px",
+                    borderRadius: "6px",
+                    background: "rgba(94,240,138,0.05)",
+                    marginBottom: "12px",
+                  }}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+        <style>
+          {
+            "@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }"
+          }
+        </style>
+      </PortalLayout>
+    );
+  }
 
   return (
     <PortalLayout pageTitle="Profile">
@@ -390,7 +481,7 @@ export default function PortalProfilePage() {
               <p style={{ margin: 0, fontSize: "12px", color: "#7A7D90" }}>
                 <EditableText
                   textKey="portal.profile.email.helper-text"
-                  defaultText="To change your email address contact us at vincenzo@imperidome.com."
+                  defaultText={`To change your email address contact us at ${import.meta.env.VITE_ADMIN_EMAIL || "your account manager"}.`}
                   as="span"
                 />
               </p>
@@ -461,7 +552,7 @@ export default function PortalProfilePage() {
                 }}
               >
                 <option value="">Select a type...</option>
-                {BUSINESS_TYPE_OPTIONS.map((opt) => (
+                {businessTypeOptions.map((opt) => (
                   <option key={opt} value={opt}>
                     {opt}
                   </option>
@@ -505,7 +596,7 @@ export default function PortalProfilePage() {
                 <span
                   data-ocid="profile.personal_info.success_state"
                   style={{
-                    color: "#166534",
+                    color: "#4ADE80",
                     fontSize: "14px",
                     fontWeight: 500,
                     animation: "fadeInOut 3s ease forwards",
@@ -518,11 +609,11 @@ export default function PortalProfilePage() {
                   />
                 </span>
               )}
-              {profileError && (
+              {profileError && !showDeleteModal && (
                 <span
                   data-ocid="profile.personal_info.error_state"
                   style={{
-                    color: "#991B1B",
+                    color: "#F87171",
                     fontSize: "14px",
                     fontWeight: 500,
                   }}
@@ -630,7 +721,7 @@ export default function PortalProfilePage() {
                 <span
                   data-ocid="profile.password.success_state"
                   style={{
-                    color: "#166534",
+                    color: "#4ADE80",
                     fontSize: "14px",
                     fontWeight: 500,
                     animation: "fadeInOut 3s ease forwards",
@@ -647,7 +738,7 @@ export default function PortalProfilePage() {
                 <span
                   data-ocid="profile.password.error_state"
                   style={{
-                    color: "#991B1B",
+                    color: "#F87171",
                     fontSize: "14px",
                     fontWeight: 500,
                   }}
@@ -662,14 +753,14 @@ export default function PortalProfilePage() {
         {/* ═══════════════ Card 3: Danger Zone ═══════════════ */}
         <div
           data-ocid="profile.danger_zone.card"
-          style={{ ...cardStyle, border: "1px solid #991B1B" }}
+          style={{ ...cardStyle, border: "1px solid #F87171" }}
         >
           <h3
             style={{
               margin: "0 0 12px",
               fontSize: "17px",
               fontWeight: 700,
-              color: "#991B1B",
+              color: "#F87171",
             }}
           >
             <EditableText
@@ -685,12 +776,26 @@ export default function PortalProfilePage() {
               as="span"
             />
           </p>
+          {profileError && (
+            <p
+              data-ocid="profile.danger_zone.error_state"
+              style={{
+                margin: "0 0 12px",
+                fontSize: "14px",
+                color: "#F87171",
+                fontWeight: 500,
+              }}
+            >
+              {profileError}
+            </p>
+          )}
           {deletionSubmitted ? (
             <p
               style={{
                 margin: 0,
                 fontSize: "14px",
-                color: "#166534",
+                color: "#5EF08A",
+                fontFamily: "'Courier New', monospace",
                 fontWeight: 500,
               }}
             >
@@ -707,8 +812,8 @@ export default function PortalProfilePage() {
               onClick={() => setShowDeleteModal(true)}
               style={{
                 background: "rgba(17,19,34,0.7)",
-                color: "#991B1B",
-                border: "1px solid #991B1B",
+                color: "#F87171",
+                border: "1px solid #F87171",
                 borderRadius: "8px",
                 padding: "10px 20px",
                 fontSize: "14px",
@@ -739,13 +844,15 @@ export default function PortalProfilePage() {
             justifyContent: "center",
             padding: "24px",
           }}
-          role="presentation"
           onKeyDown={(e) => {
             if (e.key === "Escape") setShowDeleteModal(false);
           }}
         >
-          <div
+          <dialog
             data-ocid="profile.delete.modal"
+            open={showDeleteModal}
+            aria-modal="true"
+            aria-labelledby="delete-modal-title"
             style={{
               background: "rgba(17,19,34,0.7)",
               borderRadius: "12px",
@@ -756,6 +863,7 @@ export default function PortalProfilePage() {
             }}
           >
             <h3
+              id="delete-modal-title"
               style={{
                 margin: "0 0 12px",
                 fontSize: "18px",
@@ -816,25 +924,31 @@ export default function PortalProfilePage() {
                 type="button"
                 data-ocid="profile.delete.confirm_button"
                 onClick={handleSubmitDeletion}
+                disabled={deletionLoading}
                 style={{
-                  background: "#991B1B",
+                  background: "#F87171",
                   color: "#ffffff",
                   border: "none",
                   borderRadius: "6px",
                   padding: "10px 20px",
                   fontSize: "14px",
                   fontWeight: 600,
-                  cursor: "pointer",
+                  cursor: deletionLoading ? "not-allowed" : "pointer",
+                  opacity: deletionLoading ? 0.7 : 1,
                 }}
               >
-                <EditableText
-                  textKey="portal.profile.delete-modal.confirm-btn"
-                  defaultText="Submit Deletion Request"
-                  as="span"
-                />
+                {deletionLoading ? (
+                  "Submitting\u2026"
+                ) : (
+                  <EditableText
+                    textKey="portal.profile.delete-modal.confirm-btn"
+                    defaultText="Submit Deletion Request"
+                    as="span"
+                  />
+                )}
               </button>
             </div>
-          </div>
+          </dialog>
         </div>
       )}
 

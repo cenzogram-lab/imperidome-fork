@@ -14,6 +14,11 @@ export interface PendingNotification {
     body: string;
     createdAt: bigint;
 }
+export interface BusinessMetrics {
+    activeBookings: bigint;
+    saasPlanStatus: string;
+    monthlyRevenueCents: bigint;
+}
 export interface TransformationOutput {
     status: bigint;
     body: Uint8Array;
@@ -33,7 +38,9 @@ export interface EmailLog {
 }
 export interface CrmClient {
     id: string;
+    webhookSecret?: string;
     hasAccount: boolean;
+    deletionRequested: boolean;
     source: string;
     name: string;
     milestoneUpdatedAt?: bigint;
@@ -41,10 +48,16 @@ export interface CrmClient {
     created_at: bigint;
     briefSubmittedAt?: bigint;
     email: string;
+    connectedAt?: bigint;
+    stripeConnectAccountId?: string;
     notes: string;
     currentMilestone: bigint;
+    platformFeePercentage: number;
     projectStatus: string;
+    deletionRequestedAt: bigint;
     phone: string;
+    stripeConnectStatus: string;
+    lastActivityAt?: bigint;
     briefStatus?: string;
     siteLinkLog: Array<SiteLinkEntry>;
     completionPaymentCharged: boolean;
@@ -66,16 +79,26 @@ export interface PurchaseRequest {
 export interface Subscription {
     id: SubscriptionId;
     status: string;
+    nextBillingDate: bigint;
     updated_at: Timestamp;
     plan_code: string;
     plan_name: string;
     billing_cycle: string;
+    clientEmail: string;
     created_at: Timestamp;
+    stripeCustomerId?: string;
     stripe_subscription_id: string;
     client_id: ClientId;
+    reminderSentAt?: bigint;
     next_payment_date: Timestamp;
+    paymentFailed: boolean;
 }
 export type SubscriptionId = bigint;
+export interface SubAdmin {
+    allowedTabs: Array<string>;
+    createdAt: bigint;
+    email: string;
+}
 export interface Lead {
     id: string;
     status: string;
@@ -132,6 +155,7 @@ export interface DaySchedule {
     isOpen: boolean;
     startHour: bigint;
 }
+export type EmailCampaignId = bigint;
 export interface Questionnaire {
     id: QuestionnaireId;
     updated_at: Timestamp;
@@ -155,6 +179,7 @@ export interface Order {
     created_at: Timestamp;
     launch_target: string;
     client_id: ClientId;
+    amount: number;
     tier_code: string;
 }
 export interface http_header {
@@ -212,6 +237,9 @@ export interface EmailTemplate {
 }
 export interface DashboardMetrics {
     totalProducts: bigint;
+    ordersByStatus: Array<[string, bigint]>;
+    totalOrders: bigint;
+    totalOrderValue: bigint;
     outstandingInvoices: bigint;
     recentActivity: Array<string>;
     totalClients: bigint;
@@ -257,6 +285,13 @@ export interface UserProfile {
     firstName: string;
 }
 export type Timestamp = bigint;
+export interface SocialMediaConfig {
+    instagramUrl: string;
+    youtubeUrl: string;
+    facebookUrl: string;
+    linkedinUrl: string;
+    tiktokUrl: string;
+}
 export interface NotificationLogEntry {
     id: string;
     url: string;
@@ -366,7 +401,15 @@ export interface BillingHistory {
     client_id: ClientId;
     amount: number;
 }
-export type EmailTemplateId = bigint;
+export interface ClientMessage {
+    id: string;
+    body: string;
+    createdAt: bigint;
+    isRead: boolean;
+    receiverEmail: string;
+    senderName: string;
+    senderEmail: string;
+}
 export interface Invoice {
     id: InvoiceId;
     status: string;
@@ -381,14 +424,12 @@ export interface Invoice {
     client_id: ClientId;
     amount: number;
 }
-export interface ClientMessage {
-    id: string;
-    body: string;
-    createdAt: bigint;
-    isRead: boolean;
-    receiverEmail: string;
-    senderName: string;
-    senderEmail: string;
+export type EmailTemplateId = bigint;
+export interface WebhookAuditEntry {
+    received_at: bigint;
+    event_id: string;
+    processing_result: string;
+    event_type: string;
 }
 export type BillingId = bigint;
 export type BlogPostId = bigint;
@@ -424,15 +465,47 @@ export interface AdHocInvoice {
     amount: number;
     paidAt?: bigint;
 }
+export interface EmailCampaign {
+    id: EmailCampaignId;
+    status: string;
+    subject: string;
+    scheduledDate?: bigint;
+    body: string;
+    createdAt: bigint;
+    sentAt?: bigint;
+    recipients: Array<string>;
+}
 export type OrderId = bigint;
 export interface Product {
     id: ProductId;
+    proofPoints?: string;
+    show_questionnaire: boolean;
+    seoMetaTitle?: string;
+    faqItems?: string;
     active: boolean;
+    payment_type: string;
     price_monthly?: number;
+    speedy_filter?: string;
+    tagline?: string;
+    plan_section?: string;
     name: string;
+    tags: Array<string>;
     description: string;
     created_at: Timestamp;
+    closingCTA?: string;
+    bodySections?: string;
+    upgradePath?: string;
+    imageUrl?: string;
     product_type: string;
+    recommendedPlan?: string;
+    heroSubheadline?: string;
+    detailDescription?: string;
+    seoMetaDescription?: string;
+    featureBullets: Array<string>;
+    heroHeadline?: string;
+    bestFor?: string;
+    video_url_1: string;
+    video_url_2: string;
     price_onetime?: number;
     tier_code?: string;
     price_annual?: number;
@@ -456,7 +529,14 @@ export enum UserRole {
     guest = "guest"
 }
 export interface backendInterface {
-    addBuild(adminEmail: string, clientName: string, siteUrl: string, description: string | null, category: string | null, thumbnailUrl: string | null): Promise<{
+    activateSubscription(subscriptionId: string): Promise<{
+        __kind__: "ok";
+        ok: string;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    addBuild(clientName: string, siteUrl: string, description: string | null, category: string | null, thumbnailUrl: string | null): Promise<{
         __kind__: "ok";
         ok: Build;
     } | {
@@ -464,31 +544,38 @@ export interface backendInterface {
         err: string;
     }>;
     addClient(name: string, email: string, phone: string, source: string, activeServices: Array<string>, onboardingBriefId: string | null): Promise<string>;
-    addFleetCanister(adminEmail: string, name: string, canisterId: string): Promise<void>;
-    addFleetSite(adminEmail: string, name: string, canisterId: string): Promise<void>;
-    addFleetSoftware(adminEmail: string, name: string, canisterId: string): Promise<void>;
-    addMarqueeLogo(logoUrl: string, logoLabel: string, adminEmail: string): Promise<{
+    addFleetCanister(name: string, canisterId: string): Promise<void>;
+    addFleetSite(name: string, canisterId: string): Promise<void>;
+    addFleetSoftware(name: string, canisterId: string): Promise<void>;
+    addMarqueeLogo(logoUrl: string, logoLabel: string): Promise<{
         __kind__: "ok";
         ok: MarqueeLogo;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    adminUpdateClientProfile(adminEmail: string, clientId: string, firstName: string, lastName: string, phone: string, businessName: string, businessType: string): Promise<{
+    addSubAdmin(email: string, tabs: Array<string>): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    adminUpdateClientProfile(clientId: string, firstName: string, lastName: string, phone: string, businessName: string, businessType: string): Promise<{
         __kind__: "ok";
         ok: string;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    approvePurchaseRequest(adminEmail: string, requestId: bigint, successUrl: string, cancelUrl: string): Promise<{
+    approvePurchaseRequest(requestId: bigint, successUrl: string, cancelUrl: string): Promise<{
         __kind__: "ok";
         ok: string;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    approveReview(adminEmail: string, reviewId: ReviewId): Promise<{
+    approveReview(reviewId: ReviewId): Promise<{
         __kind__: "ok";
         ok: null;
     } | {
@@ -496,11 +583,25 @@ export interface backendInterface {
         err: string;
     }>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
-    assignMeetingToLead(leadId: string, newDate: string, newTime: string, meetingMethod: string, adminEmail: string): Promise<{
+    assignMeetingToLead(leadId: string, newDate: string, newTime: string, meetingMethod: string): Promise<{
         ok: boolean;
         meetLink: string;
     }>;
-    blockDate(adminEmail: string, date: string): Promise<void>;
+    blockDate(date: string): Promise<void>;
+    cancelEmailCampaign(campaignId: bigint): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    cancelSubscription(subscriptionId: string): Promise<{
+        __kind__: "ok";
+        ok: string;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
     changePassword(args: {
         email: string;
         newPasswordHash: Uint8Array;
@@ -516,54 +617,74 @@ export interface backendInterface {
         __kind__: "error";
         error: string;
     }>;
-    clearGoogleCalendarConfig(adminEmail: string): Promise<{
+    clearGoogleCalendarConfig(): Promise<{
         __kind__: "ok";
         ok: null;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    clearGoogleSheetsConfig(adminEmail: string): Promise<{
+    clearGoogleSheetsConfig(): Promise<{
         __kind__: "ok";
         ok: null;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    clearNotificationLog(adminEmail: string): Promise<{
+    clearNotificationLog(): Promise<{
         __kind__: "ok";
         ok: null;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    clearPendingPushNotifications(adminEmail: string): Promise<{
+    clearPendingPushNotifications(): Promise<{
         __kind__: "ok";
         ok: string;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    convertLeadToClient(adminEmail: string, leadId: string, name: string, email: string, phone: string, source: string, activeServices: Array<string>, onboardingBriefId: string | null): Promise<string>;
-    createAdHocInvoiceSession(clientId: string, adminEmail: string, description: string, amountCents: bigint, successUrl: string, cancelUrl: string): Promise<{
+    convertLeadToClient(leadId: string, name: string, email: string, phone: string, source: string, activeServices: Array<string>, onboardingBriefId: string | null): Promise<string>;
+    createAdHocInvoiceSession(clientId: string, description: string, amountCents: bigint, successUrl: string, cancelUrl: string): Promise<{
         __kind__: "ok";
         ok: string;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    createBlogPost(adminEmail: string, title: string, slug: string, category: string, excerpt: string, body: string, author: string, featured_image_url: string | null, featuredImageCaption: string, status: string, seoMetaDescription: string | null, seoMetaKeywords: string | null): Promise<UpsertResult>;
-    createCheckoutSession(items: Array<ShoppingItem>, successUrl: string, cancelUrl: string): Promise<string>;
-    createCompletionPaymentSession(clientId: string, adminEmail: string, successUrl: string, cancelUrl: string): Promise<string>;
-    createDraftLead(name: string, email: string, phone: string, service: string, adminEmail: string): Promise<{
+    createBlogPost(title: string, slug: string, category: string, excerpt: string, body: string, author: string, featured_image_url: string | null, featuredImageCaption: string, status: string, seoMetaDescription: string | null, seoMetaKeywords: string | null): Promise<UpsertResult>;
+    createCheckoutSession(items: Array<ShoppingItem>, clientEmail: string, successUrl: string, cancelUrl: string, clientName: string): Promise<{
+        __kind__: "ok";
+        ok: string;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    createCompletionPaymentSession(clientId: string, successUrl: string, cancelUrl: string): Promise<string>;
+    createDraftLead(name: string, email: string, phone: string, service: string): Promise<{
         ok: boolean;
         leadId: string;
     }>;
     createEditRequest(requestType: string, pageSection: string, description: string, attachmentUrl: string): Promise<UpsertResult>;
+    createEmailCampaign(subject: string, body: string, recipients: Array<string>, scheduledDate: bigint | null): Promise<{
+        __kind__: "ok";
+        ok: bigint;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
     createLead(path: string, name: string, email: string, business: string, message: string): Promise<string>;
-    createPortfolioItem(adminEmail: string, client_name: string, site_url: string, thumbnail_url: string, imageCaption: string, tier_code: string, description: string, is_featured: boolean, seoMetaDescription: string | null, seoMetaKeywords: string | null): Promise<{
+    createPortfolioItem(client_name: string, site_url: string, thumbnail_url: string, imageCaption: string, tier_code: string, description: string, is_featured: boolean, seoMetaDescription: string | null, seoMetaKeywords: string | null): Promise<{
         __kind__: "ok";
         ok: string;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    createProduct(name: string, description: string, productType: string, priceMonthly: number | null, priceAnnual: number | null, priceOnetime: number | null, tagline: string | null, featureBullets: Array<string>, bestFor: string | null, upgradePath: string | null, recommendedPlan: string | null, paymentType: string, videoUrl1: string, videoUrl2: string, showQuestionnaire: boolean, planSection: string | null, speedyFilter: string | null): Promise<{
+        __kind__: "ok";
+        ok: ProductId;
     } | {
         __kind__: "err";
         err: string;
@@ -582,69 +703,119 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
-    declinePurchaseRequest(adminEmail: string, requestId: bigint, reason: string | null): Promise<{
+    createStripePortalSession(callerEmail: string): Promise<{
         __kind__: "ok";
         ok: string;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    deleteBlogPost(adminEmail: string, id: BlogPostId): Promise<void>;
-    deleteBuild(adminEmail: string, buildId: string): Promise<{
+    declinePurchaseRequest(requestId: bigint, reason: string | null): Promise<{
+        __kind__: "ok";
+        ok: string;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    deleteBlogPost(id: BlogPostId): Promise<void>;
+    deleteBuild(buildId: string): Promise<{
         __kind__: "ok";
         ok: boolean;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    deleteClient(adminEmail: string, clientId: string): Promise<{
+    deleteClient(clientId: string): Promise<{
         __kind__: "ok";
         ok: null;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    deleteClientFile(adminEmail: string, fileId: string): Promise<{
+    deleteClientFile(fileId: string): Promise<{
         __kind__: "ok";
         ok: boolean;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    deleteLead(adminEmail: string, leadId: string): Promise<void>;
-    deleteMarqueeLogo(id: string, adminEmail: string): Promise<{
+    deleteLead(leadId: string): Promise<void>;
+    deleteMarqueeLogo(id: string): Promise<{
         __kind__: "ok";
         ok: boolean;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    deletePortfolioItem(adminEmail: string, id: string): Promise<UpsertResult>;
-    deleteQuestionnaire(adminEmail: string, questionnaireId: QuestionnaireId): Promise<void>;
-    editBuild(adminEmail: string, id: string, clientName: string, siteUrl: string, description: string | null, category: string | null, thumbnailUrl: string | null): Promise<{
+    deletePortfolioItem(id: string): Promise<UpsertResult>;
+    deleteProduct(productId: bigint): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    deleteQuestionnaire(questionnaireId: QuestionnaireId): Promise<void>;
+    deleteReferral(referralCode: string): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    deleteReview(reviewId: ReviewId): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    editBuild(id: string, clientName: string, siteUrl: string, description: string | null, category: string | null, thumbnailUrl: string | null): Promise<{
         __kind__: "ok";
         ok: Build;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    generateAdminOTP(adminEmail: string): Promise<string>;
-    generatePartnerLink(adminEmail: string, partnerName: string, partnerEmail: string): Promise<string>;
-    getAdHocClientInvoices(adminEmail: string, clientId: string): Promise<Array<AdHocInvoice>>;
+    generateAdminOTP(adminEmail: string): Promise<{
+        __kind__: "ok";
+        ok: string;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    generatePartnerLink(partnerName: string, partnerEmail: string): Promise<string>;
+    getAdHocClientInvoices(clientId: string): Promise<Array<AdHocInvoice>>;
     getAdminAllActivity(): Promise<Array<ActivityLog>>;
-    getAdminAllClients(adminEmail: string): Promise<Array<UserProfile>>;
-    getAdminAllOrders(adminEmail: string): Promise<Array<Order>>;
-    getAdminAllQuestionnaires(adminEmail: string): Promise<Array<Questionnaire>>;
-    getAdminNotifications(adminEmail: string): Promise<Array<AdminNotification>>;
+    getAdminAllClients(): Promise<Array<UserProfile>>;
+    getAdminAllOrders(): Promise<Array<Order>>;
+    getAdminAllQuestionnaires(): Promise<Array<Questionnaire>>;
+    getAdminBillingHistory(): Promise<{
+        __kind__: "ok";
+        ok: Array<BillingHistory>;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    getAdminContactEmail(): Promise<string>;
+    getAdminNotifications(): Promise<Array<AdminNotification>>;
     getAdminStats(): Promise<AdminStats>;
     getAllBlogPostsAdmin(): Promise<Array<BlogPost>>;
+    getAllEmailCampaigns(): Promise<{
+        __kind__: "ok";
+        ok: Array<EmailCampaign>;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
     getAllPortfolioAdmin(): Promise<Array<PortfolioItem>>;
     getAllProductsAdmin(): Promise<Array<Product>>;
     getAllSiteText(): Promise<Array<[string, string]>>;
     getApprovedReviews(): Promise<Array<Review>>;
     getAvailability(): Promise<AvailabilitySettings>;
     getBlogPostBySlug(slug: string): Promise<BlogPost | null>;
-    getBuilds(adminEmail: string): Promise<Array<Build>>;
+    getBuilds(): Promise<Array<Build>>;
+    getBusinessMetrics(): Promise<BusinessMetrics>;
     getCallerUserRole(): Promise<UserRole>;
     getCanisterCycles(canisterId: string): Promise<{
         __kind__: "ok";
@@ -655,7 +826,15 @@ export interface backendInterface {
     }>;
     getCategoryVisibility(): Promise<Array<[string, boolean]>>;
     getClientBriefStatus(email: string): Promise<string | null>;
+    getClientBusinessMetrics(canisterId: string): Promise<{
+        __kind__: "ok";
+        ok: BusinessMetrics;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
     getClientByEmail(email: string): Promise<CrmClient | null>;
+    getClientByPrincipal(principal: Principal): Promise<UserProfile | null>;
     getClientFileUrl(callerEmail: string, fileId: string): Promise<{
         __kind__: "ok";
         ok: string;
@@ -671,43 +850,59 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
+    getClientOrderVolumes(): Promise<Array<[string, number]>>;
     getClientOrders(client: Principal): Promise<Array<Order>>;
     getClientPurchaseRequests(clientEmail: string): Promise<Array<PurchaseRequest>>;
-    getClients(adminEmail: string): Promise<Array<CrmClient>>;
-    getConversionStats(adminEmail: string, fromTs: bigint | null, toTs: bigint | null): Promise<{
+    getClients(): Promise<Array<CrmClient>>;
+    getConnectedClients(): Promise<Array<CrmClient>>;
+    getConversionStats(fromTs: bigint | null, toTs: bigint | null): Promise<{
         convertedLeads: bigint;
         totalLeads: bigint;
         conversionRate: number;
     }>;
-    getCountryBreakdown(email: string): Promise<Array<[string, bigint, number]>>;
+    getCountryBreakdown(): Promise<Array<[string, bigint, number]>>;
     getCycles(): Promise<bigint>;
-    getDailyVisitorChart(email: string): Promise<Array<[string, bigint]>>;
+    getDailyVisitorChart(): Promise<Array<[string, bigint]>>;
     getDashboardMetrics(): Promise<DashboardMetrics>;
-    getEmailLogs(adminEmail: string): Promise<Array<EmailLog>>;
+    getEmailHealth(): Promise<{
+        totalFailures: bigint;
+        lastFailureTimestamp: bigint;
+        last24hFailures: bigint;
+    }>;
+    getEmailLogs(): Promise<Array<EmailLog>>;
     getEmailTemplates(): Promise<Array<EmailTemplate>>;
     getFilesForClient(callerEmail: string, clientEmail: string): Promise<Array<ClientFileMetadata>>;
     getFleetSites(): Promise<Array<FleetCanister>>;
     getFleetSoftware(): Promise<Array<FleetCanister>>;
-    getGoogleCalendarConfig(adminEmail: string): Promise<{
+    getGlobalTaxRate(): Promise<number>;
+    getGoogleCalendarConfig(): Promise<{
         __kind__: "ok";
         ok: GoogleCalendarConfig;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    getGoogleSheetsConfig(adminEmail: string): Promise<{
+    getGoogleSheetsConfig(): Promise<{
         __kind__: "ok";
         ok: GoogleSheetsConfig;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    getLeads(adminEmail: string): Promise<Array<Lead>>;
-    getLiveVisitorCount(email: string): Promise<bigint>;
+    getLeads(): Promise<Array<Lead>>;
+    getLiveVisitorCount(): Promise<bigint>;
+    getLogoUrl(): Promise<string>;
     getMarqueeLogos(): Promise<Array<MarqueeLogo>>;
     getMessages(callerEmail: string, targetClientEmail: string): Promise<Array<ClientMessage>>;
     getMyActivity(): Promise<Array<ActivityLog>>;
     getMyAdHocInvoices(): Promise<Array<AdHocInvoice>>;
+    getMyAdminPermissions(): Promise<{
+        __kind__: "ok";
+        ok: Array<string>;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
     getMyBillingHistory(): Promise<Array<BillingHistory>>;
     getMyEditRequests(): Promise<Array<EditRequest>>;
     getMyInvoices(): Promise<Array<Invoice>>;
@@ -724,7 +919,7 @@ export interface backendInterface {
         date: string;
         time: string;
     }>;
-    getNotificationLog(adminEmail: string): Promise<{
+    getNotificationLog(): Promise<{
         __kind__: "ok";
         ok: Array<NotificationLogEntry>;
     } | {
@@ -732,31 +927,34 @@ export interface backendInterface {
         err: string;
     }>;
     getOrCreateMyReferralCode(): Promise<string>;
-    getPendingPushNotifications(adminEmail: string): Promise<{
+    getPendingPushNotifications(): Promise<{
         __kind__: "ok";
         ok: Array<PendingNotification>;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    getPendingReviews(adminEmail: string): Promise<Array<Review>>;
+    getPendingReviews(): Promise<Array<Review>>;
+    getPendingSubscriptions(): Promise<Array<Subscription>>;
     getPortalShopProductIds(): Promise<Array<bigint>>;
     getPortalShopProducts(): Promise<Array<Product>>;
+    getProductImageUrl(productId: bigint): Promise<string | null>;
     getProducts(): Promise<Array<Product>>;
     getProductsByType(productType: string): Promise<Array<Product>>;
     getPublicAvailability(): Promise<AvailabilitySettings>;
     getPublicBuilds(): Promise<Array<Build>>;
     getPublicBuildsCount(): Promise<bigint>;
+    getPublicSocialMediaConfig(): Promise<SocialMediaConfig>;
     getPublishedBlogPosts(): Promise<Array<BlogPost>>;
     getPublishedPortfolio(): Promise<Array<PortfolioItem>>;
-    getPurchaseRequests(adminEmail: string): Promise<{
+    getPurchaseRequests(): Promise<{
         __kind__: "ok";
         ok: Array<PurchaseRequest>;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    getPushSubscription(adminEmail: string): Promise<{
+    getPushSubscription(): Promise<{
         __kind__: "ok";
         ok: PushSubscription | null;
     } | {
@@ -765,14 +963,16 @@ export interface backendInterface {
     }>;
     getQuestionDefinitions(tierCode: string): Promise<Array<QuestionDefinition>>;
     getQuestionnaireByClientId(clientId: ClientId): Promise<Questionnaire | null>;
-    getReferralStats(adminEmail: string): Promise<Array<ReferralStat>>;
-    getRejectedReviews(adminEmail: string): Promise<Array<Review>>;
-    getRescheduleHistory(adminEmail: string, leadId: string): Promise<Array<bigint>>;
+    getReferralStats(): Promise<Array<ReferralStat>>;
+    getRejectedReviews(): Promise<Array<Review>>;
+    getReminderLeadDays(): Promise<bigint>;
+    getRescheduleHistory(leadId: string): Promise<Array<bigint>>;
     getRescheduleLeadByToken(token: string): Promise<{
         isExpired: boolean;
         lead: Lead;
     } | null>;
-    getSiteLinkLog(adminEmail: string, clientId: string): Promise<{
+    getSiteBaseUrl(): Promise<string>;
+    getSiteLinkLog(clientId: string): Promise<{
         __kind__: "ok";
         ok: Array<SiteLinkEntry>;
     } | {
@@ -780,28 +980,36 @@ export interface backendInterface {
         err: string;
     }>;
     getSiteText(key: string): Promise<string | null>;
-    getStripeCharges(adminEmail: string): Promise<{
+    getSocialMediaConfig(): Promise<{
+        __kind__: "ok";
+        ok: SocialMediaConfig;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    getStripeCharges(): Promise<{
         __kind__: "ok";
         ok: string;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    getStripeCustomers(adminEmail: string): Promise<{
+    getStripeConfiguration(): Promise<StripeConfiguration | null>;
+    getStripeCustomers(): Promise<{
         __kind__: "ok";
         ok: string;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    getStripeDashboardData(adminEmail: string): Promise<{
+    getStripeDashboardData(): Promise<{
         __kind__: "ok";
         ok: string;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    getStripePayouts(adminEmail: string): Promise<{
+    getStripePayouts(): Promise<{
         __kind__: "ok";
         ok: string;
     } | {
@@ -810,7 +1018,7 @@ export interface backendInterface {
     }>;
     getStripePublishableKey(): Promise<string>;
     getStripeSessionStatus(sessionId: string): Promise<StripeSessionStatus>;
-    getStripeSubscriptions(adminEmail: string): Promise<{
+    getStripeSubscriptions(): Promise<{
         __kind__: "ok";
         ok: string;
     } | {
@@ -818,10 +1026,17 @@ export interface backendInterface {
         err: string;
     }>;
     getStripeTestMode(): Promise<boolean>;
-    getTopPages(email: string): Promise<Array<[string, bigint, number]>>;
-    getUnreadMessageCounts(adminEmail: string): Promise<Array<[string, bigint]>>;
+    getSubAdmins(): Promise<{
+        __kind__: "ok";
+        ok: Array<[string, SubAdmin]>;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    getTopPages(): Promise<Array<[string, bigint, number]>>;
+    getUnreadMessageCounts(): Promise<Array<[string, bigint]>>;
     getVapidPublicKey(): Promise<string>;
-    getVisitorStats(email: string): Promise<{
+    getVisitorStats(): Promise<{
         todayUnique: bigint;
         weekUnique: bigint;
         monthUnique: bigint;
@@ -831,7 +1046,8 @@ export interface backendInterface {
         weekSessions: bigint;
         allTimeSessions: bigint;
     }>;
-    handleStripeWebhook(payload: string, _signature: string): Promise<{
+    getWebhookAuditLog(): Promise<Array<WebhookAuditEntry>>;
+    handleStripeWebhook(payload: string, _signature: string, secret: string): Promise<{
         __kind__: "ok";
         ok: string;
     } | {
@@ -849,8 +1065,8 @@ export interface backendInterface {
         email: string;
         passwordHash: Uint8Array;
     }): Promise<LoginResult>;
-    markAllNotificationsRead(adminEmail: string): Promise<void>;
-    markCompletionPaymentCharged(clientId: string, adminEmail: string): Promise<{
+    markAllNotificationsRead(): Promise<void>;
+    markCompletionPaymentCharged(clientId: string): Promise<{
         __kind__: "ok";
         ok: null;
     } | {
@@ -865,48 +1081,97 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
-    markNotificationRead(adminEmail: string, id: string): Promise<void>;
-    markQuestionnaireReviewed(adminEmail: string, questionnaireId: QuestionnaireId): Promise<void>;
-    publishBlogPost(adminEmail: string, id: BlogPostId): Promise<void>;
-    publishPortfolioItem(adminEmail: string, id: string): Promise<UpsertResult>;
+    markNotificationRead(id: string): Promise<void>;
+    markQuestionnaireReviewed(questionnaireId: QuestionnaireId): Promise<void>;
+    publishBlogPost(id: BlogPostId): Promise<void>;
+    publishPortfolioItem(id: string): Promise<UpsertResult>;
     recordVisit(pagePath: string, timestamp: bigint, sessionId: string, countryCode: string | null): Promise<boolean>;
-    registerUser(args: {
-        email: string;
-        passwordHash: Uint8Array;
-        lastName: string;
-        firstName: string;
-    }): Promise<UpsertResult>;
-    rejectReview(adminEmail: string, reviewId: ReviewId): Promise<{
+    registerAdminPrincipal(): Promise<{
         __kind__: "ok";
         ok: null;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    removeFleetCanister(adminEmail: string, canisterId: string): Promise<void>;
-    removeFleetSite(adminEmail: string, canisterId: string): Promise<void>;
-    removeFleetSoftware(adminEmail: string, canisterId: string): Promise<void>;
-    removePushSubscription(adminEmail: string): Promise<{
+    registerUser(args: {
+        email: string;
+        passwordHash: Uint8Array;
+        lastName: string;
+        firstName: string;
+    }): Promise<UpsertResult>;
+    rejectReview(reviewId: ReviewId): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    removeAdminPrincipal(p: Principal): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    removeFleetCanister(canisterId: string): Promise<void>;
+    removeFleetSite(canisterId: string): Promise<void>;
+    removeFleetSoftware(canisterId: string): Promise<void>;
+    removeProductImage(productId: bigint): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    removePushSubscription(): Promise<{
         __kind__: "ok";
         ok: string;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    reorderMarqueeLogos(orderedIds: Array<string>, adminEmail: string): Promise<{
+    removeSubAdmin(email: string): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    reorderMarqueeLogos(orderedIds: Array<string>): Promise<{
         __kind__: "ok";
         ok: boolean;
     } | {
         __kind__: "err";
         err: string;
     }>;
+    requestAccountDeletion(): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
     requestPasswordReset(email: string): Promise<string>;
+    rescheduleEmailCampaign(campaignId: bigint, newScheduledDate: bigint): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
     rescheduleLead(token: string, newDate: string, newTime: string, meetingMethod: string): Promise<{
         ok: boolean;
         message: string;
     }>;
-    resendEmail(adminEmail: string, clientId: string, templateKey: string): Promise<boolean>;
-    resendSiteLink(adminEmail: string, clientId: string, url: string): Promise<{
+    reseedCatalog(): Promise<{
+        __kind__: "ok";
+        ok: string;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    resendEmail(clientId: string, templateKey: string): Promise<boolean>;
+    resendSiteLink(clientId: string, url: string): Promise<{
         __kind__: "ok";
         ok: null;
     } | {
@@ -914,15 +1179,14 @@ export interface backendInterface {
         err: string;
     }>;
     resetPasswordWithToken(token: string, newPasswordHash: Uint8Array): Promise<string>;
-    saveEmailTemplate(adminEmail: string, trigger_key: string, subject: string, body: string): Promise<void>;
-    savePushSubscription(adminEmail: string, endpoint: string, p256dh: string, auth: string): Promise<{
+    saveEmailTemplate(trigger_key: string, subject: string, body: string): Promise<void>;
+    savePushSubscription(endpoint: string, p256dh: string, auth: string): Promise<{
         __kind__: "ok";
         ok: string;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    sendAccountDeletionRequest(): Promise<void>;
     sendDepositInvoice(clientPrincipal: Principal, clientEmail: string, amountCents: bigint, description: string, dueDate: Timestamp): Promise<string>;
     sendMessage(callerEmail: string, targetClientEmail: string, body: string): Promise<{
         __kind__: "ok";
@@ -931,41 +1195,118 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
+    sendNowEmailCampaign(campaignId: bigint): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
     sendOrderStatusEmail(clientPrincipal: Principal, status: Status, clientEmail: string): Promise<void>;
-    sendRescheduleLink(adminEmail: string, leadId: string): Promise<{
+    sendRescheduleLink(leadId: string): Promise<{
         message: string;
         success: boolean;
     }>;
-    sendSiteLink(adminEmail: string, clientId: string, siteUrl: string): Promise<{
+    sendSiteLink(clientId: string, siteUrl: string): Promise<{
         __kind__: "ok";
         ok: string;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    setAvailability(adminEmail: string, settings: AvailabilitySettings): Promise<void>;
-    setGoogleCalendarConfig(config: GoogleCalendarConfig, adminEmail: string): Promise<{
+    sendUpcomingBillingReminders(): Promise<{
+        __kind__: "ok";
+        ok: bigint;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    setAdminEmail(email: string): Promise<{
         __kind__: "ok";
         ok: null;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    setGoogleSheetsConfig(config: GoogleSheetsConfig, adminEmail: string): Promise<{
+    setAvailability(settings: AvailabilitySettings): Promise<void>;
+    setClientWebhookSecret(clientId: string, secret: string): Promise<{
         __kind__: "ok";
         ok: null;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    setStripeConfiguration(config: StripeConfiguration, adminEmail: string): Promise<void>;
-    setStripePublishableKey(key: string, adminEmail: string): Promise<void>;
-    setStripeSecretKey(key: string, adminEmail: string): Promise<void>;
-    setStripeTestMode(testMode: boolean, adminEmail: string): Promise<void>;
-    setStripeWebhookSecret(secret: string, adminEmail: string): Promise<void>;
-    setVapidKeys(adminEmail: string, privateKey: string, publicKey: string): Promise<{
+    setGlobalTaxRate(rate: number): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    setGoogleCalendarConfig(config: GoogleCalendarConfig): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    setGoogleSheetsConfig(config: GoogleSheetsConfig): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    setLogoUrl(url: string): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    setReminderLeadDays(days: bigint): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    setSiteAuditFallbackPrice(price: bigint): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    setSiteBaseUrl(url: string): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    setSocialMediaConfig(config: SocialMediaConfig): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    setStripeConfiguration(config: StripeConfiguration): Promise<void>;
+    setStripePublishableKey(key: string): Promise<void>;
+    setStripeSecretKey(key: string): Promise<void>;
+    setStripeTestMode(testMode: boolean): Promise<void>;
+    setStripeWebhookSecret(secret: string): Promise<void>;
+    setVapidKeys(privateKey: string, publicKey: string): Promise<{
         __kind__: "ok";
         ok: string;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    setWebhookSharedSecret(secret: string): Promise<{
+        __kind__: "ok";
+        ok: null;
     } | {
         __kind__: "err";
         err: string;
@@ -979,44 +1320,90 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
-    togglePortalShopProduct(adminEmail: string, productId: bigint): Promise<{
+    togglePortalShopProduct(productId: bigint): Promise<{
         __kind__: "ok";
         ok: string;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    toggleProductStatus(adminEmail: string, productId: string): Promise<UpsertResult>;
+    toggleProductStatus(productId: string): Promise<UpsertResult>;
     trackReferralClick(code: string): Promise<void>;
     trackReferralConversion(referralCode: string, buyerEmail: string, buyerName: string): Promise<void>;
     transform(input: TransformationInput): Promise<TransformationOutput>;
-    unblockDate(adminEmail: string, date: string): Promise<void>;
-    unpublishBlogPost(adminEmail: string, id: BlogPostId): Promise<void>;
-    unpublishPortfolioItem(adminEmail: string, id: string): Promise<UpsertResult>;
-    updateBlogPost(adminEmail: string, id: BlogPostId, title: string, slug: string, category: string, excerpt: string, body: string, author: string, featured_image_url: string | null, featuredImageCaption: string, status: string, seoMetaDescription: string | null, seoMetaKeywords: string | null): Promise<void>;
-    updateCategoryVisibility(adminEmail: string, category: string, active: boolean): Promise<UpsertResult>;
-    updateClientBriefStatus(newStatus: string): Promise<UpsertResult>;
-    updateClientHasAccount(clientId: string, hasAccount: boolean, adminEmail: string): Promise<UpsertResult>;
-    updateClientMilestone(adminEmail: string, clientId: string, newMilestone: bigint): Promise<{
+    unblockDate(date: string): Promise<{
         __kind__: "ok";
         ok: null;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    updateClientNotes(clientId: string, notes: string, adminEmail: string): Promise<UpsertResult>;
-    updateClientStatus(adminEmail: string, clientId: string, newStatus: string): Promise<UpsertResult>;
-    updateLeadStatus(adminEmail: string, leadId: string, newStatus: string): Promise<UpsertResult>;
-    updateMarqueeLogo(id: string, logoUrl: string, logoLabel: string, adminEmail: string): Promise<{
+    unpublishBlogPost(id: BlogPostId): Promise<void>;
+    unpublishPortfolioItem(id: string): Promise<UpsertResult>;
+    updateBlogPost(id: BlogPostId, title: string, slug: string, category: string, excerpt: string, body: string, author: string, featured_image_url: string | null, featuredImageCaption: string, status: string, seoMetaDescription: string | null, seoMetaKeywords: string | null): Promise<void>;
+    updateCategoryVisibility(category: string, active: boolean): Promise<UpsertResult>;
+    updateClientBriefStatus(newStatus: string): Promise<UpsertResult>;
+    updateClientHasAccount(clientId: string, hasAccount: boolean): Promise<UpsertResult>;
+    updateClientMilestone(clientId: string, newMilestone: bigint): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    updateClientNotes(clientId: string, notes: string): Promise<UpsertResult>;
+    updateClientPlatformFee(clientId: string, newFeePercentage: number): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    updateClientStatus(clientId: string, newStatus: string): Promise<UpsertResult>;
+    updateClientStripeAccountId(clientId: string, stripeAccountId: string, connectionStatus: string): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    updateEmailCampaign(campaignId: bigint, subject: string, body: string, recipients: Array<string>, scheduledDate: bigint | null): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    updateLeadStatus(leadId: string, newStatus: string): Promise<UpsertResult>;
+    updateMarqueeLogo(id: string, logoUrl: string, logoLabel: string): Promise<{
         __kind__: "ok";
         ok: MarqueeLogo;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    updateOrderStatus(adminEmail: string, orderId: string, newStatus: string): Promise<UpsertResult>;
-    updatePortfolioItem(adminEmail: string, id: string, client_name: string, site_url: string, thumbnail_url: string, imageCaption: string, tier_code: string, description: string, is_featured: boolean, seoMetaDescription: string | null, seoMetaKeywords: string | null): Promise<UpsertResult>;
-    updateProductPrice(adminEmail: string, productId: string, newPriceMonthly: number | null, newPriceAnnual: number | null, newPriceOnetime: number | null): Promise<UpsertResult>;
+    updateOrderStatus(orderId: string, newStatus: string): Promise<UpsertResult>;
+    updatePortfolioItem(id: string, client_name: string, site_url: string, thumbnail_url: string, imageCaption: string, tier_code: string, description: string, is_featured: boolean, seoMetaDescription: string | null, seoMetaKeywords: string | null): Promise<UpsertResult>;
+    updateProductDescription(productId: string, newDescription: string): Promise<UpsertResult>;
+    updateProductDetailContent(productId: string, detailDescription: string | null, seoMetaTitle: string | null, seoMetaDescription: string | null, heroHeadline: string | null, heroSubheadline: string | null, bodySections: string | null, proofPoints: string | null, faqItems: string | null, closingCTA: string | null): Promise<UpsertResult>;
+    updateProductImage(productId: string, imageUrl: string): Promise<UpsertResult>;
+    updateProductPaymentType(productId: string, paymentType: string): Promise<boolean>;
+    updateProductPlanSection(productId: ProductId, planSection: string | null): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    updateProductPrice(productId: string, newPriceMonthly: number | null, newPriceAnnual: number | null, newPriceOnetime: number | null): Promise<UpsertResult>;
+    updateProductRichFields(productId: string, tagline: string | null, featureBullets: Array<string>, bestFor: string | null, upgradePath: string | null, recommendedPlan: string | null, videoUrl1: string, videoUrl2: string, showQuestionnaire: boolean): Promise<UpsertResult>;
+    updateProductSpeedyFilter(productId: ProductId, speedyFilter: string | null): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
     updateProfile(args: {
         businessName: string;
         businessType: string;
@@ -1025,22 +1412,35 @@ export interface backendInterface {
         lastName: string;
         firstName: string;
     }): Promise<UpsertResult>;
-    updateQuestionDefinitions(adminEmail: string, tierCode: string, questions: Array<QuestionDefinition>): Promise<{
+    updateQuestionDefinitions(tierCode: string, questions: Array<QuestionDefinition>): Promise<{
         __kind__: "ok";
         ok: null;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    updateSiteText(key: string, value: string, adminEmail: string): Promise<boolean>;
-    uploadFileToClient(adminEmail: string, clientEmail: string, fileData: Uint8Array, fileName: string, fileLabel: string): Promise<{
+    updateSiteText(key: string, value: string): Promise<boolean>;
+    updateSubAdminTabs(email: string, tabs: Array<string>): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    uploadFileToClient(clientEmail: string, fileData: Uint8Array, fileName: string, fileLabel: string): Promise<{
         __kind__: "ok";
         ok: ClientFileMetadata;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    verifyAdminOTP(adminEmail: string, otp: string): Promise<string>;
+    verifyAdminOTP(adminEmail: string, otp: string): Promise<{
+        __kind__: "ok";
+        ok: string;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
     verifyAndRecordPurchase(sessionId: string, email: string, name: string, services: Array<string>): Promise<{
         __kind__: "ok";
         ok: string;

@@ -21,8 +21,6 @@ import {
   useSiteTextStore,
 } from "../store/useSiteTextStore";
 
-const SUPER_ADMIN_EMAIL = "vincenzo@imperidome.com";
-
 const NEON = "#39FF14";
 const DARK = "#0a0a0a";
 const NEON_DIM = "#39FF1444";
@@ -124,7 +122,7 @@ function EditorOverlay({
       return;
     }
     const session = getSession();
-    if (!session || session.email !== SUPER_ADMIN_EMAIL) {
+    if (!session || session.role !== "admin") {
       setError("Unauthorized: Super Admin access required.");
       return;
     }
@@ -385,7 +383,7 @@ function useEditableState(textKey: string, defaultText: string) {
 
   const currentText = getText(textKey, defaultText);
   const session = getSession();
-  const isSuperAdmin = editMode && session?.email === SUPER_ADMIN_EMAIL;
+  const isSuperAdmin = editMode && session?.role === "admin";
 
   const openEditor = () => {
     if (isSuperAdmin) setIsEditing(true);

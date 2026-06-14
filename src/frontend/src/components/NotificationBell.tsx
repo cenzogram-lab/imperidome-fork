@@ -1,5 +1,4 @@
 import { useActor } from "@/hooks/useActor";
-import { getSession } from "@/hooks/useSession";
 import { Bell, CreditCard, FileText, Share2, UserPlus, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
@@ -18,11 +17,6 @@ interface AdminNotification {
 }
 // BackendAdminNotification is imported for module-level type safety
 void (null as unknown as BackendAdminNotification);
-
-function getAdminEmail(): string {
-  const s = getSession();
-  return s?.email ?? localStorage.getItem("imperidome_admin_email") ?? "";
-}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const NEON = "#39FF14";
@@ -88,9 +82,9 @@ export default function NotificationBell() {
   const fetchNotifications = useCallback(async () => {
     if (!actor) return;
     try {
-      const data = (await (actor as backendInterface).getAdminNotifications(
-        getAdminEmail(),
-      )) as unknown as AdminNotification[];
+      const data = (await (
+        actor as backendInterface
+      ).getAdminNotifications()) as unknown as AdminNotification[];
       setNotifications(data);
     } catch {
       // silently fail — bell should not block the dashboard
@@ -131,10 +125,7 @@ export default function NotificationBell() {
   async function handleMarkRead(id: string) {
     if (!actor) return;
     try {
-      await (actor as backendInterface).markNotificationRead(
-        getAdminEmail(),
-        id,
-      );
+      await (actor as backendInterface).markNotificationRead(id);
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
       );
@@ -146,9 +137,7 @@ export default function NotificationBell() {
   async function handleMarkAllRead() {
     if (!actor) return;
     try {
-      await (actor as backendInterface).markAllNotificationsRead(
-        getAdminEmail(),
-      );
+      await (actor as backendInterface).markAllNotificationsRead();
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
       // Show success toast for 3 seconds
       setToastVisible(true);

@@ -7,17 +7,15 @@ import {
   Trash2,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import type { NotificationLogEntry } from "../../backend.d";
+import type { CSSProperties } from "react";
+import type { NotificationLogEntry, backendInterface } from "../../backend.d";
+import TypewriterText from "../../components/TypewriterText";
 import { useActor } from "../../hooks/useActor";
-import { getSession } from "../../hooks/useSession";
 import AdminLayout from "./AdminLayout";
 
-function getAdminEmail(): string {
-  const s = getSession();
-  return s?.email ?? localStorage.getItem("imperidome_admin_email") ?? "";
-}
-
 function formatTimestamp(ts: bigint): string {
+  if (ts === 0n) return "—";
+  if (Number.isNaN(Number(ts))) return "—";
   const ms = Number(ts) / 1_000_000;
   return new Date(ms).toLocaleString("en-US", {
     month: "short",
@@ -210,14 +208,18 @@ export default function AdminNotificationLogPage() {
   const [clearSuccess, setClearSuccess] = useState(false);
   const [clearError, setClearError] = useState<string | null>(null);
 
-  const adminEmail = getAdminEmail();
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const rowsPerPage = 50;
+
+  // currentPage is reset directly in handleClearLog after clearing
 
   const fetchLog = useCallback(async () => {
     if (!actor) return;
     setLoading(true);
     setError(null);
     try {
-      const result = await actor.getNotificationLog(adminEmail);
+      const result = await (actor as backendInterface).getNotificationLog();
       if ("ok" in result) {
         setEntries(result.ok);
       } else if ("err" in result) {
@@ -230,7 +232,7 @@ export default function AdminNotificationLogPage() {
     } finally {
       setLoading(false);
     }
-  }, [actor, adminEmail]);
+  }, [actor]);
 
   useEffect(() => {
     if (!actor || isFetching) return;
@@ -242,9 +244,10 @@ export default function AdminNotificationLogPage() {
     setClearing(true);
     setClearError(null);
     try {
-      const result = await actor.clearNotificationLog(adminEmail);
+      const result = await (actor as backendInterface).clearNotificationLog();
       if ("ok" in result) {
         setEntries([]);
+        setCurrentPage(1);
         setClearSuccess(true);
         setTimeout(() => setClearSuccess(false), 3000);
         setShowConfirm(false);
@@ -277,7 +280,7 @@ export default function AdminNotificationLogPage() {
       )}
 
       <div style={{ maxWidth: "1100px" }}>
-        {/* ── Page header ──────────────────────────────────────────────────── */}
+        {/* Page header */}
         <div
           style={{
             display: "flex",
@@ -294,29 +297,26 @@ export default function AdminNotificationLogPage() {
                 width: "44px",
                 height: "44px",
                 borderRadius: "12px",
-                background: "rgba(184,134,11,0.12)",
-                border: "1px solid rgba(184,134,11,0.25)",
+                background: "rgba(94,240,138,0.1)",
+                border: "1px solid rgba(94,240,138,0.3)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 flexShrink: 0,
               }}
             >
-              <History size={20} color="#d4a017" />
+              <History size={20} color="#5EF08A" />
             </div>
             <div>
               <h1
-                style={{
-                  color: "#EEF0F8",
-                  fontSize: "20px",
-                  fontWeight: 700,
-                  margin: 0,
-                }}
+                className="matrix-heading"
+                style={{ fontSize: "20px", fontWeight: 700, margin: 0 }}
               >
-                Notification Log
+                <TypewriterText text="Notification Log" speed={40} />
               </h1>
               <p
-                style={{ color: "#7A7D90", fontSize: "13px", marginTop: "2px" }}
+                className="matrix-muted"
+                style={{ fontSize: "13px", marginTop: "2px" }}
               >
                 All push notifications sent from this admin panel, newest first.
               </p>
@@ -332,26 +332,21 @@ export default function AdminNotificationLogPage() {
               setShowConfirm(true);
             }}
             disabled={loading || entries.length === 0}
+            className="matrix-btn-outline"
             style={{
               display: "flex",
               alignItems: "center",
               gap: "7px",
               padding: "9px 18px",
-              borderRadius: "10px",
-              background:
-                loading || entries.length === 0
-                  ? "rgba(255,255,255,0.04)"
-                  : "rgba(239,68,68,0.1)",
-              border:
-                loading || entries.length === 0
-                  ? "1px solid #1C1F33"
-                  : "1px solid rgba(239,68,68,0.3)",
-              color: loading || entries.length === 0 ? "#3A3D52" : "#f87171",
               fontSize: "13px",
               fontWeight: 600,
               cursor:
                 loading || entries.length === 0 ? "not-allowed" : "pointer",
-              transition: "background 0.15s, border-color 0.15s",
+              opacity: loading || entries.length === 0 ? 0.4 : 1,
+              border: "1px solid rgba(239,68,68,0.4)",
+              color: "#f87171",
+              background: "rgba(239,68,68,0.07)",
+              borderRadius: "10px",
             }}
           >
             <Trash2 size={14} />
@@ -359,7 +354,7 @@ export default function AdminNotificationLogPage() {
           </button>
         </div>
 
-        {/* ── Success / error banners ───────────────────────────────────────── */}
+        {/* Success / error banners */}
         {clearSuccess && (
           <div
             data-ocid="notification-log.clear.success_state"
@@ -399,15 +394,14 @@ export default function AdminNotificationLogPage() {
           </div>
         )}
 
-        {/* ── Table card ───────────────────────────────────────────────────── */}
+        {/* Table card */}
         <div
+          className="matrix-card"
           style={{
-            background: "rgba(14,16,32,0.9)",
-            border: "1px solid #1C1F33",
             borderRadius: "16px",
             overflowX: "auto",
             WebkitOverflowScrolling:
-              "touch" as React.CSSProperties["WebkitOverflowScrolling"],
+              "touch" as CSSProperties["WebkitOverflowScrolling"],
           }}
         >
           {/* Loading */}
@@ -420,8 +414,9 @@ export default function AdminNotificationLogPage() {
                 justifyContent: "center",
                 gap: "10px",
                 padding: "64px 24px",
-                color: "#7A7D90",
+                color: "#5EF08A",
                 fontSize: "14px",
+                fontFamily: "'Courier New', monospace",
               }}
             >
               <Loader2
@@ -449,13 +444,10 @@ export default function AdminNotificationLogPage() {
               <button
                 type="button"
                 onClick={fetchLog}
+                className="matrix-btn-outline"
                 style={{
                   marginTop: "8px",
                   padding: "8px 20px",
-                  borderRadius: "8px",
-                  background: "rgba(255,255,255,0.06)",
-                  border: "1px solid #1C1F33",
-                  color: "#7A7D90",
                   fontSize: "13px",
                   cursor: "pointer",
                 }}
@@ -482,26 +474,25 @@ export default function AdminNotificationLogPage() {
                   width: "56px",
                   height: "56px",
                   borderRadius: "50%",
-                  background: "rgba(122,125,144,0.08)",
-                  border: "1px solid #1C1F33",
+                  background: "rgba(94,240,138,0.06)",
+                  border: "1px solid rgba(94,240,138,0.15)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                <Bell size={24} color="#3A3D52" />
+                <Bell size={24} color="rgba(94,240,138,0.4)" />
               </div>
               <p
-                style={{
-                  color: "#7A7D90",
-                  fontSize: "15px",
-                  fontWeight: 600,
-                  margin: 0,
-                }}
+                className="matrix-muted"
+                style={{ fontSize: "15px", fontWeight: 600, margin: 0 }}
               >
                 No notifications have been sent yet.
               </p>
-              <p style={{ color: "#3A3D52", fontSize: "13px", margin: 0 }}>
+              <p
+                className="matrix-muted"
+                style={{ fontSize: "13px", margin: 0 }}
+              >
                 Notifications will appear here as events trigger them.
               </p>
             </div>
@@ -518,8 +509,8 @@ export default function AdminNotificationLogPage() {
                     "minmax(140px,1.5fr) minmax(160px,2fr) minmax(200px,3fr) minmax(160px,2fr) 140px",
                   gap: "0",
                   padding: "0 24px",
-                  borderBottom: "1px solid #1C1F33",
-                  background: "rgba(255,255,255,0.02)",
+                  borderBottom: "1px solid rgba(94,240,138,0.15)",
+                  background: "rgba(94,240,138,0.03)",
                 }}
               >
                 {["Event", "Title", "Body", "URL", "Timestamp"].map((col) => (
@@ -530,8 +521,9 @@ export default function AdminNotificationLogPage() {
                       fontSize: "10px",
                       fontWeight: 700,
                       letterSpacing: "0.08em",
-                      color: "rgba(122,125,144,0.7)",
+                      color: "rgba(94,240,138,0.7)",
                       textTransform: "uppercase",
+                      fontFamily: "'Courier New', monospace",
                     }}
                   >
                     {col}
@@ -540,175 +532,243 @@ export default function AdminNotificationLogPage() {
               </div>
 
               {/* Table rows */}
-              {entries.map((entry, idx) => (
-                <div
-                  key={entry.id}
-                  data-ocid={`notification-log.item.${idx + 1}`}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      "minmax(140px,1.5fr) minmax(160px,2fr) minmax(200px,3fr) minmax(160px,2fr) 140px",
-                    gap: "0",
-                    padding: "0 24px",
-                    borderBottom:
-                      idx < entries.length - 1 ? "1px solid #1C1F33" : "none",
-                    transition: "background 0.12s",
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLDivElement).style.background =
-                      "rgba(255,255,255,0.015)";
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLDivElement).style.background =
-                      "transparent";
-                  }}
-                >
-                  {/* Event */}
+              {entries
+                .slice(
+                  (currentPage - 1) * rowsPerPage,
+                  currentPage * rowsPerPage,
+                )
+                .map((entry, idx) => (
                   <div
+                    key={entry.id}
+                    data-ocid={`notification-log.item.${idx + 1}`}
                     style={{
-                      padding: "16px 12px 16px 0",
-                      display: "flex",
-                      alignItems: "flex-start",
+                      display: "grid",
+                      gridTemplateColumns:
+                        "minmax(140px,1.5fr) minmax(160px,2fr) minmax(200px,3fr) minmax(160px,2fr) 140px",
+                      gap: "0",
+                      padding: "0 24px",
+                      borderBottom:
+                        idx < entries.length - 1
+                          ? "1px solid rgba(94,240,138,0.08)"
+                          : "none",
+                      transition: "background 0.12s",
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLDivElement).style.background =
+                        "rgba(94,240,138,0.02)";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLDivElement).style.background =
+                        "transparent";
                     }}
                   >
-                    <EventBadge event={entry.event} />
-                  </div>
-
-                  {/* Title */}
-                  <div
-                    style={{
-                      padding: "16px 12px 16px 0",
-                      color: "#EEF0F8",
-                      fontSize: "13px",
-                      fontWeight: 600,
-                      display: "flex",
-                      alignItems: "flex-start",
-                    }}
-                  >
-                    <span
+                    <div
                       style={{
-                        overflow: "hidden",
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
+                        padding: "16px 12px 16px 0",
+                        display: "flex",
+                        alignItems: "flex-start",
                       }}
                     >
-                      {entry.title}
-                    </span>
-                  </div>
-
-                  {/* Body */}
-                  <div
-                    style={{
-                      padding: "16px 12px 16px 0",
-                      color: "#7A7D90",
-                      fontSize: "13px",
-                      display: "flex",
-                      alignItems: "flex-start",
-                    }}
-                  >
-                    <span
+                      <EventBadge event={entry.event} />
+                    </div>
+                    <div
                       style={{
-                        overflow: "hidden",
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
+                        padding: "16px 12px 16px 0",
+                        color: "#5EF08A",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        display: "flex",
+                        alignItems: "flex-start",
                       }}
                     >
-                      {entry.body}
-                    </span>
-                  </div>
-
-                  {/* URL */}
-                  <div
-                    style={{
-                      padding: "16px 12px 16px 0",
-                      fontSize: "12px",
-                      display: "flex",
-                      alignItems: "flex-start",
-                    }}
-                  >
-                    {isValidUrl(entry.url) ? (
-                      <a
-                        href={entry.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <span
                         style={{
-                          color: "#d4a017",
-                          textDecoration: "none",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "4px",
-                          fontWeight: 500,
                           overflow: "hidden",
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
                         }}
                       >
+                        {entry.title}
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        padding: "16px 12px 16px 0",
+                        color: "#7A7D90",
+                        fontSize: "13px",
+                        display: "flex",
+                        alignItems: "flex-start",
+                      }}
+                    >
+                      <span
+                        style={{
+                          overflow: "hidden",
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
+                        }}
+                      >
+                        {entry.body}
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        padding: "16px 12px 16px 0",
+                        fontSize: "12px",
+                        display: "flex",
+                        alignItems: "flex-start",
+                      }}
+                    >
+                      {isValidUrl(entry.url) ? (
+                        <a
+                          href={entry.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            color: "#5EF08A",
+                            textDecoration: "none",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            fontWeight: 500,
+                            overflow: "hidden",
+                          }}
+                        >
+                          <span
+                            style={{
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              maxWidth: "120px",
+                            }}
+                          >
+                            {entry.url.replace(/^https?:\/\/[^/]+/, "") || "/"}
+                          </span>
+                          <ExternalLink size={11} style={{ flexShrink: 0 }} />
+                        </a>
+                      ) : (
                         <span
+                          className="matrix-muted"
                           style={{
                             overflow: "hidden",
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",
-                            maxWidth: "120px",
                           }}
                         >
-                          {entry.url.replace(/^https?:\/\/[^/]+/, "") || "/"}
+                          {entry.url || "—"}
                         </span>
-                        <ExternalLink size={11} style={{ flexShrink: 0 }} />
-                      </a>
-                    ) : (
-                      <span
-                        style={{
-                          color: "#3A3D52",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {entry.url || "—"}
-                      </span>
-                    )}
+                      )}
+                    </div>
+                    <div
+                      style={{
+                        padding: "16px 0 16px 0",
+                        color: "rgba(94,240,138,0.5)",
+                        fontSize: "11px",
+                        fontWeight: 500,
+                        display: "flex",
+                        alignItems: "flex-start",
+                        whiteSpace: "nowrap",
+                        fontFamily: "'Courier New', monospace",
+                      }}
+                    >
+                      {formatTimestamp(entry.timestamp)}
+                    </div>
                   </div>
+                ))}
+            </div>
+          )}
 
-                  {/* Timestamp */}
+          {/* Footer count + pagination */}
+          {!loading &&
+            !error &&
+            entries.length > 0 &&
+            (() => {
+              const totalPages = Math.ceil(entries.length / rowsPerPage);
+              return (
+                <div
+                  style={{
+                    padding: "12px 24px",
+                    borderTop: "1px solid rgba(94,240,138,0.1)",
+                    background: "rgba(94,240,138,0.02)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: "8px",
+                  }}
+                >
+                  <span className="matrix-muted" style={{ fontSize: "12px" }}>
+                    {entries.length} notification
+                    {entries.length !== 1 ? "s" : ""} in log
+                  </span>
                   <div
                     style={{
-                      padding: "16px 0 16px 0",
-                      color: "#4A4D62",
-                      fontSize: "11px",
-                      fontWeight: 500,
                       display: "flex",
-                      alignItems: "flex-start",
-                      whiteSpace: "nowrap",
+                      alignItems: "center",
+                      gap: "12px",
                     }}
                   >
-                    {formatTimestamp(entry.timestamp)}
+                    <span
+                      style={{
+                        color: "#5EF08A",
+                        fontSize: "12px",
+                        fontFamily: "'Courier New', monospace",
+                      }}
+                    >
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <div style={{ display: "flex", gap: "6px" }}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCurrentPage((p) => Math.max(1, p - 1))
+                        }
+                        disabled={currentPage === 1}
+                        style={{
+                          padding: "4px 12px",
+                          background: "transparent",
+                          border: "1px solid #5EF08A",
+                          borderRadius: "6px",
+                          color: "#5EF08A",
+                          fontSize: "12px",
+                          fontFamily: "'Courier New', monospace",
+                          cursor: currentPage === 1 ? "not-allowed" : "pointer",
+                          opacity: currentPage === 1 ? 0.5 : 1,
+                          transition: "opacity 0.15s",
+                        }}
+                      >
+                        Prev
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCurrentPage((p) => Math.min(totalPages, p + 1))
+                        }
+                        disabled={currentPage === totalPages}
+                        style={{
+                          padding: "4px 12px",
+                          background: "transparent",
+                          border: "1px solid #5EF08A",
+                          borderRadius: "6px",
+                          color: "#5EF08A",
+                          fontSize: "12px",
+                          fontFamily: "'Courier New', monospace",
+                          cursor:
+                            currentPage === totalPages
+                              ? "not-allowed"
+                              : "pointer",
+                          opacity: currentPage === totalPages ? 0.5 : 1,
+                          transition: "opacity 0.15s",
+                        }}
+                      >
+                        Next
+                      </button>
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-
-          {/* Footer count */}
-          {!loading && !error && entries.length > 0 && (
-            <div
-              style={{
-                padding: "12px 24px",
-                borderTop: "1px solid #1C1F33",
-                background: "rgba(255,255,255,0.015)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <span style={{ color: "#4A4D62", fontSize: "12px" }}>
-                {entries.length} notification{entries.length !== 1 ? "s" : ""}{" "}
-                in log
-              </span>
-              <span style={{ color: "#3A3D52", fontSize: "11px" }}>
-                Sorted newest first
-              </span>
-            </div>
-          )}
+              );
+            })()}
         </div>
       </div>
     </AdminLayout>

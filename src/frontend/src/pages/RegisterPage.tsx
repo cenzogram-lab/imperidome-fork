@@ -1,6 +1,7 @@
 import { Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import type { backendInterface } from "../backend";
+import TypewriterText from "../components/TypewriterText";
 import { useActor } from "../hooks/useActor";
 import { useSession } from "../hooks/useSession";
 import { hashPassword } from "../lib/hashPassword";
@@ -281,7 +282,20 @@ export default function RegisterPage() {
                 marginTop: "4px",
               }}
             >
-              Min. 8 characters, one uppercase letter, one number.
+              <p
+                style={{
+                  fontSize: "12px",
+                  color: DARK.body,
+                  marginBottom: "16px",
+                  marginTop: "4px",
+                  fontFamily: "'Courier New', monospace",
+                }}
+              >
+                <TypewriterText
+                  text="Min. 8 characters, one uppercase letter, one number."
+                  speed={20}
+                />
+              </p>
             </p>
 
             {/* Confirm Password field */}

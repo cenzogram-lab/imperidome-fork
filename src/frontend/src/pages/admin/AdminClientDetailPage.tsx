@@ -1,36 +1,29 @@
 import { useParams, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, Pencil, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { toast } from "sonner";
 import type { backendInterface } from "../../backend.d";
-import type { Questionnaire, SiteLinkEntry, Status } from "../../backend.d";
+import type {
+  Questionnaire,
+  SiteLinkEntry,
+  Status,
+  Subscription,
+} from "../../backend.d";
 import { useActor } from "../../hooks/useActor";
-import { getSession } from "../../hooks/useSession";
+import { getSession, useSession } from "../../hooks/useSession";
 
 // Inline types for admin client data (returned by getAdminAllClients)
-interface ClientProfile {
-  principal: any;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  businessName: string;
-  businessType: string;
-  createdAt: bigint;
-}
-
-interface ClientSummary {
-  profile: ClientProfile;
-  subscriptionPlanName: string | null;
-  latestOrderStatus: Status | null;
+// getAdminAllClients() returns UserProfile[] — fields are flat on the object, no .profile nesting
+interface ClientSummary extends UserProfile {
+  subscriptionPlanName?: string | null;
+  latestOrderStatus?: Status | null;
   // CRM fields returned by getAdminAllClients (may be present depending on backend version)
   currentMilestone?: bigint | number | null;
   completionPaymentCharged?: boolean;
   activeServices?: string[];
   notes?: string;
 }
-
-type UserProfile = ClientProfile;
 
 interface InvoiceRecord {
   id: bigint;
@@ -42,11 +35,37 @@ interface InvoiceRecord {
   paid_at?: bigint;
   stripe_payment_intent_id: string;
   order_id?: bigint;
-  client_id: any;
+  client_id: string;
   created_at: bigint;
   updated_at: bigint;
 }
 
+import type { AdHocInvoice, Invoice } from "../../backend.d";
+
+// MergedInvoice covers both Invoice (created_at) and AdHocInvoice (createdAt) shapes
+interface MergedInvoice {
+  id: bigint;
+  amount: number;
+  status: string;
+  description?: string;
+  invoice_number?: string;
+  created_at?: bigint;
+  due_date?: bigint;
+  paid_at?: bigint;
+  stripe_payment_intent_id?: string;
+  invoiceNumber?: string;
+  createdAt?: bigint;
+  dueDate?: bigint;
+  paidAt?: bigint;
+  stripeSessionId?: string;
+  orderId?: bigint;
+  clientId?: string;
+  client_id?: string;
+  updated_at?: bigint;
+}
+
+import type { Principal } from "@icp-sdk/core/principal";
+import type { ClientId, UserProfile } from "../../backend.d";
 import AdminLayout from "./AdminLayout";
 
 type StatusKey =
@@ -161,7 +180,7 @@ interface Order {
   delivery_window: string;
   created_at: bigint;
   launch_target: string;
-  client_id: any;
+  client_id: Principal;
   tier_code: string;
 }
 
@@ -196,6 +215,8 @@ function StatusBadge({ status }: { status: Status }) {
 }
 
 function formatDate(ts: bigint): string {
+  if (ts === 0n) return "—";
+  if (Number.isNaN(Number(ts))) return "—";
   const ms = Number(ts) / 1_000_000;
   return new Date(ms).toLocaleDateString("en-US", {
     month: "short",
@@ -205,6 +226,8 @@ function formatDate(ts: bigint): string {
 }
 
 function formatReviewedAt(ts: bigint): string {
+  if (ts === 0n) return "—";
+  if (Number.isNaN(Number(ts))) return "—";
   const ms = Number(ts) / 1_000_000;
   return new Date(ms).toLocaleString("en-US", {
     month: "long",
@@ -232,7 +255,7 @@ function parseAnswers(
   }
 }
 
-const inputStyle: React.CSSProperties = {
+const inputStyle: CSSProperties = {
   width: "100%",
   border: "1px solid #1C1F33",
   borderRadius: 6,
@@ -244,7 +267,7 @@ const inputStyle: React.CSSProperties = {
   boxSizing: "border-box",
 };
 
-const labelStyle: React.CSSProperties = {
+const labelStyle: CSSProperties = {
   display: "block",
   fontSize: 12,
   fontWeight: 600,
@@ -286,14 +309,18 @@ export default function AdminClientDetailPage() {
   const router = useRouter();
   const { actor } = useActor();
 
-  function getAdminEmail(): string {
-    const s = getSession();
-    return s?.email ?? localStorage.getItem("imperidome_admin_email") ?? "";
-  }
-
   const [client, setClient] = useState<ClientSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
+  const [questionnaireError, setQuestionnaireError] = useState<string | null>(
+    null,
+  );
+  const [invoicesError, setInvoicesError] = useState<string | null>(null);
+  const [subscriptionsError, setSubscriptionsError] = useState<string | null>(
+    null,
+  );
+  const [siteLinksError, setSiteLinksError] = useState<string | null>(null);
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
@@ -327,7 +354,7 @@ export default function AdminClientDetailPage() {
     null,
   );
 
-  const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
+  const [invoices, setInvoices] = useState<MergedInvoice[]>([]);
   const [invoicesLoading, setInvoicesLoading] = useState(true);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [depositForm, setDepositForm] = useState({
@@ -352,6 +379,10 @@ export default function AdminClientDetailPage() {
     amount: "",
   });
   const [invoiceSending, setInvoiceSending] = useState(false);
+  const [invoiceSendError, setInvoiceSendError] = useState<string | null>(null);
+  const [invoiceCheckoutUrl, setInvoiceCheckoutUrl] = useState<string | null>(
+    null,
+  );
 
   // ── Send Site Link ────────────────────────────────────────────────────────
   const [showSiteLinkModal, setShowSiteLinkModal] = useState(false);
@@ -408,15 +439,17 @@ export default function AdminClientDetailPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // ── Purchase Requests ─────────────────────────────────────────────────────
+  // Aligned to the generated PurchaseRequest type in backend.d.ts
   interface PurchaseRequest {
-    id: string;
+    id: bigint;
     clientEmail: string;
-    productId: string;
+    productId: bigint;
     productName: string;
     amount: number;
     frequency: string;
     status: string; // "pending" | "approved" | "declined"
-    createdAt: bigint;
+    requestedAt: bigint;
+    respondedAt?: bigint;
     checkoutUrl?: string;
     declineReason?: string;
   }
@@ -432,34 +465,140 @@ export default function AdminClientDetailPage() {
   >({});
   const [declinePendingId, setDeclinePendingId] = useState<string | null>(null);
 
+  // ── Subscriptions ─────────────────────────────────────────────────────────
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [subscriptionsLoading, setSubscriptionsLoading] = useState(true);
+  const [activatingId, setActivatingId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
+  const [subscriptionActionError, setSubscriptionActionError] = useState<
+    Record<string, string>
+  >({});
+
   async function loadPurchaseRequests() {
     if (!actor || !client) return;
     setPurchaseRequestsLoading(true);
     try {
-      const all: PurchaseRequest[] = (await (
-        actor as backendInterface
-      ).getPurchaseRequests(adminEmail)) as unknown as PurchaseRequest[];
-      const forClient = all.filter(
-        (r) => r.clientEmail === client.profile.email,
-      );
-      const sorted = [...forClient].sort(
-        (a, b) => Number(b.createdAt) - Number(a.createdAt),
+      const result = await (actor as backendInterface).getPurchaseRequests();
+      if ("err" in result) throw new Error(result.err);
+      const all: PurchaseRequest[] = result.ok as PurchaseRequest[];
+      const forClient = all.filter((r) => r.clientEmail === client.email);
+      const sorted = [...forClient].sort((a, b) =>
+        b.requestedAt > a.requestedAt
+          ? 1
+          : b.requestedAt < a.requestedAt
+            ? -1
+            : 0,
       );
       setPurchaseRequests(sorted);
-    } catch {
+    } catch (err) {
+      toast.error("Failed to load purchase requests.");
+      if (import.meta.env.DEV) {
+        console.error(err);
+      }
       setPurchaseRequests([]);
     } finally {
       setPurchaseRequestsLoading(false);
     }
   }
 
+  async function handleActivateSubscription(subscriptionId: string) {
+    if (!actor) return;
+    setActivatingId(subscriptionId);
+    setSubscriptionActionError((prev) => {
+      const n = { ...prev };
+      delete n[subscriptionId];
+      return n;
+    });
+    try {
+      const result = await (actor as backendInterface).activateSubscription(
+        subscriptionId,
+      );
+      if (result && "err" in result) {
+        setSubscriptionActionError((prev) => ({
+          ...prev,
+          [subscriptionId]: String(result.err),
+        }));
+      } else {
+        setSubscriptions((prev) =>
+          prev.map((s) =>
+            s.id.toString() === subscriptionId ? { ...s, status: "active" } : s,
+          ),
+        );
+        toast.success("Subscription activated");
+        try {
+          await (actor as backendInterface).resendEmail(
+            clientId,
+            "subscription_activated",
+          );
+        } catch (emailErr) {
+          console.error("Failed to send activation email:", emailErr);
+        }
+      }
+    } catch (err) {
+      setSubscriptionActionError((prev) => ({
+        ...prev,
+        [subscriptionId]:
+          err instanceof Error ? err.message : "Activation failed",
+      }));
+    } finally {
+      setActivatingId(null);
+    }
+  }
+
+  async function handleCancelSubscription(subscriptionId: string) {
+    if (!actor) return;
+    setCancellingId(subscriptionId);
+    setSubscriptionActionError((prev) => {
+      const n = { ...prev };
+      delete n[subscriptionId];
+      return n;
+    });
+    try {
+      const result = await (actor as backendInterface).cancelSubscription(
+        subscriptionId,
+      );
+      if (result && "err" in result) {
+        setSubscriptionActionError((prev) => ({
+          ...prev,
+          [subscriptionId]: String(result.err),
+        }));
+      } else {
+        setSubscriptions((prev) =>
+          prev.map((s) =>
+            s.id.toString() === subscriptionId
+              ? { ...s, status: "cancelled" }
+              : s,
+          ),
+        );
+        setCancelConfirmId(null);
+        toast.success("Subscription cancelled");
+      }
+    } catch (err) {
+      setSubscriptionActionError((prev) => ({
+        ...prev,
+        [subscriptionId]:
+          err instanceof Error ? err.message : "Cancellation failed",
+      }));
+    } finally {
+      setCancellingId(null);
+    }
+  }
+
   async function handleApprovePurchaseRequest(requestId: string) {
     if (!actor) return;
     setApprovingId(requestId);
+    let requestIdBigInt: bigint;
+    try {
+      requestIdBigInt = BigInt(String(requestId));
+    } catch {
+      toast.error("Invalid request ID");
+      setApprovingId(null);
+      return;
+    }
     try {
       const result = await (actor as backendInterface).approvePurchaseRequest(
-        adminEmail,
-        requestId as unknown as bigint,
+        requestIdBigInt,
         `${window.location.origin}/portal/requests`,
         `${window.location.origin}/portal/requests`,
       );
@@ -482,10 +621,17 @@ export default function AdminClientDetailPage() {
     if (!actor) return;
     const reason = declineReasonMap[requestId] ?? "";
     setDecliningId(requestId);
+    let requestIdBigInt: bigint;
+    try {
+      requestIdBigInt = BigInt(String(requestId));
+    } catch {
+      toast.error("Invalid request ID");
+      setDecliningId(null);
+      return;
+    }
     try {
       const result = await (actor as backendInterface).declinePurchaseRequest(
-        adminEmail,
-        requestId as unknown as bigint,
+        requestIdBigInt,
         reason,
       );
       if (result && "err" in result) {
@@ -515,86 +661,131 @@ export default function AdminClientDetailPage() {
     if (purchaseRequestsOpen && actor && client) {
       loadPurchaseRequests();
     }
-  }, [purchaseRequestsOpen, actor, client?.profile.email]);
+  }, [purchaseRequestsOpen, actor, client?.email]); // retryPrKey removed — dead state
 
   // Derive the Messages section
-  const adminEmail = getAdminEmail();
-  const isAdmin = adminEmail === "vincenzo@imperidome.com";
+  const { session: adminSession } = useSession();
+  const isAdmin = adminSession?.role === "admin";
+  const adminEmail = adminSession?.email ?? "";
 
   useEffect(() => {
     if (!actor) return;
+    if (!isAdmin) return;
     setLoading(true);
     setOrdersLoading(true);
     setQuestionnaireLoading(true);
     setInvoicesLoading(true);
 
     (actor as backendInterface)
-      .getAdminAllClients(adminEmail)
+      .getAdminAllClients()
       .then((clients: unknown[]) => {
         const typedClients = clients as ClientSummary[];
-        const match = typedClients.find(
-          (c) => c.profile.principal.toString() === clientId,
-        );
+        const match = typedClients.find((c) => c.email === clientId);
         if (match) {
           setClient(match);
           // Initialize notes textarea from fetched client record
           setNotesValue(match.notes ?? "");
           // Fetch orders
           (actor as backendInterface)
-            .getClientOrders(match.profile.principal)
+            .getClientOrders(clientId as unknown as ClientId)
             .then((fetchedOrders: Order[]) => {
-              const sorted = [...fetchedOrders].sort(
-                (a, b) => Number(b.created_at) - Number(a.created_at),
+              const sorted = [...fetchedOrders].sort((a, b) =>
+                b.created_at > a.created_at
+                  ? 1
+                  : b.created_at < a.created_at
+                    ? -1
+                    : 0,
               );
               setOrders(sorted);
             })
-            .catch(() => setOrders([]))
+            .catch(() => {
+              setOrdersError("Orders failed to load.");
+              setOrders([]);
+            })
             .finally(() => setOrdersLoading(false));
           // Fetch questionnaire
           (actor as backendInterface)
-            .getQuestionnaireByClientId(match.profile.principal)
+            .getQuestionnaireByClientId(clientId as unknown as ClientId)
             .then((q: Questionnaire | null) => setQuestionnaire(q))
-            .catch(() => setQuestionnaire(null))
+            .catch(() => {
+              setQuestionnaireError("Questionnaire data failed to load.");
+              setQuestionnaire(null);
+            })
             .finally(() => setQuestionnaireLoading(false));
           // Fetch invoices (subscription + ad-hoc merged)
           Promise.all([
             (actor as backendInterface).getClientInvoices(
-              match.profile.principal,
+              clientId as unknown as ClientId,
             ),
-            (actor as backendInterface).getAdHocClientInvoices(
-              adminEmail,
-              match.profile.email,
-            ),
+            (actor as backendInterface).getAdHocClientInvoices(match.email),
           ])
             .then(([subscriptionInvoices, adHocInvoices]) => {
-              const allInvoices = [
-                ...(subscriptionInvoices as any[]),
-                ...(adHocInvoices as any[]),
+              const allInvoices: MergedInvoice[] = [
+                ...(subscriptionInvoices as unknown as MergedInvoice[]),
+                ...(adHocInvoices as unknown as MergedInvoice[]),
               ];
-              const sorted = allInvoices.sort(
-                (a, b) =>
-                  Number(b.createdAt ?? b.created_at ?? 0) -
-                  Number(a.createdAt ?? a.created_at ?? 0),
-              );
-              setInvoices(sorted);
+              const sortedBI = [...allInvoices].sort((a, b) => {
+                const bTs = b.createdAt ?? b.created_at ?? 0n;
+                const aTs = a.createdAt ?? a.created_at ?? 0n;
+                return bTs > aTs ? 1 : bTs < aTs ? -1 : 0;
+              });
+              setInvoices(sortedBI);
             })
-            .catch(() => setInvoices([]))
+            .catch(() => {
+              setInvoicesError("Invoices failed to load.");
+              setInvoices([]);
+            })
             .finally(() => setInvoicesLoading(false));
+          // Fetch subscriptions
+          setSubscriptionsLoading(true);
+          (actor as backendInterface)
+            .getStripeSubscriptions()
+            .then((result: { ok: string } | { err: string }) => {
+              if ("ok" in result) {
+                try {
+                  const parsed: Subscription[] = JSON.parse(result.ok);
+                  const forClient = parsed.filter(
+                    (s) => s.clientEmail === match.email,
+                  );
+                  const sorted = [...forClient].sort((a, b) =>
+                    b.created_at > a.created_at
+                      ? 1
+                      : b.created_at < a.created_at
+                        ? -1
+                        : 0,
+                  );
+                  setSubscriptions(sorted);
+                } catch {
+                  setSubscriptions([]);
+                }
+              } else {
+                setSubscriptions([]);
+              }
+            })
+            .catch(() => {
+              setSubscriptionsError("Subscriptions failed to load.");
+              setSubscriptions([]);
+            })
+            .finally(() => setSubscriptionsLoading(false));
+
           // Fetch site link log
           setSiteLinkLogLoading(true);
           (actor as backendInterface)
-            .getSiteLinkLog(adminEmail, clientId)
+            .getSiteLinkLog(clientId)
             .then((result: { ok: SiteLinkEntry[] } | { err: string }) => {
               if ("ok" in result) {
-                const sorted = [...result.ok].sort(
-                  (a, b) => Number(b.sentAt) - Number(a.sentAt),
+                const sorted = [...result.ok].sort((a, b) =>
+                  b.sentAt > a.sentAt ? 1 : b.sentAt < a.sentAt ? -1 : 0,
                 );
                 setSiteLinkLog(sorted);
               } else {
                 setSiteLinkLog([]);
               }
             })
-            .catch(() => setSiteLinkLog([]))
+            .catch(() => {
+              setSiteLinksError("Site links failed to load.");
+              setSiteLinkLog([]);
+            })
             .finally(() => setSiteLinkLogLoading(false));
         } else {
           setError("Client not found.");
@@ -608,13 +799,14 @@ export default function AdminClientDetailPage() {
         setOrdersLoading(false);
         setQuestionnaireLoading(false);
         setInvoicesLoading(false);
+        setSubscriptionsLoading(false);
       })
       .finally(() => setLoading(false));
-  }, [actor, clientId, adminEmail]);
+  }, [actor, clientId, isAdmin]);
 
   function startEdit() {
     if (!client) return;
-    const p = client.profile;
+    const p = client;
     setEditForm({
       firstName: p.firstName,
       lastName: p.lastName,
@@ -634,7 +826,6 @@ export default function AdminClientDetailPage() {
       // Call adminUpdateClientProfile to persist profile edits to the backend.
       // Cast as any because the binding may not yet be in the generated backend.d.ts.
       const result = await (actor as backendInterface).adminUpdateClientProfile(
-        adminEmail,
         clientId,
         editForm.firstName,
         editForm.lastName,
@@ -647,14 +838,14 @@ export default function AdminClientDetailPage() {
       }
       // Only update local state on confirmed ok response
       const updatedProfile: UserProfile = {
-        ...client.profile,
+        ...client,
         firstName: editForm.firstName,
         lastName: editForm.lastName,
         phone: editForm.phone,
         businessName: editForm.businessName,
         businessType: editForm.businessType,
       };
-      setClient((prev) => (prev ? { ...prev, profile: updatedProfile } : prev));
+      setClient((prev) => (prev ? { ...prev, ...updatedProfile } : prev));
       setEditing(false);
       toast.success("Client profile updated");
     } catch (err) {
@@ -677,7 +868,6 @@ export default function AdminClientDetailPage() {
     setReviewingQuestionnaire(true);
     try {
       await (actor as backendInterface).markQuestionnaireReviewed(
-        adminEmail,
         questionnaire.id,
       );
       const nowNs = BigInt(Date.now()) * BigInt(1_000_000);
@@ -726,8 +916,8 @@ export default function AdminClientDetailPage() {
     setDepositError(null);
     try {
       await (actor as backendInterface).sendDepositInvoice(
-        client.profile.principal,
-        client.profile.email,
+        clientId as unknown as ClientId,
+        client.email,
         BigInt(amountCents),
         depositForm.description || "50% deposit",
         dueDateTs,
@@ -735,28 +925,28 @@ export default function AdminClientDetailPage() {
       setDepositSuccess(true);
       // Refresh invoices (subscription + ad-hoc merged)
       const [subscriptionInvoices, adHocInvoices] = await Promise.all([
-        (actor as backendInterface).getClientInvoices(client.profile.principal),
-        (actor as backendInterface).getAdHocClientInvoices(
-          adminEmail,
-          client.profile.email,
+        (actor as backendInterface).getClientInvoices(
+          clientId as unknown as ClientId,
         ),
+        (actor as backendInterface).getAdHocClientInvoices(client.email),
       ]);
-      const allInvoices = [
-        ...(subscriptionInvoices as any[]),
-        ...(adHocInvoices as any[]),
+      const allInvoices: MergedInvoice[] = [
+        ...(subscriptionInvoices as unknown as MergedInvoice[]),
+        ...(adHocInvoices as unknown as MergedInvoice[]),
       ];
-      const sortedInv = allInvoices.sort(
-        (a: any, b: any) =>
-          Number(b.createdAt ?? b.created_at ?? 0) -
-          Number(a.createdAt ?? a.created_at ?? 0),
-      );
+      const sortedInv = allInvoices.sort((a, b) => {
+        const bTs = b.createdAt ?? b.created_at ?? 0n;
+        const aTs = a.createdAt ?? a.created_at ?? 0n;
+        return bTs > aTs ? 1 : bTs < aTs ? -1 : 0;
+      });
       setInvoices(sortedInv);
       // Refresh orders
       const refreshedOrders = await (actor as backendInterface).getClientOrders(
-        client.profile.principal,
+        clientId as unknown as ClientId,
       );
-      const sortedOrders = [...refreshedOrders].sort(
-        (a: Order, b: Order) => Number(b.created_at) - Number(a.created_at),
+      // AGENTS.md: newest-first, b > a ? 1
+      const sortedOrders = [...refreshedOrders].sort((a: Order, b: Order) =>
+        b.created_at > a.created_at ? 1 : b.created_at < a.created_at ? -1 : 0,
       );
       setOrders(sortedOrders);
       setTimeout(() => {
@@ -812,12 +1002,10 @@ export default function AdminClientDetailPage() {
     setCompletionPaymentLoading(true);
     setCompletionPaymentError(null);
     try {
-      const adminEmail = getAdminEmail();
       const result: string = await (
         actor as backendInterface
       ).createCompletionPaymentSession(
         clientId,
-        adminEmail,
         `${window.location.origin}/order-confirmation`,
         window.location.href,
       );
@@ -841,10 +1029,12 @@ export default function AdminClientDetailPage() {
 
   function openSendInvoiceModal() {
     setInvoiceForm({ description: "", amount: "" });
+    setInvoiceCheckoutUrl(null);
     setShowSendInvoiceModal(true);
   }
 
   async function handleSendInvoice() {
+    setInvoiceSendError(null);
     if (!actor || !client) return;
     const amountFloat = Number.parseFloat(invoiceForm.amount);
     if (!invoiceForm.description.trim()) {
@@ -855,6 +1045,10 @@ export default function AdminClientDetailPage() {
       toast.error("Please enter a valid amount (minimum $0.50).");
       return;
     }
+    if (amountFloat <= 0) {
+      setInvoiceSendError("Invoice amount must be greater than $0.00");
+      return;
+    }
     const amountCents = Math.round(amountFloat * 100);
     setInvoiceSending(true);
     try {
@@ -862,38 +1056,43 @@ export default function AdminClientDetailPage() {
         actor as backendInterface
       ).createAdHocInvoiceSession(
         clientId,
-        adminEmail,
         invoiceForm.description.trim(),
         BigInt(amountCents),
         `${window.location.origin}/order-confirmation`,
         `${window.location.origin}/admin/clients/${clientId}`,
       );
       if (result && "err" in result) {
-        toast.error(String(result.err));
-      } else {
-        setShowSendInvoiceModal(false);
-        setInvoiceForm({ description: "", amount: "" });
-        toast.success("Invoice sent successfully");
+        const errMsg = String(result.err);
+        setInvoiceSendError(errMsg);
+        setInvoiceSending(false);
+        return;
+      }
+      if (result && "ok" in result) {
+        setInvoiceCheckoutUrl(result.ok as string);
+        toast.success("Invoice session created successfully");
         // Refresh invoices list (subscription + ad-hoc merged)
         const [subscriptionInvoices, adHocInvoices] = await Promise.all([
           (actor as backendInterface).getClientInvoices(
-            client.profile.principal,
+            clientId as unknown as ClientId,
           ),
-          (actor as backendInterface).getAdHocClientInvoices(
-            adminEmail,
-            client.profile.email,
-          ),
+          (actor as backendInterface).getAdHocClientInvoices(clientId),
         ]);
-        const allInvoices = [
-          ...(subscriptionInvoices as any[]),
-          ...(adHocInvoices as any[]),
+        const allInvoices: MergedInvoice[] = [
+          ...(subscriptionInvoices as unknown as MergedInvoice[]),
+          ...(adHocInvoices as unknown as MergedInvoice[]),
         ];
-        const sorted = allInvoices.sort(
-          (a: any, b: any) =>
-            Number(b.createdAt ?? b.created_at ?? 0) -
-            Number(a.createdAt ?? a.created_at ?? 0),
-        );
+        const sorted = allInvoices.sort((a, b) => {
+          const bTs = b.createdAt ?? b.created_at ?? 0n;
+          const aTs = a.createdAt ?? a.created_at ?? 0n;
+          return bTs > aTs ? 1 : bTs < aTs ? -1 : 0;
+        });
         setInvoices(sorted);
+      } else {
+        setInvoiceSendError(
+          "Unexpected response from server. Please try again.",
+        );
+        setInvoiceSending(false);
+        return;
       }
     } catch (err) {
       const msg =
@@ -909,18 +1108,18 @@ export default function AdminClientDetailPage() {
   async function refreshSiteLinkLog() {
     if (!actor) return;
     try {
-      const result = await (actor as backendInterface).getSiteLinkLog(
-        adminEmail,
-        clientId,
-      );
+      const result = await (actor as backendInterface).getSiteLinkLog(clientId);
       if ("ok" in result) {
-        const sorted = [...(result.ok as SiteLinkEntry[])].sort(
-          (a, b) => Number(b.sentAt) - Number(a.sentAt),
+        const sorted = [...(result.ok as SiteLinkEntry[])].sort((a, b) =>
+          b.sentAt > a.sentAt ? 1 : b.sentAt < a.sentAt ? -1 : 0,
         );
         setSiteLinkLog(sorted);
       }
-    } catch {
-      // silently ignore refresh errors
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.error(err);
+      }
+      // silently ignore refresh errors for site link log
     }
   }
 
@@ -938,7 +1137,6 @@ export default function AdminClientDetailPage() {
     setSiteLinkError(null);
     try {
       const result = await (actor as backendInterface).sendSiteLink(
-        adminEmail,
         clientId,
         siteLinkUrl.trim(),
       );
@@ -969,7 +1167,6 @@ export default function AdminClientDetailPage() {
     setResendingUrl(url);
     try {
       const result = await (actor as backendInterface).resendSiteLink(
-        adminEmail,
         clientId,
         url,
       );
@@ -1012,7 +1209,6 @@ export default function AdminClientDetailPage() {
       const result = await (actor as backendInterface).updateClientNotes(
         clientId,
         notes,
-        adminEmail,
       );
       if (result && "err" in result) {
         throw new Error(String(result.err));
@@ -1041,6 +1237,13 @@ export default function AdminClientDetailPage() {
     };
   }, []);
 
+  // Reset invoice checkout URL when modal closes
+  useEffect(() => {
+    if (!showSendInvoiceModal) {
+      setInvoiceCheckoutUrl(null);
+    }
+  }, [showSendInvoiceModal]);
+
   // ── File Delivery handlers ────────────────────────────────────────────────
 
   async function loadClientFiles() {
@@ -1049,13 +1252,17 @@ export default function AdminClientDetailPage() {
     try {
       const files = await (actor as backendInterface).getFilesForClient(
         adminEmail,
-        client.profile.email,
+        client.email,
       );
-      const sorted = [...(files as ClientFileMetadata[])].sort(
-        (a, b) => Number(b.uploadedAt) - Number(a.uploadedAt),
+      const sorted = [...(files as ClientFileMetadata[])].sort((a, b) =>
+        b.uploadedAt > a.uploadedAt ? 1 : b.uploadedAt < a.uploadedAt ? -1 : 0,
       );
       setClientFiles(sorted);
-    } catch {
+    } catch (err) {
+      toast.error("Failed to load client files.");
+      if (import.meta.env.DEV) {
+        console.error(err);
+      }
       setClientFiles([]);
     } finally {
       setFilesLoading(false);
@@ -1068,7 +1275,7 @@ export default function AdminClientDetailPage() {
     if (actor && client) {
       loadClientFiles();
     }
-  }, [actor, client?.profile.email]);
+  }, [actor, client?.email]);
 
   // ── Messages helpers ─────────────────────────────────────────────────────
 
@@ -1076,14 +1283,17 @@ export default function AdminClientDetailPage() {
     if (!actor || !client) return;
     try {
       const msgs = await (actor as backendInterface).getMessages(
-        "vincenzo@imperidome.com",
-        client.profile.email,
+        adminEmail,
+        client.email,
       );
       setMessages((msgs as ClientMessage[]) ?? []);
-    } catch {
-      // silently ignore poll errors
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.error(err);
+      }
+      // silently ignore poll errors for messages
     }
-  }, [actor, client]);
+  }, [actor, client, adminEmail]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional
   useEffect(() => {
@@ -1091,14 +1301,8 @@ export default function AdminClientDetailPage() {
     setMessagesLoading(true);
     // Load initial thread + mark read
     Promise.all([
-      (actor as backendInterface).getMessages(
-        "vincenzo@imperidome.com",
-        client.profile.email,
-      ),
-      (actor as backendInterface).markMessagesRead(
-        "vincenzo@imperidome.com",
-        client.profile.email,
-      ),
+      (actor as backendInterface).getMessages(adminEmail, client.email),
+      (actor as backendInterface).markMessagesRead(adminEmail, client.email),
     ])
       .then(([msgs]) => {
         setMessages((msgs as ClientMessage[]) ?? []);
@@ -1109,6 +1313,7 @@ export default function AdminClientDetailPage() {
     // Start 10-second poll
     if (messagesPollRef.current) clearInterval(messagesPollRef.current);
     messagesPollRef.current = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
       loadMessages();
     }, 10_000);
 
@@ -1118,7 +1323,7 @@ export default function AdminClientDetailPage() {
         messagesPollRef.current = null;
       }
     };
-  }, [actor, client?.profile.email]);
+  }, [actor, client?.email]);
 
   // Auto-scroll to bottom when messages update
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional
@@ -1135,8 +1340,8 @@ export default function AdminClientDetailPage() {
     setReplySending(true);
     try {
       const result = await (actor as backendInterface).sendMessage(
-        "vincenzo@imperidome.com",
-        client.profile.email,
+        adminEmail,
+        client.email,
         body,
       );
       if (result && "err" in result) {
@@ -1166,8 +1371,7 @@ export default function AdminClientDetailPage() {
       const arrayBuffer = await fileUploadFile.arrayBuffer();
       const uint8 = new Uint8Array(arrayBuffer);
       const result = await (actor as backendInterface).uploadFileToClient(
-        adminEmail,
-        client.profile.email,
+        client.email,
         uint8,
         fileUploadFile.name,
         fileLabel.trim(),
@@ -1194,10 +1398,7 @@ export default function AdminClientDetailPage() {
     if (!actor) return;
     setDeletingFileId(fileId);
     try {
-      const result = await (actor as backendInterface).deleteClientFile(
-        adminEmail,
-        fileId,
-      );
+      const result = await (actor as backendInterface).deleteClientFile(fileId);
       if (result && "err" in result) {
         throw new Error(String(result.err));
       }
@@ -1291,8 +1492,7 @@ export default function AdminClientDetailPage() {
 
     try {
       const result = await (actor as backendInterface).updateOrderStatus(
-        adminEmail,
-        activeOrder.id as unknown as string,
+        String(activeOrder.id),
         Object.keys(makeStatus(newKey))[0],
       );
 
@@ -1304,9 +1504,9 @@ export default function AdminClientDetailPage() {
       if (EMAIL_TRIGGER_STATUSES.includes(newKey)) {
         try {
           await (actor as backendInterface).sendOrderStatusEmail(
-            client.profile.principal,
+            clientId as unknown as ClientId,
             makeStatus(newKey),
-            client.profile.email,
+            client.email,
           );
         } catch {
           // Email failure is non-blocking
@@ -1329,7 +1529,7 @@ export default function AdminClientDetailPage() {
     (r) => r.status === "pending",
   ).length;
 
-  const profile = client?.profile;
+  const profile = client;
   const fullName = profile
     ? `${profile.firstName} ${profile.lastName}`.trim()
     : "";
@@ -1425,7 +1625,8 @@ export default function AdminClientDetailPage() {
                       margin: 0,
                       fontSize: 22,
                       fontWeight: 700,
-                      color: "#EEF0F8",
+                      color: "#5EF08A",
+                      fontFamily: "'Courier New', monospace",
                       flex: 1,
                       minWidth: 0,
                     }}
@@ -1551,7 +1752,7 @@ export default function AdminClientDetailPage() {
                     color: "#7A7D90",
                   }}
                 >
-                  <span>Joined {formatDate(profile.createdAt)}</span>
+                  <span>Joined {formatDate(profile.created_at)}</span>
 
                   {client?.subscriptionPlanName ? (
                     <span
@@ -1602,9 +1803,10 @@ export default function AdminClientDetailPage() {
 
                 {/* Send Invoice Modal (ad-hoc Stripe checkout) */}
                 {showSendInvoiceModal && (
-                  <div
+                  <dialog
+                    open
                     data-ocid="client_detail.invoices.send_invoice.dialog"
-                    role="presentation"
+                    aria-modal="true"
                     style={{
                       position: "fixed",
                       inset: 0,
@@ -1760,6 +1962,16 @@ export default function AdminClientDetailPage() {
                         />
                       </div>
 
+                      {/* Inline error */}
+                      {invoiceSendError && (
+                        <div
+                          className="text-red-500 text-sm mt-2 p-2 bg-red-950/30 rounded border border-red-800/30"
+                          style={{ marginBottom: 12 }}
+                        >
+                          {invoiceSendError}
+                        </div>
+                      )}
+
                       {/* Buttons */}
                       <div style={{ display: "flex", gap: 12 }}>
                         <button
@@ -1831,8 +2043,131 @@ export default function AdminClientDetailPage() {
                           Cancel
                         </button>
                       </div>
+                      {invoiceCheckoutUrl && (
+                        <div
+                          style={{
+                            marginTop: 20,
+                            paddingTop: 20,
+                            borderTop: "1px solid rgba(255,255,255,0.1)",
+                          }}
+                        >
+                          <div
+                            style={{
+                              background: "rgba(94,240,138,0.1)",
+                              border: "1px solid rgba(94,240,138,0.3)",
+                              borderRadius: 6,
+                              padding: "12px 16px",
+                              marginBottom: 16,
+                              color: "#5EF08A",
+                              fontSize: 14,
+                              fontWeight: 600,
+                            }}
+                          >
+                            Invoice session created successfully
+                          </div>
+                          <label
+                            htmlFor="invoice-checkout-url"
+                            style={labelStyle}
+                          >
+                            Checkout URL
+                          </label>
+                          <div
+                            style={{ display: "flex", gap: 10, marginTop: 6 }}
+                          >
+                            <input
+                              id="invoice-checkout-url"
+                              type="text"
+                              readOnly
+                              value={invoiceCheckoutUrl}
+                              style={{
+                                flex: 1,
+                                background: "rgba(255,255,255,0.05)",
+                                border: "1px solid rgba(255,255,255,0.1)",
+                                borderRadius: 8,
+                                padding: "10px 12px",
+                                fontSize: 13,
+                                color: "#EEF0F8",
+                                outline: "none",
+                                fontFamily: "inherit",
+                              }}
+                            />
+                            <button
+                              type="button"
+                              data-ocid="client_detail.invoices.send_invoice.copy_url_button"
+                              onClick={() => {
+                                if (invoiceCheckoutUrl) {
+                                  navigator.clipboard.writeText(
+                                    invoiceCheckoutUrl,
+                                  );
+                                  toast.success("URL copied to clipboard");
+                                }
+                              }}
+                              style={{
+                                background: "rgba(99,102,241,0.15)",
+                                color: "#a5b4fc",
+                                border: "1px solid rgba(99,102,241,0.4)",
+                                borderRadius: 8,
+                                padding: "10px 18px",
+                                fontSize: 13,
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                whiteSpace: "nowrap",
+                                transition: "background 0.2s",
+                              }}
+                              onMouseEnter={(e) => {
+                                (
+                                  e.currentTarget as HTMLButtonElement
+                                ).style.background = "rgba(99,102,241,0.25)";
+                              }}
+                              onMouseLeave={(e) => {
+                                (
+                                  e.currentTarget as HTMLButtonElement
+                                ).style.background = "rgba(99,102,241,0.15)";
+                              }}
+                            >
+                              Copy
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            data-ocid="client_detail.invoices.send_invoice.done_button"
+                            onClick={() => setShowSendInvoiceModal(false)}
+                            style={{
+                              marginTop: 16,
+                              width: "100%",
+                              background: "transparent",
+                              color: "#7A7D90",
+                              border: "1px solid rgba(255,255,255,0.15)",
+                              borderRadius: 8,
+                              padding: "11px 0",
+                              fontSize: 14,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              transition: "border-color 0.2s, color 0.2s",
+                            }}
+                            onMouseEnter={(e) => {
+                              (
+                                e.currentTarget as HTMLButtonElement
+                              ).style.borderColor = "rgba(255,255,255,0.3)";
+                              (
+                                e.currentTarget as HTMLButtonElement
+                              ).style.color = "#EEF0F8";
+                            }}
+                            onMouseLeave={(e) => {
+                              (
+                                e.currentTarget as HTMLButtonElement
+                              ).style.borderColor = "rgba(255,255,255,0.15)";
+                              (
+                                e.currentTarget as HTMLButtonElement
+                              ).style.color = "#7A7D90";
+                            }}
+                          >
+                            Done
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  </div>
+                  </dialog>
                 )}
               </>
             ) : (
@@ -2049,6 +2384,21 @@ export default function AdminClientDetailPage() {
               Project Timeline
             </h3>
 
+            {ordersError && (
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "#f87171",
+                  background: "rgba(239,68,68,0.1)",
+                  borderRadius: 4,
+                  padding: "6px 10px",
+                  marginTop: 6,
+                  maxWidth: 320,
+                }}
+              >
+                Orders failed to load.
+              </div>
+            )}
             {ordersLoading ? (
               <div
                 style={{
@@ -2199,7 +2549,7 @@ export default function AdminClientDetailPage() {
             )}
           </div>
 
-          {/* ── Section 2b: Notes (vincenzo@imperidome.com only) ── */}
+          {/* ── Section 2b: Notes ── */}
           {isAdmin && (
             <div
               data-ocid="client_detail.notes.card"
@@ -2685,13 +3035,16 @@ export default function AdminClientDetailPage() {
                       {clientFiles.map((file, idx) => {
                         const isDeleting = deletingFileId === file.id;
                         const confirmingDelete = deleteConfirmId === file.id;
-                        const uploadDate = new Date(
-                          Number(file.uploadedAt) / 1_000_000,
-                        ).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        });
+                        const uploadDate =
+                          file.uploadedAt === 0n
+                            ? "—"
+                            : new Date(
+                                Number(file.uploadedAt) / 1_000_000,
+                              ).toLocaleDateString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                              });
                         return (
                           <tr
                             key={file.id}
@@ -3009,8 +3362,7 @@ export default function AdminClientDetailPage() {
                   </div>
                 ) : (
                   messages.map((msg) => {
-                    const isAdminMsg =
-                      msg.senderEmail === "vincenzo@imperidome.com";
+                    const isAdminMsg = msg.senderEmail === adminEmail;
                     const ts = new Date(Number(msg.createdAt) / 1_000_000);
                     const timeStr = ts.toLocaleString("en-US", {
                       month: "short",
@@ -3377,11 +3729,12 @@ export default function AdminClientDetailPage() {
                                   text: "#FBBF24",
                                   border: "rgba(251,191,36,0.3)",
                                 };
-                        const isApproving = approvingId === req.id;
-                        const isDeclining = decliningId === req.id;
-                        const isDeclinePending = declinePendingId === req.id;
+                        const isApproving = approvingId === String(req.id);
+                        const isDeclining = decliningId === String(req.id);
+                        const isDeclinePending =
+                          declinePendingId === String(req.id);
                         const reqDate = new Date(
-                          Number(req.createdAt) / 1_000_000,
+                          Number(req.requestedAt) / 1_000_000,
                         ).toLocaleDateString("en-US", {
                           month: "short",
                           day: "numeric",
@@ -3389,7 +3742,7 @@ export default function AdminClientDetailPage() {
                         });
                         return (
                           <div
-                            key={req.id}
+                            key={String(req.id)}
                             data-ocid={`client_detail.purchase_requests.item.${idx + 1}`}
                             style={{
                               background: "rgba(19,21,36,0.5)",
@@ -3481,7 +3834,9 @@ export default function AdminClientDetailPage() {
                                       type="button"
                                       data-ocid={`client_detail.purchase_requests.approve_button.${idx + 1}`}
                                       onClick={() =>
-                                        handleApprovePurchaseRequest(req.id)
+                                        handleApprovePurchaseRequest(
+                                          String(req.id),
+                                        )
                                       }
                                       disabled={isApproving || isDeclining}
                                       style={{
@@ -3513,7 +3868,7 @@ export default function AdminClientDetailPage() {
                                       type="button"
                                       data-ocid={`client_detail.purchase_requests.decline_button.${idx + 1}`}
                                       onClick={() =>
-                                        setDeclinePendingId(req.id)
+                                        setDeclinePendingId(String(req.id))
                                       }
                                       disabled={isApproving || isDeclining}
                                       style={{
@@ -3551,7 +3906,7 @@ export default function AdminClientDetailPage() {
                                     }}
                                   >
                                     <label
-                                      htmlFor={`decline-reason-${req.id}`}
+                                      htmlFor={`decline-reason-${String(req.id)}`}
                                       style={{
                                         fontSize: 11,
                                         fontWeight: 700,
@@ -3563,15 +3918,17 @@ export default function AdminClientDetailPage() {
                                       Decline Reason (optional)
                                     </label>
                                     <textarea
-                                      id={`decline-reason-${req.id}`}
+                                      id={`decline-reason-${String(req.id)}`}
                                       data-ocid={`client_detail.purchase_requests.decline_reason.${idx + 1}`}
                                       rows={2}
                                       placeholder="e.g. Product not available for this plan"
-                                      value={declineReasonMap[req.id] ?? ""}
+                                      value={
+                                        declineReasonMap[String(req.id)] ?? ""
+                                      }
                                       onChange={(e) =>
                                         setDeclineReasonMap((prev) => ({
                                           ...prev,
-                                          [req.id]: e.target.value,
+                                          [String(req.id)]: e.target.value,
                                         }))
                                       }
                                       style={{
@@ -3594,7 +3951,9 @@ export default function AdminClientDetailPage() {
                                         type="button"
                                         data-ocid={`client_detail.purchase_requests.confirm_button.${idx + 1}`}
                                         onClick={() =>
-                                          handleDeclinePurchaseRequest(req.id)
+                                          handleDeclinePurchaseRequest(
+                                            String(req.id),
+                                          )
                                         }
                                         disabled={isDeclining}
                                         style={{
@@ -3743,6 +4102,21 @@ export default function AdminClientDetailPage() {
               Questionnaire Summary
             </h3>
 
+            {questionnaireError && (
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "#f87171",
+                  background: "rgba(239,68,68,0.1)",
+                  borderRadius: 4,
+                  padding: "6px 10px",
+                  marginTop: 6,
+                  maxWidth: 320,
+                }}
+              >
+                Questionnaire data failed to load.
+              </div>
+            )}
             {questionnaireLoading ? (
               <div
                 data-ocid="client_detail.questionnaire.loading_state"
@@ -4064,6 +4438,21 @@ export default function AdminClientDetailPage() {
               </div>
             )}
 
+            {invoicesError && (
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "#f87171",
+                  background: "rgba(239,68,68,0.1)",
+                  borderRadius: 4,
+                  padding: "6px 10px",
+                  marginTop: 6,
+                  maxWidth: 320,
+                }}
+              >
+                Invoices failed to load.
+              </div>
+            )}
             {invoicesLoading ? (
               <div
                 data-ocid="client_detail.invoices.loading_state"
@@ -4243,7 +4632,9 @@ export default function AdminClientDetailPage() {
                               <button
                                 type="button"
                                 data-ocid={`client_detail.invoices.download_button.${idx + 1}`}
-                                onClick={() => downloadInvoicePdf(inv)}
+                                onClick={() =>
+                                  downloadInvoicePdf(inv as InvoiceRecord)
+                                }
                                 title="Download PDF Receipt"
                                 style={{
                                   background: "none",
@@ -4281,6 +4672,377 @@ export default function AdminClientDetailPage() {
               </div>
             )}
 
+            {/* ── Section: Subscriptions ── */}
+            <div
+              data-ocid="client_detail.subscriptions.card"
+              style={{
+                background: "rgba(17,19,34,0.7)",
+                backdropFilter: "blur(12px)",
+                borderRadius: 8,
+                border: "1px solid #1C1F33",
+                padding: 24,
+                marginTop: 20,
+                width: "100%",
+                boxSizing: "border-box",
+              }}
+            >
+              <h3
+                style={{
+                  margin: "0 0 16px 0",
+                  fontSize: 16,
+                  fontWeight: 700,
+                  color: "#EEF0F8",
+                }}
+              >
+                Subscriptions
+              </h3>
+
+              {subscriptionsError && (
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "#f87171",
+                    background: "rgba(239,68,68,0.1)",
+                    borderRadius: 4,
+                    padding: "6px 10px",
+                    marginTop: 6,
+                    maxWidth: 320,
+                  }}
+                >
+                  Subscriptions failed to load.
+                </div>
+              )}
+              {subscriptionsLoading ? (
+                <div
+                  data-ocid="client_detail.subscriptions.loading_state"
+                  style={{
+                    color: "#7A7D90",
+                    fontSize: 14,
+                    padding: "16px 0",
+                    textAlign: "center",
+                  }}
+                >
+                  Loading subscriptions...
+                </div>
+              ) : subscriptions.length === 0 ? (
+                <div
+                  data-ocid="client_detail.subscriptions.empty_state"
+                  style={{
+                    textAlign: "center",
+                    color: "#7A7D90",
+                    fontSize: 14,
+                    padding: "24px 0",
+                    background: "rgba(19,21,36,0.5)",
+                    borderRadius: 6,
+                  }}
+                >
+                  No subscriptions found for this client.
+                </div>
+              ) : (
+                <div style={{ overflowX: "auto" }}>
+                  <table
+                    style={{
+                      width: "100%",
+                      borderCollapse: "collapse",
+                      minWidth: 640,
+                    }}
+                  >
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid #1C1F33" }}>
+                        {[
+                          "Plan",
+                          "Billing",
+                          "Status",
+                          "Created",
+                          "Actions",
+                        ].map((col) => (
+                          <th
+                            key={col}
+                            style={{
+                              padding: "8px 12px",
+                              textAlign: "left",
+                              fontSize: 11,
+                              fontWeight: 700,
+                              color: "#7A7D90",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.06em",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {col}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {subscriptions.map((sub, idx) => {
+                        const subIdStr = sub.id.toString();
+                        const isActivating = activatingId === subIdStr;
+                        const isCancelling = cancellingId === subIdStr;
+                        const isConfirmingCancel = cancelConfirmId === subIdStr;
+                        const actionError = subscriptionActionError[subIdStr];
+
+                        const statusConfig: Record<
+                          string,
+                          { bg: string; text: string; label: string }
+                        > = {
+                          pending: {
+                            bg: "rgba(251,191,36,0.15)",
+                            text: "#FBBF24",
+                            label: "Awaiting Activation",
+                          },
+                          active: {
+                            bg: "rgba(94,240,138,0.15)",
+                            text: "#5EF08A",
+                            label: "Active",
+                          },
+                          cancelled: {
+                            bg: "rgba(239,68,68,0.15)",
+                            text: "#f87171",
+                            label: "Cancelled",
+                          },
+                          cancellation_requested: {
+                            bg: "rgba(251,191,36,0.15)",
+                            text: "#FBBF24",
+                            label: "Cancellation Requested",
+                          },
+                        };
+                        const cfg =
+                          statusConfig[sub.status] ?? statusConfig.pending;
+
+                        return (
+                          <tr
+                            key={subIdStr}
+                            data-ocid={`client_detail.subscriptions.row.${idx + 1}`}
+                            style={{ borderBottom: "1px solid #1C1F33" }}
+                          >
+                            <td
+                              style={{
+                                padding: "10px 12px",
+                                fontSize: 13,
+                                color: "#EEF0F8",
+                                fontWeight: 600,
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {sub.plan_name}
+                            </td>
+                            <td
+                              style={{
+                                padding: "10px 12px",
+                                fontSize: 13,
+                                color: "#7A7D90",
+                                whiteSpace: "nowrap",
+                                textTransform: "capitalize",
+                              }}
+                            >
+                              {sub.billing_cycle}
+                            </td>
+                            <td
+                              style={{
+                                padding: "10px 12px",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  background: cfg.bg,
+                                  color: cfg.text,
+                                  borderRadius: 5,
+                                  padding: "3px 9px",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  letterSpacing: "0.04em",
+                                  border: `1px solid ${cfg.text}33`,
+                                }}
+                              >
+                                {cfg.label}
+                              </span>
+                            </td>
+                            <td
+                              style={{
+                                padding: "10px 12px",
+                                fontSize: 13,
+                                color: "#7A7D90",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {formatDate(sub.created_at)}
+                            </td>
+                            <td
+                              style={{
+                                padding: "10px 12px",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {isConfirmingCancel ? (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: 8,
+                                    background: "rgba(239,68,68,0.07)",
+                                    border: "1px solid rgba(239,68,68,0.2)",
+                                    borderRadius: 7,
+                                    padding: "10px 12px",
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      fontSize: 12,
+                                      color: "#f87171",
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    Cancel this subscription? The client will no
+                                    longer be billed.
+                                  </span>
+                                  <div style={{ display: "flex", gap: 8 }}>
+                                    <button
+                                      type="button"
+                                      data-ocid={`client_detail.subscriptions.confirm_cancel_button.${idx + 1}`}
+                                      onClick={() =>
+                                        handleCancelSubscription(subIdStr)
+                                      }
+                                      disabled={isCancelling}
+                                      style={{
+                                        background: isCancelling
+                                          ? "rgba(239,68,68,0.08)"
+                                          : "rgba(239,68,68,0.15)",
+                                        color: "#f87171",
+                                        border: "1px solid rgba(239,68,68,0.4)",
+                                        borderRadius: 5,
+                                        padding: "5px 12px",
+                                        fontSize: 12,
+                                        fontWeight: 700,
+                                        cursor: isCancelling
+                                          ? "not-allowed"
+                                          : "pointer",
+                                        opacity: isCancelling ? 0.65 : 1,
+                                        whiteSpace: "nowrap",
+                                      }}
+                                    >
+                                      {isCancelling
+                                        ? "Cancelling..."
+                                        : "Confirm"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      data-ocid={`client_detail.subscriptions.cancel_cancel_button.${idx + 1}`}
+                                      onClick={() => setCancelConfirmId(null)}
+                                      disabled={isCancelling}
+                                      style={{
+                                        background: "transparent",
+                                        color: "#7A7D90",
+                                        border:
+                                          "1px solid rgba(255,255,255,0.12)",
+                                        borderRadius: 5,
+                                        padding: "5px 12px",
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        cursor: isCancelling
+                                          ? "not-allowed"
+                                          : "pointer",
+                                      }}
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 8,
+                                    flexWrap: "wrap",
+                                  }}
+                                >
+                                  {sub.status === "pending" && (
+                                    <button
+                                      type="button"
+                                      data-ocid={`client_detail.subscriptions.activate_button.${idx + 1}`}
+                                      onClick={() =>
+                                        handleActivateSubscription(subIdStr)
+                                      }
+                                      disabled={isActivating}
+                                      style={{
+                                        background: isActivating
+                                          ? "rgba(94,240,138,0.08)"
+                                          : "rgba(94,240,138,0.12)",
+                                        color: "#5EF08A",
+                                        border:
+                                          "1px solid rgba(94,240,138,0.4)",
+                                        borderRadius: 5,
+                                        padding: "5px 12px",
+                                        fontSize: 12,
+                                        fontWeight: 700,
+                                        cursor: isActivating
+                                          ? "not-allowed"
+                                          : "pointer",
+                                        opacity: isActivating ? 0.65 : 1,
+                                        whiteSpace: "nowrap",
+                                        transition: "background 0.2s",
+                                      }}
+                                    >
+                                      {isActivating
+                                        ? "Activating..."
+                                        : "Activate"}
+                                    </button>
+                                  )}
+                                  {sub.status === "active" && (
+                                    <button
+                                      type="button"
+                                      data-ocid={`client_detail.subscriptions.cancel_button.${idx + 1}`}
+                                      onClick={() =>
+                                        setCancelConfirmId(subIdStr)
+                                      }
+                                      disabled={isCancelling}
+                                      style={{
+                                        background: "transparent",
+                                        color: "#f87171",
+                                        border:
+                                          "1px solid rgba(239,68,68,0.35)",
+                                        borderRadius: 5,
+                                        padding: "5px 12px",
+                                        fontSize: 12,
+                                        fontWeight: 700,
+                                        cursor: "pointer",
+                                        whiteSpace: "nowrap",
+                                        transition: "background 0.2s",
+                                      }}
+                                    >
+                                      Cancel
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                              {actionError && (
+                                <div
+                                  data-ocid={`client_detail.subscriptions.error_state.${idx + 1}`}
+                                  style={{
+                                    fontSize: 11,
+                                    color: "#f87171",
+                                    marginTop: 6,
+                                    background: "rgba(239,68,68,0.08)",
+                                    border: "1px solid rgba(239,68,68,0.2)",
+                                    borderRadius: 4,
+                                    padding: "4px 8px",
+                                  }}
+                                >
+                                  {actionError}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
             {/* ── Sent Site Link History ── */}
             <div
               data-ocid="client_detail.site_link_log.card"
@@ -4306,6 +5068,21 @@ export default function AdminClientDetailPage() {
                 Sent Link History
               </h3>
 
+              {siteLinksError && (
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "#f87171",
+                    background: "rgba(239,68,68,0.1)",
+                    borderRadius: 4,
+                    padding: "6px 10px",
+                    marginTop: 6,
+                    maxWidth: 320,
+                  }}
+                >
+                  Site links failed to load.
+                </div>
+              )}
               {siteLinkLogLoading ? (
                 <div
                   data-ocid="client_detail.site_link_log.loading_state"
@@ -4472,9 +5249,9 @@ export default function AdminClientDetailPage() {
 
             {/* Send Site Link Modal */}
             {showSiteLinkModal && (
-              <div
+              <dialog
+                open={true}
                 data-ocid="client_detail.site_link.dialog"
-                role="presentation"
                 style={{
                   position: "fixed",
                   inset: 0,
@@ -4492,6 +5269,7 @@ export default function AdminClientDetailPage() {
                 onKeyDown={(e) => {
                   if (e.key === "Escape") setShowSiteLinkModal(false);
                 }}
+                aria-modal="true"
               >
                 <div
                   style={{
@@ -4710,14 +5488,14 @@ export default function AdminClientDetailPage() {
                     </button>
                   </div>
                 </div>
-              </div>
+              </dialog>
             )}
 
             {/* Send Deposit Invoice Modal */}
             {showDepositModal && (
-              <div
+              <dialog
+                open={true}
                 data-ocid="client_detail.invoices.modal"
-                role="presentation"
                 style={{
                   position: "fixed",
                   inset: 0,
@@ -4736,6 +5514,7 @@ export default function AdminClientDetailPage() {
                 onKeyDown={(e) => {
                   if (e.key === "Escape") setShowDepositModal(false);
                 }}
+                aria-modal="true"
               >
                 <div
                   style={{
@@ -4894,7 +5673,7 @@ export default function AdminClientDetailPage() {
                     </button>
                   </div>
                 </div>
-              </div>
+              </dialog>
             )}
           </div>
         </>

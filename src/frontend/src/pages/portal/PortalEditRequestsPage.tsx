@@ -1,14 +1,16 @@
 import { Paperclip } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { EditRequest, backendInterface } from "../../backend";
+import type { CSSProperties, ChangeEvent, FormEvent } from "react";
+import type { EditRequest, backendInterface } from "../../backend.d";
 import { EditableText } from "../../components/EditableText";
+import TypewriterText from "../../components/TypewriterText";
 import { useActor } from "../../hooks/useActor";
+import { useSession } from "../../hooks/useSession";
 import PortalLayout from "./PortalLayout";
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 function formatDate(ts: bigint): string {
+  if (ts === 0n) return "—";
+  if (Number.isNaN(Number(ts))) return "—";
   const ms = Number(ts / 1_000_000n);
   return new Date(ms).toLocaleDateString("en-US", {
     month: "short",
@@ -17,34 +19,52 @@ function formatDate(ts: bigint): string {
   });
 }
 
-function Skeleton({ style }: { style?: React.CSSProperties }) {
+function Skeleton({ style }: { style?: CSSProperties }) {
   return (
     <div
       style={{
-        background: "rgba(40,45,70,0.8)",
+        background: "rgba(94,240,138,0.05)",
         borderRadius: "6px",
         animation: "pulse 1.5s ease-in-out infinite",
+        border: "1px solid rgba(94,240,138,0.1)",
         ...style,
       }}
     />
   );
 }
 
-// ---------------------------------------------------------------------------
-// Status badge
-// ---------------------------------------------------------------------------
-const STATUS_CFG: Record<string, { bg: string; color: string }> = {
-  SUBMITTED: { bg: "#FEF9C3", color: "#92400E" },
-  "IN PROGRESS": { bg: "#5EF08A", color: "#ffffff" },
-  COMPLETED: { bg: "#DCFCE7", color: "#166534" },
-  DECLINED: { bg: "#FEE2E2", color: "#991B1B" },
-};
-
 function StatusBadge({ status }: { status: string }) {
-  const cfg = STATUS_CFG[status.toUpperCase()] ?? {
-    bg: "#F3F4F6",
-    color: "#7A7D90",
-  };
+  const s = status.toUpperCase();
+  if (s === "COMPLETED")
+    return (
+      <span className="matrix-badge" style={{ fontSize: "11px" }}>
+        COMPLETED
+      </span>
+    );
+  if (s === "DECLINED")
+    return (
+      <span className="matrix-badge-red" style={{ fontSize: "11px" }}>
+        DECLINED
+      </span>
+    );
+  if (s === "IN PROGRESS")
+    return (
+      <span
+        style={{
+          display: "inline-block",
+          padding: "3px 12px",
+          borderRadius: "999px",
+          fontSize: "11px",
+          fontWeight: 700,
+          letterSpacing: "0.05em",
+          background: "rgba(94,240,138,0.15)",
+          color: "#5EF08A",
+          border: "1px solid rgba(94,240,138,0.4)",
+        }}
+      >
+        IN PROGRESS
+      </span>
+    );
   return (
     <span
       style={{
@@ -54,19 +74,16 @@ function StatusBadge({ status }: { status: string }) {
         fontSize: "11px",
         fontWeight: 700,
         letterSpacing: "0.05em",
-        background: cfg.bg,
-        color: cfg.color,
-        whiteSpace: "nowrap",
+        background: "rgba(234,179,8,0.1)",
+        color: "#EAB308",
+        border: "1px solid rgba(234,179,8,0.3)",
       }}
     >
-      {status.toUpperCase()}
+      SUBMITTED
     </span>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Truncated description cell
-// ---------------------------------------------------------------------------
 function DescriptionCell({ text }: { text: string }) {
   const [expanded, setExpanded] = useState(false);
   const truncated = text.length > 50 ? `${text.slice(0, 50)}…` : text;
@@ -92,9 +109,6 @@ function DescriptionCell({ text }: { text: string }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Attachment cell
-// ---------------------------------------------------------------------------
 function AttachmentCell({ url }: { url?: string }) {
   if (!url) return null;
   return (
@@ -110,9 +124,6 @@ function AttachmentCell({ url }: { url?: string }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Requests table
-// ---------------------------------------------------------------------------
 const TABLE_HEADERS = [
   "Request #",
   "Type",
@@ -126,11 +137,7 @@ function RequestsTable({
   requests,
   emptyText,
   ocidPrefix,
-}: {
-  requests: EditRequest[];
-  emptyText: string;
-  ocidPrefix: string;
-}) {
+}: { requests: EditRequest[]; emptyText: string; ocidPrefix: string }) {
   if (requests.length === 0) {
     return (
       <p
@@ -141,53 +148,24 @@ function RequestsTable({
       </p>
     );
   }
-
   return (
     <>
       <style>{`
-        @media (max-width: 640px) {
-          .er-table-desktop { display: none !important; }
-          .er-blocks-mobile { display: flex !important; }
-        }
-        @media (min-width: 641px) {
-          .er-table-desktop { display: table !important; }
-          .er-blocks-mobile { display: none !important; }
-        }
+        @media (max-width: 640px) { .er-table-desktop { display: none !important; } .er-blocks-mobile { display: flex !important; } }
+        @media (min-width: 641px) { .er-table-desktop { display: table !important; } .er-blocks-mobile { display: none !important; } }
+        @keyframes typewriter-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
-
-      {/* Desktop */}
       <div style={{ overflowX: "auto" }}>
         <table
           data-ocid={`${ocidPrefix}.table`}
-          className="er-table-desktop"
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            minWidth: "640px",
-          }}
+          className="er-table-desktop matrix-table"
+          style={{ width: "100%", minWidth: "640px" }}
         >
           <thead>
-            <tr
-              style={{
-                background: "#0A0B14",
-                borderBottom: "1px solid #1C1F33",
-              }}
-            >
+            <tr>
               {TABLE_HEADERS.map((h) => (
-                <th
-                  key={h}
-                  style={{
-                    padding: "10px 14px",
-                    textAlign: "left",
-                    fontSize: "11px",
-                    fontWeight: 700,
-                    color: "#7A7D90",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {h}
+                <th key={h}>
+                  <TypewriterText text={h} as="span" speed={40} />
                 </th>
               ))}
             </tr>
@@ -197,57 +175,37 @@ function RequestsTable({
               <tr
                 key={String(req.id)}
                 data-ocid={`${ocidPrefix}.row.${idx + 1}`}
-                style={{
-                  background:
-                    idx % 2 === 0 ? "rgba(17,19,34,0.7)" : "rgba(14,16,32,0.9)",
-                  borderBottom: "1px solid #1C1F33",
-                }}
+                style={{ animation: "typewriter-fade-in 0.4s ease forwards" }}
               >
                 <td
                   style={{
-                    padding: "12px 14px",
-                    fontSize: "13px",
                     fontWeight: 600,
                     color: "#EEF0F8",
                     whiteSpace: "nowrap",
+                    fontFamily: "monospace",
                   }}
                 >
                   {req.request_number}
                 </td>
-                <td
-                  style={{
-                    padding: "12px 14px",
-                    fontSize: "13px",
-                    color: "#7A7D90",
-                    whiteSpace: "nowrap",
-                  }}
-                >
+                <td style={{ color: "#7A7D90", whiteSpace: "nowrap" }}>
                   {req.request_type}
                 </td>
-                <td
-                  style={{
-                    padding: "12px 14px",
-                    fontSize: "13px",
-                    color: "#EEF0F8",
-                    maxWidth: "240px",
-                  }}
-                >
+                <td style={{ color: "#EEF0F8", maxWidth: "240px" }}>
                   <DescriptionCell text={req.description} />
                 </td>
-                <td style={{ padding: "12px 14px", textAlign: "center" }}>
+                <td style={{ textAlign: "center" }}>
                   <AttachmentCell url={req.attachment_url} />
                 </td>
                 <td
                   style={{
-                    padding: "12px 14px",
-                    fontSize: "13px",
                     color: "#7A7D90",
                     whiteSpace: "nowrap",
+                    fontFamily: "monospace",
                   }}
                 >
                   {formatDate(req.created_at)}
                 </td>
-                <td style={{ padding: "12px 14px" }}>
+                <td>
                   <StatusBadge status={req.status} />
                 </td>
               </tr>
@@ -255,8 +213,6 @@ function RequestsTable({
           </tbody>
         </table>
       </div>
-
-      {/* Mobile stacked */}
       <div
         className="er-blocks-mobile"
         style={{ flexDirection: "column", gap: "12px" }}
@@ -265,15 +221,13 @@ function RequestsTable({
           <div
             key={String(req.id)}
             data-ocid={`${ocidPrefix}.row.${idx + 1}`}
+            className="matrix-card"
             style={{
-              background:
-                idx % 2 === 0 ? "rgba(17,19,34,0.7)" : "rgba(14,16,32,0.9)",
-              border: "1px solid #1C1F33",
-              borderRadius: "8px",
               padding: "16px",
               display: "flex",
               flexDirection: "column",
               gap: "10px",
+              animation: "typewriter-fade-in 0.4s ease forwards",
             }}
           >
             <div
@@ -284,7 +238,12 @@ function RequestsTable({
               }}
             >
               <span
-                style={{ fontSize: "13px", fontWeight: 700, color: "#EEF0F8" }}
+                style={{
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  color: "#EEF0F8",
+                  fontFamily: "monospace",
+                }}
               >
                 {req.request_number}
               </span>
@@ -295,9 +254,10 @@ function RequestsTable({
                 style={{
                   margin: "0 0 2px",
                   fontSize: "11px",
-                  color: "#7A7D90",
+                  color: "#5EF08A",
                   textTransform: "uppercase",
                   letterSpacing: "0.04em",
+                  fontFamily: "monospace",
                 }}
               >
                 Type
@@ -311,9 +271,10 @@ function RequestsTable({
                 style={{
                   margin: "0 0 2px",
                   fontSize: "11px",
-                  color: "#7A7D90",
+                  color: "#5EF08A",
                   textTransform: "uppercase",
                   letterSpacing: "0.04em",
+                  fontFamily: "monospace",
                 }}
               >
                 Description
@@ -334,14 +295,22 @@ function RequestsTable({
                   style={{
                     margin: "0 0 2px",
                     fontSize: "11px",
-                    color: "#7A7D90",
+                    color: "#5EF08A",
                     textTransform: "uppercase",
                     letterSpacing: "0.04em",
+                    fontFamily: "monospace",
                   }}
                 >
                   Submitted
                 </p>
-                <p style={{ margin: 0, fontSize: "13px", color: "#7A7D90" }}>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "13px",
+                    color: "#7A7D90",
+                    fontFamily: "monospace",
+                  }}
+                >
                   {formatDate(req.created_at)}
                 </p>
               </div>
@@ -371,19 +340,14 @@ function RequestsTable({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
 export default function PortalEditRequestsPage() {
+  const { session } = useSession();
+  const userEmail = session?.email ?? "";
   const { actor, isFetching } = useActor();
-
-  // Data
   const [requests, setRequests] = useState<EditRequest[] | undefined>(
     undefined,
   );
   const [loadError, setLoadError] = useState(false);
-
-  // Form
   const [requestType, setRequestType] = useState("Text Change");
   const [pageSection, setPageSection] = useState("");
   const [description, setDescription] = useState("");
@@ -392,14 +356,16 @@ export default function PortalEditRequestsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [descriptionError, setDescriptionError] = useState("");
+  const [pageSectionError, setPageSectionError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!actor || isFetching) return;
+    if (!actor || !userEmail || isFetching) return;
     let cancelled = false;
     async function load() {
       try {
-        const data = await actor!.getMyEditRequests();
+        const data = await (actor as backendInterface).getMyEditRequests();
         if (!cancelled) setRequests(data);
       } catch {
         if (!cancelled) setLoadError(true);
@@ -409,15 +375,18 @@ export default function PortalEditRequestsPage() {
     return () => {
       cancelled = true;
     };
-  }, [actor, isFetching]);
+  }, [actor, isFetching, userEmail]);
 
   const isLoading = isFetching || (requests === undefined && !loadError);
-
   const activeRequests = (requests ?? []).filter(
-    (r) => r.status === "SUBMITTED" || r.status === "IN PROGRESS",
+    (r) =>
+      r.status.toUpperCase() === "SUBMITTED" ||
+      r.status.toUpperCase() === "IN PROGRESS",
   );
   const completedRequests = (requests ?? []).filter(
-    (r) => r.status === "COMPLETED" || r.status === "DECLINED",
+    (r) =>
+      r.status.toUpperCase() === "COMPLETED" ||
+      r.status.toUpperCase() === "DECLINED",
   );
 
   function resetForm() {
@@ -426,51 +395,77 @@ export default function PortalEditRequestsPage() {
     setDescription("");
     setSelectedFile(null);
     setUploadProgress(0);
+    setDescriptionError("");
+    setPageSectionError("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!actor) return;
+    if (!actor || !userEmail) return;
+    // Client-side validation
+    let valid = true;
+    if (!description.trim()) {
+      setDescriptionError("Description is required.");
+      valid = false;
+    }
+    if (!pageSection.trim()) {
+      setPageSectionError("Page or section is required.");
+      valid = false;
+    }
+    if (!valid) return;
     setSubmitting(true);
     setSubmitError("");
     setUploadProgress(0);
-
+    let attachmentUrl: string | null = null;
     try {
-      let attachmentUrl: string | null = null;
-
       if (selectedFile) {
         const { createBlobFromBytes } = await import("../../lib/blobStorage");
         const bytes = new Uint8Array(await selectedFile.arrayBuffer());
         const blob = createBlobFromBytes(bytes).withUploadProgress(
           (pct: number) => setUploadProgress(Math.round(pct * 100)),
         );
-        attachmentUrl = blob.getDirectURL();
+        // getDirectURL handles upload and returns the resolved storage URL
+        attachmentUrl = await blob.getDirectURL();
       }
-
       const result = await (actor as backendInterface).createEditRequest(
         requestType,
         pageSection,
         description,
         attachmentUrl ?? "",
       );
-
-      if ("ok" in result) {
-        const updated = await actor!.getMyEditRequests();
+      if ("ok" in result || "okAlreadyAdvanced" in result) {
+        const updated = await (actor as backendInterface).getMyEditRequests();
         setRequests(updated);
         setSubmitSuccess(true);
         resetForm();
       } else {
+        if (attachmentUrl) {
+          if (import.meta.env.DEV) {
+            console.warn(
+              "Orphaned blob after edit request failure:",
+              attachmentUrl,
+            );
+          }
+        }
         setSubmitError("Could not submit request. Please try again.");
       }
     } catch {
+      if (attachmentUrl) {
+        if (import.meta.env.DEV) {
+          console.warn(
+            "Orphaned blob after edit request failure:",
+            attachmentUrl,
+          );
+        }
+      }
       setSubmitError("An error occurred. Please try again.");
     } finally {
       setSubmitting(false);
     }
   }
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
     if (file && file.size > 10 * 1024 * 1024) {
       setSubmitError("File must be 10MB or smaller.");
@@ -481,66 +476,50 @@ export default function PortalEditRequestsPage() {
     setSelectedFile(file);
   }
 
-  const cardStyle: React.CSSProperties = {
-    background: "rgba(17,19,34,0.7)",
-    borderRadius: "8px",
-    padding: "24px",
-    border: "1px solid #1C1F33",
-    width: "100%",
-  };
-
-  const labelStyle: React.CSSProperties = {
-    display: "block",
-    fontSize: "13px",
-    fontWeight: 600,
-    color: "#7A7D90",
-    marginBottom: "6px",
-  };
-
-  const inputStyle: React.CSSProperties = {
+  const inputStyle: CSSProperties = {
     width: "100%",
     padding: "10px 12px",
     minHeight: "44px",
-    border: "1.5px solid #CBD5E1",
+    border: "1px solid rgba(94,240,138,0.2)",
+    borderRadius: "6px",
     fontSize: "14px",
     color: "#EEF0F8",
-    background: "rgba(17,19,34,0.7)",
+    background: "rgba(7,8,16,0.8)",
     boxSizing: "border-box",
     outline: "none",
+    transition: "border-color 0.2s, box-shadow 0.2s",
+  };
+  const labelStyle: CSSProperties = {
+    display: "block",
+    fontSize: "13px",
+    fontWeight: 600,
+    color: "#5EF08A",
+    marginBottom: "6px",
+    fontFamily: "monospace",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
   };
 
   return (
     <PortalLayout pageTitle="Edit Requests">
       <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        .er-form-input:focus {
-          border-color: #5EF08A !important;
-          box-shadow: 0 0 0 3px rgba(59,130,196,0.12);
-        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .er-form-input:focus { border-color: #5EF08A !important; box-shadow: 0 0 0 3px rgba(94,240,138,0.1) !important; }
       `}</style>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-        {/* ===== SUBMIT REQUEST CARD ===== */}
-        <div data-ocid="edit_requests.submit.card" style={cardStyle}>
-          <h3
-            style={{
-              margin: "0 0 4px",
-              fontSize: "16px",
-              fontWeight: 700,
-              color: "#EEF0F8",
-            }}
-          >
-            <EditableText
-              textKey="portal.edit-requests.submit.heading"
-              defaultText="Submit an Edit Request."
-              as="span"
+        <div
+          data-ocid="edit_requests.submit.card"
+          className="matrix-card"
+          style={{ padding: "24px" }}
+        >
+          <h3 style={{ margin: "0 0 4px" }}>
+            <TypewriterText
+              text="Submit an Edit Request."
+              className="matrix-heading"
+              style={{ fontSize: "16px", fontWeight: 700 }}
+              speed={40}
             />
           </h3>
           <p style={{ margin: "0 0 20px", fontSize: "14px", color: "#7A7D90" }}>
@@ -555,11 +534,11 @@ export default function PortalEditRequestsPage() {
             <div
               data-ocid="edit_requests.submit.success_state"
               style={{
-                background: "#F0FDF4",
-                border: "1px solid #BBF7D0",
+                background: "rgba(94,240,138,0.08)",
+                border: "1px solid rgba(94,240,138,0.3)",
                 borderRadius: "8px",
                 padding: "20px",
-                color: "#166534",
+                color: "#5EF08A",
                 fontSize: "14px",
                 fontWeight: 600,
                 display: "flex",
@@ -574,10 +553,17 @@ export default function PortalEditRequestsPage() {
                 fill="none"
                 aria-hidden="true"
               >
-                <circle cx="12" cy="12" r="10" fill="#DCFCE7" />
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  fill="rgba(94,240,138,0.1)"
+                  stroke="#5EF08A"
+                  strokeWidth="1.5"
+                />
                 <path
                   d="M7 13l3 3 7-7"
-                  stroke="#166534"
+                  stroke="#5EF08A"
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -595,7 +581,7 @@ export default function PortalEditRequestsPage() {
                   marginLeft: "auto",
                   background: "none",
                   border: "none",
-                  color: "#166534",
+                  color: "#5EF08A",
                   cursor: "pointer",
                   fontSize: "14px",
                   fontWeight: 600,
@@ -614,19 +600,18 @@ export default function PortalEditRequestsPage() {
                 <div
                   data-ocid="edit_requests.submit.error_state"
                   style={{
-                    background: "#FEE2E2",
-                    border: "1px solid #1C1F33",
+                    background: "rgba(239,68,68,0.1)",
+                    border: "1px solid rgba(239,68,68,0.3)",
                     borderRadius: "6px",
                     padding: "12px 14px",
                     marginBottom: "16px",
-                    color: "#991B1B",
+                    color: "#EF4444",
                     fontSize: "13px",
                   }}
                 >
                   {submitError}
                 </div>
               )}
-
               <div
                 style={{
                   display: "flex",
@@ -634,9 +619,12 @@ export default function PortalEditRequestsPage() {
                   gap: "16px",
                 }}
               >
-                {/* Request Type */}
                 <div>
-                  <label htmlFor="er-type" style={labelStyle}>
+                  <label
+                    htmlFor="er-type"
+                    aria-label="Request Type"
+                    style={labelStyle}
+                  >
                     <EditableText
                       textKey="portal.edit-requests.type.label"
                       defaultText="Request Type"
@@ -660,10 +648,12 @@ export default function PortalEditRequestsPage() {
                     <option>Other</option>
                   </select>
                 </div>
-
-                {/* Page or Section */}
                 <div>
-                  <label htmlFor="er-page" style={labelStyle}>
+                  <label
+                    htmlFor="er-page"
+                    aria-label="Page or Section"
+                    style={labelStyle}
+                  >
                     <EditableText
                       textKey="portal.edit-requests.page-section.label"
                       defaultText="Page or Section"
@@ -675,17 +665,39 @@ export default function PortalEditRequestsPage() {
                     type="text"
                     data-ocid="edit_requests.page_section.input"
                     value={pageSection}
-                    onChange={(e) => setPageSection(e.target.value)}
+                    onChange={(e) => {
+                      setPageSection(e.target.value);
+                      if (e.target.value.trim()) setPageSectionError("");
+                    }}
                     placeholder="e.g. Homepage hero, About page, Services menu."
                     required
                     className="er-form-input"
-                    style={inputStyle}
+                    style={{
+                      ...inputStyle,
+                      borderColor: pageSectionError
+                        ? "rgba(239,68,68,0.6)"
+                        : undefined,
+                    }}
                   />
+                  {pageSectionError && (
+                    <p
+                      data-ocid="edit_requests.page_section.field_error"
+                      style={{
+                        margin: "4px 0 0",
+                        fontSize: "12px",
+                        color: "#EF4444",
+                      }}
+                    >
+                      {pageSectionError}
+                    </p>
+                  )}
                 </div>
-
-                {/* Description */}
                 <div>
-                  <label htmlFor="er-desc" style={labelStyle}>
+                  <label
+                    htmlFor="er-desc"
+                    aria-label="Description"
+                    style={labelStyle}
+                  >
                     <EditableText
                       textKey="portal.edit-requests.description.label"
                       defaultText="Description"
@@ -696,7 +708,10 @@ export default function PortalEditRequestsPage() {
                     id="er-desc"
                     data-ocid="edit_requests.description.textarea"
                     value={description}
-                    onChange={(e) => setDescription(e.target.value)}
+                    onChange={(e) => {
+                      setDescription(e.target.value);
+                      if (e.target.value.trim()) setDescriptionError("");
+                    }}
                     rows={4}
                     placeholder="Describe the change you need in as much detail as possible."
                     required
@@ -705,11 +720,24 @@ export default function PortalEditRequestsPage() {
                       ...inputStyle,
                       resize: "vertical",
                       fontFamily: "inherit",
+                      borderColor: descriptionError
+                        ? "rgba(239,68,68,0.6)"
+                        : undefined,
                     }}
                   />
+                  {descriptionError && (
+                    <p
+                      data-ocid="edit_requests.description.field_error"
+                      style={{
+                        margin: "4px 0 0",
+                        fontSize: "12px",
+                        color: "#EF4444",
+                      }}
+                    >
+                      {descriptionError}
+                    </p>
+                  )}
                 </div>
-
-                {/* File Attachment */}
                 <div>
                   <label htmlFor="er-file" style={labelStyle}>
                     <EditableText
@@ -717,7 +745,14 @@ export default function PortalEditRequestsPage() {
                       defaultText="File Attachment"
                       as="span"
                     />{" "}
-                    <span style={{ fontWeight: 400, color: "#7A7D90" }}>
+                    <span
+                      style={{
+                        fontWeight: 400,
+                        color: "#7A7D90",
+                        textTransform: "none",
+                        letterSpacing: 0,
+                      }}
+                    >
                       <EditableText
                         textKey="portal.edit-requests.file.hint"
                         defaultText="(optional — images or PDF, max 10MB)"
@@ -727,13 +762,13 @@ export default function PortalEditRequestsPage() {
                   </label>
                   <div
                     style={{
-                      border: "1.5px dashed #CBD5E1",
+                      border: "1px dashed rgba(94,240,138,0.25)",
                       borderRadius: "6px",
                       padding: "14px 16px",
                       display: "flex",
                       alignItems: "center",
                       gap: "10px",
-                      background: "#0A0B14",
+                      background: "rgba(7,8,16,0.8)",
                       cursor: "pointer",
                     }}
                     onClick={() => fileInputRef.current?.click()}
@@ -741,11 +776,11 @@ export default function PortalEditRequestsPage() {
                       e.key === "Enter" && fileInputRef.current?.click()
                     }
                   >
-                    <Paperclip size={16} color="#94A3B8" />
+                    <Paperclip size={16} color="#5EF08A" />
                     <span
                       style={{
                         fontSize: "13px",
-                        color: selectedFile ? "#1B2D4F" : "#94A3B8",
+                        color: selectedFile ? "#EEF0F8" : "#7A7D90",
                       }}
                     >
                       {selectedFile
@@ -765,7 +800,7 @@ export default function PortalEditRequestsPage() {
                           marginLeft: "auto",
                           background: "none",
                           border: "none",
-                          color: "#991B1B",
+                          color: "#EF4444",
                           cursor: "pointer",
                           fontSize: "12px",
                         }}
@@ -783,8 +818,6 @@ export default function PortalEditRequestsPage() {
                     onChange={handleFileChange}
                     style={{ display: "none" }}
                   />
-
-                  {/* Upload progress */}
                   {submitting && selectedFile && uploadProgress > 0 && (
                     <div
                       data-ocid="edit_requests.upload.loading_state"
@@ -797,17 +830,29 @@ export default function PortalEditRequestsPage() {
                           marginBottom: "4px",
                         }}
                       >
-                        <span style={{ fontSize: "12px", color: "#7A7D90" }}>
+                        <span
+                          style={{
+                            fontSize: "12px",
+                            color: "#5EF08A",
+                            fontFamily: "monospace",
+                          }}
+                        >
                           Uploading...
                         </span>
-                        <span style={{ fontSize: "12px", color: "#7A7D90" }}>
+                        <span
+                          style={{
+                            fontSize: "12px",
+                            color: "#5EF08A",
+                            fontFamily: "monospace",
+                          }}
+                        >
                           {uploadProgress}%
                         </span>
                       </div>
                       <div
                         style={{
                           height: "4px",
-                          background: "rgba(40,45,70,0.8)",
+                          background: "rgba(94,240,138,0.1)",
                           borderRadius: "2px",
                           overflow: "hidden",
                         }}
@@ -819,33 +864,28 @@ export default function PortalEditRequestsPage() {
                             background: "#5EF08A",
                             borderRadius: "2px",
                             transition: "width 0.2s ease",
+                            boxShadow: "0 0 6px rgba(94,240,138,0.5)",
                           }}
                         />
                       </div>
                     </div>
                   )}
                 </div>
-
-                {/* Submit button */}
                 <button
                   type="submit"
                   data-ocid="edit_requests.submit_button"
                   disabled={submitting}
+                  className="matrix-btn"
                   style={{
                     width: "100%",
                     padding: "12px",
                     minHeight: "44px",
-                    background: submitting ? "rgba(94,240,138,0.5)" : "#5EF08A",
-                    color: "#ffffff",
-                    fontWeight: 700,
-                    fontSize: "15px",
-                    border: "none",
+                    opacity: submitting ? 0.6 : 1,
                     cursor: submitting ? "not-allowed" : "pointer",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     gap: "8px",
-                    transition: "background 0.15s ease",
                   }}
                 >
                   {submitting ? (
@@ -863,12 +903,12 @@ export default function PortalEditRequestsPage() {
                           cx="12"
                           cy="12"
                           r="10"
-                          stroke="rgba(255,255,255,0.3)"
+                          stroke="rgba(0,0,0,0.3)"
                           strokeWidth="3"
                         />
                         <path
                           d="M12 2a10 10 0 0 1 10 10"
-                          stroke="#ffffff"
+                          stroke="#061209"
                           strokeWidth="3"
                           strokeLinecap="round"
                         />
@@ -888,20 +928,17 @@ export default function PortalEditRequestsPage() {
           )}
         </div>
 
-        {/* ===== ACTIVE REQUESTS ===== */}
-        <div data-ocid="edit_requests.active.card" style={cardStyle}>
-          <h3
-            style={{
-              margin: "0 0 20px",
-              fontSize: "16px",
-              fontWeight: 700,
-              color: "#EEF0F8",
-            }}
-          >
-            <EditableText
-              textKey="portal.edit-requests.active.heading"
-              defaultText="Active Requests."
-              as="span"
+        <div
+          data-ocid="edit_requests.active.card"
+          className="matrix-card"
+          style={{ padding: "24px" }}
+        >
+          <h3 style={{ margin: "0 0 20px" }}>
+            <TypewriterText
+              text="Active Requests."
+              className="matrix-heading"
+              style={{ fontSize: "16px", fontWeight: 700 }}
+              speed={40}
             />
           </h3>
           {isLoading ? (
@@ -915,7 +952,7 @@ export default function PortalEditRequestsPage() {
           ) : loadError ? (
             <p
               data-ocid="edit_requests.active.error_state"
-              style={{ color: "#991B1B", fontSize: "14px", margin: 0 }}
+              style={{ color: "#EF4444", fontSize: "14px", margin: 0 }}
             >
               <EditableText
                 textKey="portal.edit-requests.active.error-state"
@@ -932,20 +969,17 @@ export default function PortalEditRequestsPage() {
           )}
         </div>
 
-        {/* ===== COMPLETED REQUESTS ===== */}
-        <div data-ocid="edit_requests.completed.card" style={cardStyle}>
-          <h3
-            style={{
-              margin: "0 0 20px",
-              fontSize: "16px",
-              fontWeight: 700,
-              color: "#EEF0F8",
-            }}
-          >
-            <EditableText
-              textKey="portal.edit-requests.completed.heading"
-              defaultText="Completed Requests."
-              as="span"
+        <div
+          data-ocid="edit_requests.completed.card"
+          className="matrix-card"
+          style={{ padding: "24px" }}
+        >
+          <h3 style={{ margin: "0 0 20px" }}>
+            <TypewriterText
+              text="Completed Requests."
+              className="matrix-heading"
+              style={{ fontSize: "16px", fontWeight: 700 }}
+              speed={40}
             />
           </h3>
           {isLoading ? (
@@ -959,7 +993,7 @@ export default function PortalEditRequestsPage() {
           ) : loadError ? (
             <p
               data-ocid="edit_requests.completed.error_state"
-              style={{ color: "#991B1B", fontSize: "14px", margin: 0 }}
+              style={{ color: "#EF4444", fontSize: "14px", margin: 0 }}
             >
               <EditableText
                 textKey="portal.edit-requests.completed.error-state"

@@ -15,9 +15,11 @@ import {
   X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { create } from "zustand";
 import PerformanceSnapshot from "../components/PerformanceSnapshot";
+import TypewriterText from "../components/TypewriterText";
+import { useActor } from "../hooks/useActor";
 
 // ─── Tab Store ────────────────────────────────────────────────────────────────
 type Tab =
@@ -405,7 +407,7 @@ function MetricCards() {
               letterSpacing: "0.06em",
             }}
           >
-            {m.label}
+            <TypewriterText text={m.label} as="span" speed={30} />
           </p>
           <p
             style={{
@@ -3610,6 +3612,24 @@ export default function DashboardPage() {
   const { activeTier, setTier } = useTierStore();
   const [upgradeModal, setUpgradeModal] = useState<string | null>(null);
   const [isGrowthHubOpen, setIsGrowthHubOpen] = useState(false);
+  const { actor, isFetching } = useActor();
+  const [catalogPrices, setCatalogPrices] = useState<Record<string, number>>(
+    {},
+  );
+  useEffect(() => {
+    if (isFetching || !actor) return;
+    actor
+      .getProducts()
+      .then((prods) => {
+        const prices: Record<string, number> = {};
+        for (const p of prods) {
+          prices[p.name] =
+            ((p.price_monthly ?? p.price_onetime ?? 0) as number) / 100;
+        }
+        setCatalogPrices(prices);
+      })
+      .catch(() => {});
+  }, [isFetching, actor]);
 
   const featureItems = TIER_FEATURES[activeTier];
 
@@ -3877,7 +3897,10 @@ export default function DashboardPage() {
                       "#9CA3AF";
                 }}
               >
-                {label} {price}
+                {label}{" "}
+                {catalogPrices[label] !== undefined
+                  ? `${catalogPrices[label]}`
+                  : price}
               </button>
             );
           })}
@@ -3914,6 +3937,81 @@ export default function DashboardPage() {
         onClose={() => setIsGrowthHubOpen(false)}
         activeTier={activeTier}
       />
+
+      {/* Contact section */}
+      <div
+        style={{
+          marginTop: "64px",
+          borderTop: "1px solid rgba(57,255,20,0.08)",
+          paddingTop: "24px",
+          paddingBottom: "24px",
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "16px 32px",
+        }}
+        data-ocid="dashboard.footer.contact"
+      >
+        <span
+          style={{
+            fontSize: "11px",
+            color: "rgba(122,125,144,0.6)",
+            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+            letterSpacing: "0.08em",
+          }}
+        >
+          WEBLY LLC
+        </span>
+        <a
+          href="mailto:Vincenzo@imperidome.com"
+          style={{
+            fontSize: "11px",
+            color: "rgba(94,240,138,0.6)",
+            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+            textDecoration: "none",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+          }}
+          data-ocid="dashboard.footer.email"
+        >
+          <span
+            style={{
+              color: "rgba(94,240,138,0.4)",
+              fontSize: "10px",
+              fontWeight: 700,
+            }}
+          >
+            EMAIL
+          </span>
+          Vincenzo@imperidome.com
+        </a>
+        <a
+          href="tel:+18565533446"
+          style={{
+            fontSize: "11px",
+            color: "rgba(94,240,138,0.6)",
+            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+            textDecoration: "none",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+          }}
+          data-ocid="dashboard.footer.phone"
+        >
+          <span
+            style={{
+              color: "rgba(94,240,138,0.4)",
+              fontSize: "10px",
+              fontWeight: 700,
+            }}
+          >
+            PHONE
+          </span>
+          856 553 3446
+        </a>
+      </div>
 
       <style>{`
         @keyframes pulse {

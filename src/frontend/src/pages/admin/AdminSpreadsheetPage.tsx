@@ -1,3 +1,4 @@
+import type { Principal } from "@icp-sdk/core/principal";
 import {
   Check,
   Copy,
@@ -9,8 +10,8 @@ import {
   Table2,
   Wrench,
 } from "lucide-react";
-import React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, ChangeEvent, ReactNode } from "react";
 import {
   Bar,
   BarChart,
@@ -22,29 +23,29 @@ import {
   YAxis,
 } from "recharts";
 import * as XLSX from "xlsx";
-import type { backendInterface } from "../../backend.d";
+import type { Product } from "../../backend.d";
 import type {
   AdHocInvoice,
   CrmClient,
+  EmailCampaign,
   GoogleSheetsConfig,
   Order,
+  Questionnaire,
+  ReferralStat,
+  UserProfile,
+  backendInterface,
 } from "../../backend.d";
 import InstructionModal from "../../components/InstructionModal";
 import type { InstructionStep } from "../../components/InstructionModal";
+import { PROJECT_STATUSES } from "../../constants";
 import { useActor } from "../../hooks/useActor";
-import { getSession } from "../../hooks/useSession";
 import AdminLayout from "./AdminLayout";
-
-const ADMIN_EMAIL = "vincenzo@imperidome.com";
-
-function getAdminEmail(): string {
-  const s = getSession();
-  return s?.email ?? localStorage.getItem("imperidome_admin_email") ?? "";
-}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function formatTs(ts: bigint | number): string {
+  if (ts === 0n || ts === 0) return "—";
+  if (Number.isNaN(Number(ts))) return "—";
   const ms = Number(ts) / 1_000_000;
   const d = new Date(ms);
   if (Number.isNaN(d.getTime())) return "—";
@@ -59,21 +60,47 @@ function formatMoney(n: number): string {
   return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+// ── Stripe payout shape (minimal, for spreadsheet) ───────────────────────────
+interface SpreadsheetPayout {
+  id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  arrival_date: number;
+  description?: string | null;
+  bank_account?: { last4?: string } | null;
+}
+
+interface StripePayoutsJsonResponse {
+  data?: SpreadsheetPayout[];
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 type SortDir = "asc" | "desc" | null;
 type View =
   | "accounting"
   | "clients"
+  | "orders"
+  | "emailcampaigns"
+  | "questionnaires"
+  | "referrals"
   | "tools"
   | "leads"
   | "reviews"
   | "revenue"
+  | "tax"
   | "gsheets";
 
 interface AccountingRow {
   rowType: "Order" | "Invoice";
   clientName: string;
+  /** Resolved first name (for order rows resolved via getClientByPrincipal) */
+  firstName: string;
+  /** Resolved last name */
+  lastName: string;
+  /** Resolved email */
+  clientEmail: string;
   idOrInvoiceNum: string;
   descriptionOrTier: string;
   amount: string;
@@ -82,7 +109,7 @@ interface AccountingRow {
   date: string;
   dateRaw: number;
   rawClientId: string;
-  rawId: string; // order bigint as string OR adhoc invoice bigint as string
+  rawId: string;
   rowKey: string;
 }
 
@@ -98,6 +125,50 @@ interface ClientRow {
   joinDate: string;
   joinDateRaw: number;
   notes: string;
+  hasAccount?: boolean;
+  milestoneUpdatedAt?: bigint;
+  briefStatus?: string;
+}
+
+interface OrderTabRow {
+  orderId: string;
+  tierCode: string;
+  deliveryWindow: string;
+  launchTarget: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  status: string;
+  createdDate: string;
+  description: string;
+}
+interface EmailCampaignRow {
+  id: string;
+  subject: string;
+  recipientCount: number;
+  status: string;
+  createdDate: string;
+  scheduledDate: string;
+  sentDate: string;
+}
+interface QuestionnaireRow {
+  id: string;
+  clientId: string;
+  tierCode: string;
+  progress: string;
+  submitted: string;
+  reviewed: string;
+  answerSummary: string;
+  createdAt: string;
+  updatedAt: string;
+}
+interface ReferralRow {
+  code: string;
+  referrerName: string;
+  referrerEmail: string;
+  totalClicks: number;
+  conversions: number;
+  conversionRate: string;
 }
 
 // ── Status badge colour ────────────────────────────────────────────────────────
@@ -401,22 +472,124 @@ function InvoiceStatusCell({
 }: {
   status: string;
   invoiceId: string;
-  onSave: (id: string) => Promise<void>;
+  onSave: (id: string, paymentIntentId: string) => Promise<void>;
 }) {
   const [current, setCurrent] = useState(status);
   const [saving, setSaving] = useState(false);
+  const [showPiInput, setShowPiInput] = useState(false);
+  const [paymentIntentId, setPaymentIntentId] = useState("");
+  const [piError, setPiError] = useState("");
 
-  async function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+  async function handleChange(e: ChangeEvent<HTMLSelectElement>) {
     const newStatus = e.target.value;
     if (newStatus === "PAID") {
-      setCurrent(newStatus);
-      setSaving(true);
-      try {
-        await onSave(invoiceId);
-      } finally {
-        setSaving(false);
-      }
+      setShowPiInput(true);
+      setPiError("");
     }
+  }
+
+  async function handleConfirmPaid() {
+    if (!paymentIntentId || paymentIntentId.trim() === "") {
+      setPiError("Payment intent ID is required");
+      return;
+    }
+    setPiError("");
+    setCurrent("PAID");
+    setShowPiInput(false);
+    setSaving(true);
+    try {
+      await onSave(invoiceId, paymentIntentId.trim());
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleCancelPaid() {
+    setShowPiInput(false);
+    setPaymentIntentId("");
+    setPiError("");
+  }
+
+  if (showPiInput) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 4,
+          minWidth: 220,
+        }}
+      >
+        <input
+          type="text"
+          value={paymentIntentId}
+          onChange={(e) => {
+            setPaymentIntentId(e.target.value);
+            if (piError) setPiError("");
+          }}
+          placeholder="pi_... (Stripe payment intent ID)"
+          data-ocid="spreadsheet.accounting.payment_intent_input"
+          style={{
+            background: "#0E1020",
+            border: piError
+              ? "1px solid rgba(239,68,68,0.6)"
+              : "1px solid #1C1F33",
+            borderRadius: 5,
+            padding: "4px 8px",
+            fontSize: 11,
+            color: "#EEF0F8",
+            outline: "none",
+            width: "100%",
+            boxSizing: "border-box" as const,
+          }}
+        />
+        {piError && (
+          <span
+            data-ocid="spreadsheet.accounting.payment_intent_error"
+            style={{ fontSize: 10, color: "#f87171", fontWeight: 600 }}
+          >
+            {piError}
+          </span>
+        )}
+        <div style={{ display: "flex", gap: 4 }}>
+          <button
+            type="button"
+            data-ocid="spreadsheet.accounting.confirm_paid_button"
+            onClick={handleConfirmPaid}
+            disabled={saving}
+            style={{
+              background: "rgba(94,240,138,0.15)",
+              border: "1px solid rgba(94,240,138,0.4)",
+              borderRadius: 4,
+              padding: "2px 8px",
+              fontSize: 10,
+              fontWeight: 700,
+              color: "#5EF08A",
+              cursor: saving ? "not-allowed" : "pointer",
+            }}
+          >
+            {saving ? "Saving…" : "Confirm"}
+          </button>
+          <button
+            type="button"
+            data-ocid="spreadsheet.accounting.cancel_paid_button"
+            onClick={handleCancelPaid}
+            style={{
+              background: "transparent",
+              border: "1px solid #1C1F33",
+              borderRadius: 4,
+              padding: "2px 8px",
+              fontSize: 10,
+              fontWeight: 600,
+              color: "#7A7D90",
+              cursor: "pointer",
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -453,13 +626,6 @@ function InvoiceStatusCell({
 
 // ── Project status dropdown for clients ───────────────────────────────────────
 
-const PROJECT_STATUSES = [
-  "Onboarding",
-  "In Progress",
-  "Done",
-  "Payment Failed",
-];
-
 function ProjectStatusCell({
   status,
   clientId,
@@ -472,7 +638,7 @@ function ProjectStatusCell({
   const [current, setCurrent] = useState(status);
   const [saving, setSaving] = useState(false);
 
-  async function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+  async function handleChange(e: ChangeEvent<HTMLSelectElement>) {
     const newStatus = e.target.value;
     setCurrent(newStatus);
     setSaving(true);
@@ -569,7 +735,8 @@ function SortableTH({
         textTransform: "uppercase",
         letterSpacing: "0.06em",
         borderBottom: "1px solid #1C1F33",
-        background: "rgba(14,16,32,0.9)",
+        background: "rgba(7,8,16,0.95)",
+        fontFamily: "'Courier New', monospace",
         position: "sticky" as const,
         top: 0,
         cursor: "pointer",
@@ -585,6 +752,65 @@ function SortableTH({
 
 // ── Main export function ───────────────────────────────────────────────────────
 
+function safeEvalExpr(expr: string): number {
+  const s = expr.replace(/\s+/g, "");
+  const tokens: string[] = [];
+  let i = 0;
+  while (i < s.length) {
+    if (/[0-9.]/.test(s[i])) {
+      let num = "";
+      while (i < s.length && /[0-9.]/.test(s[i])) num += s[i++];
+      tokens.push(num);
+    } else if ("+-*/()".includes(s[i])) {
+      tokens.push(s[i++]);
+    } else {
+      return Number.NaN;
+    }
+  }
+  let pos = 0;
+  function parseExpr(): number {
+    let result = parseTerm();
+    while (
+      pos < tokens.length &&
+      (tokens[pos] === "+" || tokens[pos] === "-")
+    ) {
+      const op = tokens[pos++];
+      result = op === "+" ? result + parseTerm() : result - parseTerm();
+    }
+    return result;
+  }
+  function parseTerm(): number {
+    let result = parseFactor();
+    while (
+      pos < tokens.length &&
+      (tokens[pos] === "*" || tokens[pos] === "/")
+    ) {
+      const op = tokens[pos++];
+      const r = parseFactor();
+      if (op === "/" && r === 0) return Number.NaN;
+      result = op === "*" ? result * r : result / r;
+    }
+    return result;
+  }
+  function parseFactor(): number {
+    if (tokens[pos] === "(") {
+      pos++;
+      const r = parseExpr();
+      if (tokens[pos] === ")") pos++;
+      return r;
+    }
+    return Number.isNaN(Number(tokens[pos]))
+      ? Number.NaN
+      : Number(tokens[pos++]);
+  }
+  try {
+    const r = parseExpr();
+    return pos === tokens.length ? r : Number.NaN;
+  } catch {
+    return Number.NaN;
+  }
+}
+
 export default function AdminSpreadsheetPage() {
   const { actor, isFetching } = useActor();
   const [view, setView] = useState<View>("accounting");
@@ -597,6 +823,10 @@ export default function AdminSpreadsheetPage() {
   const [accountingRows, setAccountingRows] = useState<AccountingRow[]>([]);
   const [acctLoading, setAcctLoading] = useState(true);
   const [acctError, setAcctError] = useState<string | null>(null);
+
+  // ── Payouts state (loaded with Accounting tab) ────────────────────────────────
+  const [payoutsData, setPayoutsData] = useState<SpreadsheetPayout[]>([]);
+  const [payoutsError, setPayoutsError] = useState<string | null>(null);
 
   // ── Client state ──────────────────────────────────────────────────────────────
   const [clientRows, setClientRows] = useState<ClientRow[]>([]);
@@ -611,6 +841,7 @@ export default function AdminSpreadsheetPage() {
   // ── Leads tab state ──────────────────────────────────────────────────────────
   const [leadsData, setLeadsData] = useState<Record<string, unknown>[]>([]);
   const [leadsLoading, setLeadsLoading] = useState(false);
+  const [leadsError, setLeadsError] = useState<string | null>(null);
   const [leadSearch, setLeadSearch] = useState("");
   const [leadStatusFilter, setLeadStatusFilter] = useState("All");
   const [leadServiceFilter, setLeadServiceFilter] = useState("");
@@ -620,7 +851,28 @@ export default function AdminSpreadsheetPage() {
   // ── Reviews tab state ────────────────────────────────────────────────────────
   const [reviewsData, setReviewsData] = useState<Record<string, unknown>[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewsError, setReviewsError] = useState<string | null>(null);
   const [reviewSearch, setReviewSearch] = useState("");
+
+  // ── Orders tab state ──────────────────────────────────────────────────────────────────────────────────
+  const [ordersTabData, setOrdersTabData] = useState<OrderTabRow[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState("");
+  const [emailCampaignsData, setEmailCampaignsData] = useState<
+    EmailCampaignRow[]
+  >([]);
+  const [emailCampaignsLoading, setEmailCampaignsLoading] = useState(false);
+  const [emailCampaignsError, setEmailCampaignsError] = useState("");
+  const [questionnairesData, setQuestionnairesData] = useState<
+    QuestionnaireRow[]
+  >([]);
+  const [questionnairesLoading, setQuestionnairesLoading] = useState(false);
+  const [questionnairesError, setQuestionnairesError] = useState("");
+  const [referralsData, setReferralsData] = useState<ReferralRow[]>([]);
+  const [referralsLoading, setReferralsLoading] = useState(false);
+  const [referralsError, setReferralsError] = useState("");
+  const [globalTaxRate, setGlobalTaxRateValue] = useState<number>(0);
+  const [taxSaveMsg, setTaxSaveMsg] = useState<string>("");
 
   // ── Revenue tab state ────────────────────────────────────────────────────────
   const [revFromDate, setRevFromDate] = useState("");
@@ -688,39 +940,128 @@ export default function AdminSpreadsheetPage() {
     msg: string;
     ok: boolean;
   } | null>(null);
+  const [syncAllInProgress, setSyncAllInProgress] = useState(false);
+  const [syncAllResults, setSyncAllResults] = useState<Record<
+    string,
+    { ok: boolean; msg: string }
+  > | null>(null);
+  const [ordersFromDate, setOrdersFromDate] = useState("");
+  const [ordersToDate, setOrdersToDate] = useState("");
+  const [campaignsFromDate, setCampaignsFromDate] = useState("");
+  const [campaignsToDate, setCampaignsToDate] = useState("");
+  const [questFromDate, setQuestFromDate] = useState("");
+  const [questToDate, setQuestToDate] = useState("");
 
-  // ── Load accounting data ──────────────────────────────────────────────────────
+  // ── Load accounting data (also loads payouts) ───────────────────────────────
   const loadAccounting = useCallback(async () => {
     if (!actor || isFetching) return;
     setAcctLoading(true);
     setAcctError(null);
     try {
-      const adminEmail = getAdminEmail();
+      // Fetch payouts alongside accounting data (non-blocking — errors are swallowed)
+      (actor as backendInterface)
+        .getStripePayouts()
+        .then((res) => {
+          if (res && "ok" in res) {
+            try {
+              const parsed = JSON.parse(
+                (res as { ok: string }).ok,
+              ) as StripePayoutsJsonResponse;
+              setPayoutsData(parsed?.data ?? []);
+            } catch {
+              setPayoutsData([]);
+            }
+          }
+        })
+        .catch(() => {
+          setPayoutsData([]);
+          setPayoutsError(
+            "Payout data unavailable -- Stripe may not be configured or returned an error.",
+          );
+        });
       const [allClients, allOrders] = await Promise.all([
-        (actor as backendInterface).getClients(adminEmail),
-        (actor as backendInterface).getAdminAllOrders(adminEmail),
+        (actor as backendInterface).getClients(),
+        (actor as backendInterface).getAdminAllOrders(),
       ]);
 
+      // CRM client map keyed by CRM id — used for Invoice rows
       const clientMap = new Map<string, string>();
       for (const c of allClients) {
         clientMap.set(c.id, c.name);
       }
 
+      // Batch-resolve all unique order principals via getClientByPrincipal
+      const uniquePrincipals = Array.from(
+        new Set(allOrders.map((o) => String(o.client_id)).filter(Boolean)),
+      );
+      const principalProfileMap = new Map<string, UserProfile>();
+      await Promise.all(
+        uniquePrincipals.map(async (pStr) => {
+          const matchingOrder = allOrders.find(
+            (o) => String(o.client_id) === pStr,
+          );
+          if (!matchingOrder) return;
+          try {
+            const profile = await (
+              actor as backendInterface
+            ).getClientByPrincipal(
+              matchingOrder.client_id as unknown as Principal,
+            );
+            if (profile) principalProfileMap.set(pStr, profile);
+          } catch {
+            /* non-blocking */
+          }
+        }),
+      );
+
       const rows: AccountingRow[] = [];
 
-      // Add order rows
+      // Tier price map for estimating order value
+      let tierPriceMap: Record<string, number> = {};
+      try {
+        const prods = await (actor as backendInterface).getAllProductsAdmin();
+        for (const p of prods as Product[]) {
+          const price =
+            (p.price_onetime ?? 0) > 0
+              ? (p.price_onetime as number)
+              : (p.price_monthly ?? 0) > 0
+                ? (p.price_monthly as number)
+                : ((p.price_annual ?? 0) as number);
+          if (p.tier_code) tierPriceMap[String(p.tier_code)] = price;
+        }
+      } catch (err) {
+        if (import.meta.env.DEV) {
+          console.error("Failed to fetch tier pricing:", err);
+        }
+      }
+
+      // Add order rows — names resolved via getClientByPrincipal
       for (const order of allOrders) {
         const clientIdStr = String(order.client_id);
+        const profile = principalProfileMap.get(clientIdStr);
+        const firstName = profile?.firstName ?? "";
+        const lastName = profile?.lastName ?? "";
+        const clientEmail = profile?.email ?? "";
+        const resolvedName = profile
+          ? `${firstName} ${lastName}`.trim() || clientEmail
+          : (clientMap.get(clientIdStr) ?? `${clientIdStr.slice(0, 12)}\u2026`);
         rows.push({
           rowType: "Order",
-          clientName:
-            clientMap.get(clientIdStr) ??
-            clientIdStr.slice(0, 12).concat("\u2026"),
+          clientName: resolvedName,
+          firstName,
+          lastName,
+          clientEmail,
           idOrInvoiceNum: String(order.id).slice(-8),
           descriptionOrTier: order.tier_code || "—",
-          amount: "—",
-          amountRaw: 0,
-          status: order.status,
+          amount:
+            (tierPriceMap[order.tier_code] ?? 0) > 0
+              ? `${(tierPriceMap[order.tier_code] as number).toFixed(2)} (est.)`
+              : "—",
+          amountRaw: (tierPriceMap[order.tier_code] ?? 0) as number,
+          status:
+            Object.keys(
+              order.status as unknown as Record<string, unknown>,
+            )[0] ?? String(order.status),
           date: formatTs(order.created_at),
           dateRaw: Number(order.created_at),
           rawClientId: clientIdStr,
@@ -732,7 +1073,7 @@ export default function AdminSpreadsheetPage() {
       // Fetch ad-hoc invoices per client
       const invoiceFetches = allClients.map((c) =>
         (actor as backendInterface)
-          .getAdHocClientInvoices(adminEmail, c.id)
+          .getAdHocClientInvoices(c.id)
           .then((invs) => invs.map((inv) => ({ ...inv, _clientName: c.name })))
           .catch(() => [] as (AdHocInvoice & { _clientName: string })[]),
       );
@@ -743,10 +1084,14 @@ export default function AdminSpreadsheetPage() {
             rowType: "Invoice",
             clientName: (inv as AdHocInvoice & { _clientName: string })
               ._clientName,
+            // Invoices are tied to a CRM client (email-based), not a principal
+            firstName: "",
+            lastName: "",
+            clientEmail: inv.clientId,
             idOrInvoiceNum: inv.invoiceNumber,
             descriptionOrTier: inv.description,
-            amount: formatMoney(inv.amount),
-            amountRaw: inv.amount,
+            amount: formatMoney(Number(inv.amount) / 100),
+            amountRaw: Number(inv.amount) / 100,
             status: inv.status,
             date: formatTs(inv.createdAt),
             dateRaw: Number(inv.createdAt),
@@ -771,10 +1116,7 @@ export default function AdminSpreadsheetPage() {
     setClientsLoading(true);
     setClientsError(null);
     try {
-      const adminEmail = getAdminEmail();
-      const allClients = await (actor as backendInterface).getClients(
-        adminEmail,
-      );
+      const allClients = await (actor as backendInterface).getClients();
       setClientRows(
         allClients.map((c) => ({
           id: c.id,
@@ -788,6 +1130,9 @@ export default function AdminSpreadsheetPage() {
           joinDate: formatTs(c.created_at),
           joinDateRaw: Number(c.created_at),
           notes: c.notes,
+          hasAccount: c.hasAccount ?? false,
+          milestoneUpdatedAt: c.milestoneUpdatedAt,
+          briefStatus: c.briefStatus,
         })),
       );
     } catch {
@@ -807,10 +1152,9 @@ export default function AdminSpreadsheetPage() {
   // Load Google Sheets config on mount
   useEffect(() => {
     if (!actor || isFetching) return;
-    const adminEmail = getAdminEmail();
     Promise.all([
       (actor as backendInterface).isGoogleSheetsConfigured(),
-      (actor as backendInterface).getGoogleSheetsConfig(adminEmail),
+      (actor as backendInterface).getGoogleSheetsConfig(),
     ])
       .then(([configured, configRes]) => {
         setGsConfigured(Boolean(configured));
@@ -820,48 +1164,83 @@ export default function AdminSpreadsheetPage() {
           setGsSheetId(cfg.sheetId ?? "");
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setGsToast({
+          msg: "Failed to load Google Sheets configuration.",
+          ok: false,
+        });
+        setTimeout(() => setGsToast(null), 5000);
+      });
   }, [actor, isFetching]);
 
   // Fetch leads when Leads tab is activated
+  // biome-ignore lint/correctness/useExhaustiveDependencies: isFetching is a session-hydration proxy — not used directly but triggers re-fetch after session loads
   useEffect(() => {
-    if (view === "leads" && leadsData.length === 0 && !leadsLoading) {
+    if (!actor) return;
+    if (view === "leads") {
       setLeadsLoading(true);
+      setLeadsError(null);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (actor as backendInterface)
-        .getLeads(ADMIN_EMAIL)
+        .getLeads()
         .then((data: unknown) => {
           setLeadsData(
             Array.isArray(data) ? (data as Record<string, unknown>[]) : [],
           );
           setLeadsLoading(false);
         })
-        .catch(() => setLeadsLoading(false));
+        .catch(() => {
+          setLeadsError(
+            "Leads data failed to load. Please refresh and try again.",
+          );
+          setLeadsLoading(false);
+        });
     }
-  }, [view, actor, leadsData.length, leadsLoading]);
+  }, [view, actor, isFetching]);
+
+  useEffect(() => {
+    if (!actor || isFetching) return;
+    (actor as backendInterface)
+      .getGlobalTaxRate()
+      .then((rate: number) => {
+        setGlobalTaxRateValue(rate);
+      })
+      .catch((e: unknown) => console.error("Failed to load tax rate", e));
+  }, [actor, isFetching]);
 
   // Fetch reviews when Reviews tab is activated
+  // biome-ignore lint/correctness/useExhaustiveDependencies: isFetching is a session-hydration proxy — not used directly but triggers re-fetch after session loads
   useEffect(() => {
-    if (view === "reviews" && reviewsData.length === 0 && !reviewsLoading) {
+    if (!actor) return;
+    if (view === "reviews") {
       setReviewsLoading(true);
+      setReviewsError(null);
       const ba = actor as backendInterface;
       Promise.all([
-        ba.getPendingReviews(ADMIN_EMAIL),
+        ba.getPendingReviews(),
         ba.getApprovedReviews(),
-        ba.getRejectedReviews(ADMIN_EMAIL),
+        ba.getRejectedReviews(),
       ])
         .then(([pending, approved, rejected]) => {
           const all = [...pending, ...approved, ...rejected];
           setReviewsData(all as unknown as Record<string, unknown>[]);
           setReviewsLoading(false);
         })
-        .catch(() => setReviewsLoading(false));
+        .catch(() => {
+          setReviewsError(
+            "Reviews data failed to load. Please refresh and try again.",
+          );
+          setReviewsLoading(false);
+        });
     }
-  }, [view, actor, reviewsData.length, reviewsLoading]);
+  }, [view, actor, isFetching]);
 
   // Fetch conversion stats when Revenue tab is activated or date range changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: isFetching is a session-hydration proxy — not used directly but triggers re-fetch after session loads
   useEffect(() => {
     if (view === "revenue" && actor) {
+      if (revFromDate && Number.isNaN(new Date(revFromDate).getTime())) return;
+      if (revToDate && Number.isNaN(new Date(revToDate).getTime())) return;
       const fromTs = revFromDate
         ? new Date(revFromDate).getTime() * 1_000_000
         : null;
@@ -869,7 +1248,6 @@ export default function AdminSpreadsheetPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (actor as backendInterface)
         .getConversionStats(
-          ADMIN_EMAIL,
           fromTs !== null ? BigInt(fromTs) : null,
           toTs !== null ? BigInt(toTs) : null,
         )
@@ -888,43 +1266,276 @@ export default function AdminSpreadsheetPage() {
         )
         .catch(() => {});
     }
-  }, [view, actor, revFromDate, revToDate]);
+  }, [view, actor, isFetching, revFromDate, revToDate]);
+
+  // Orders tab data
+  useEffect(() => {
+    if (view !== "orders" || isFetching) return;
+    if (!actor) return;
+    (async () => {
+      setOrdersLoading(true);
+      setOrdersError("");
+      try {
+        const orders = await (actor as backendInterface).getAdminAllOrders();
+        // Batch-resolve unique principals
+        const uniquePrincipals = Array.from(
+          new Set(
+            (orders as Order[]).map((o) => String(o.client_id)).filter(Boolean),
+          ),
+        );
+        const profileMap: Record<string, UserProfile> = {};
+        await Promise.all(
+          uniquePrincipals.map(async (pStr) => {
+            try {
+              const matchingOrder = (orders as Order[]).find(
+                (o) => String(o.client_id) === pStr,
+              );
+              if (matchingOrder?.client_id) {
+                const profile = await (
+                  actor as backendInterface
+                ).getClientByPrincipal(matchingOrder.client_id);
+                if (profile) profileMap[pStr] = profile;
+              }
+            } catch {}
+          }),
+        );
+
+        const rows: OrderTabRow[] = (orders as Order[]).map((o) => {
+          const profile = profileMap[String(o.client_id) ?? ""];
+          return {
+            orderId: String(o.id),
+            tierCode: o.tier_code ?? "",
+            deliveryWindow: o.delivery_window ?? "",
+            launchTarget: o.launch_target ?? "",
+            firstName: profile?.firstName ?? "",
+            lastName: profile?.lastName ?? "",
+            email: profile?.email ?? "",
+            status:
+              Object.keys(o.status as unknown as Record<string, unknown>)[0] ??
+              "",
+            createdDate: o.created_at
+              ? new Date(Number(o.created_at) / 1_000_000).toLocaleDateString()
+              : "—",
+            description: o.tier_code ?? "",
+          };
+        });
+        setOrdersTabData(rows);
+      } catch (e: unknown) {
+        setOrdersError((e as Error)?.message ?? "Failed to load orders");
+      } finally {
+        setOrdersLoading(false);
+      }
+    })();
+  }, [view, actor, isFetching]);
+
+  // Email Campaigns tab data
+  useEffect(() => {
+    if (view !== "emailcampaigns" || isFetching) return;
+    if (!actor) return;
+    (async () => {
+      setEmailCampaignsLoading(true);
+      setEmailCampaignsError("");
+      try {
+        const campaignsResult = await (
+          actor as backendInterface
+        ).getAllEmailCampaigns();
+        const campaigns: EmailCampaign[] =
+          "ok" in campaignsResult ? campaignsResult.ok : [];
+        const rows: EmailCampaignRow[] = campaigns.map((c) => ({
+          id: String(c.id),
+          subject: c.subject ?? "",
+          recipientCount: (c.recipients?.length ?? 0) as number,
+          status:
+            Object.keys(c.status as unknown as Record<string, unknown>)[0] ??
+            "",
+          createdDate: c.createdAt
+            ? Number.isNaN(Number(c.createdAt))
+              ? "—"
+              : new Date(Number(c.createdAt) / 1_000_000).toLocaleDateString()
+            : "—",
+          scheduledDate: c.scheduledDate
+            ? Number.isNaN(Number(c.scheduledDate))
+              ? "—"
+              : new Date(
+                  Number(c.scheduledDate) / 1_000_000,
+                ).toLocaleDateString()
+            : "—",
+          sentDate: c.sentAt
+            ? Number.isNaN(Number(c.sentAt))
+              ? "—"
+              : new Date(Number(c.sentAt) / 1_000_000).toLocaleDateString()
+            : "—",
+        }));
+        setEmailCampaignsData(rows);
+      } catch (e: unknown) {
+        setEmailCampaignsError(
+          (e as Error)?.message ?? "Failed to load campaigns",
+        );
+      } finally {
+        setEmailCampaignsLoading(false);
+      }
+    })();
+  }, [view, actor, isFetching]);
+
+  // Questionnaires tab data
+  useEffect(() => {
+    if (view !== "questionnaires" || isFetching) return;
+    if (!actor) return;
+    (async () => {
+      setQuestionnairesLoading(true);
+      setQuestionnairesError("");
+      try {
+        const qs = await (
+          actor as backendInterface
+        ).getAdminAllQuestionnaires();
+        const rows: QuestionnaireRow[] = (qs as Questionnaire[]).map((q) => ({
+          id: String(q.id),
+          clientId: String(q.client_id ?? ""),
+          tierCode: q.tier_code ?? "",
+          progress: `${q.progress ?? 0}%`,
+          submitted: q.submitted ? "Yes" : "No",
+          reviewed: q.reviewed ? "Yes" : "No",
+          answerSummary: JSON.stringify(q.answers ?? {}).slice(0, 100),
+          createdAt:
+            q.created_at && q.created_at !== 0n
+              ? Number.isNaN(Number(q.created_at))
+                ? "—"
+                : new Date(
+                    Number(q.created_at) / 1_000_000,
+                  ).toLocaleDateString()
+              : "—",
+          updatedAt:
+            q.updated_at && q.updated_at !== 0n
+              ? Number.isNaN(Number(q.updated_at))
+                ? "—"
+                : new Date(
+                    Number(q.updated_at) / 1_000_000,
+                  ).toLocaleDateString()
+              : "—",
+        }));
+        setQuestionnairesData(rows);
+      } catch (e: unknown) {
+        setQuestionnairesError(
+          (e as Error)?.message ?? "Failed to load questionnaires",
+        );
+      } finally {
+        setQuestionnairesLoading(false);
+      }
+    })();
+  }, [view, actor, isFetching]);
+
+  // Referrals tab data
+  useEffect(() => {
+    if (view !== "referrals" || isFetching) return;
+    if (!actor) return;
+    (async () => {
+      setReferralsLoading(true);
+      setReferralsError("");
+      try {
+        const stats = await (actor as backendInterface).getReferralStats();
+        const rows: ReferralRow[] = (stats as ReferralStat[]).map((r) => ({
+          code: r.code ?? "",
+          referrerName: r.referrerName ?? "",
+          referrerEmail: r.referrerEmail ?? "",
+          totalClicks: Number(r.totalClicks ?? 0),
+          conversions: Number(r.successfulConversions ?? 0),
+          conversionRate:
+            Number(r.totalClicks ?? 0) > 0
+              ? `${((Number(r.successfulConversions ?? 0) / Number(r.totalClicks)) * 100).toFixed(1)}%`
+              : "0%",
+        }));
+        setReferralsData(rows);
+      } catch (e: unknown) {
+        setReferralsError((e as Error)?.message ?? "Failed to load referrals");
+      } finally {
+        setReferralsLoading(false);
+      }
+    })();
+  }, [view, actor, isFetching]);
 
   // ── Inline save handlers ──────────────────────────────────────────────────────
   async function handleSaveNotes(clientId: string, notes: string) {
     if (!actor) return;
-    await (actor as backendInterface).updateClientNotes(
+    const prevRows = clientRows;
+    const result = await (actor as backendInterface).updateClientNotes(
       clientId,
       notes,
-      getAdminEmail(),
     );
-    setClientRows((prev) =>
-      prev.map((r) => (r.id === clientId ? { ...r, notes } : r)),
-    );
+    if (result && "err" in result) {
+      setGsSyncToast({ msg: (result as { err: string }).err, ok: false });
+      setTimeout(() => setGsSyncToast(null), 5000);
+      setClientRows(prevRows);
+    } else if (result && ("ok" in result || "okAlreadyAdvanced" in result)) {
+      setClientRows((prev) =>
+        prev.map((r) => (r.id === clientId ? { ...r, notes } : r)),
+      );
+      setGsSyncToast({ msg: "Notes saved", ok: true });
+      setTimeout(() => setGsSyncToast(null), 5000);
+    } else {
+      setClientRows((prev) =>
+        prev.map((r) => (r.id === clientId ? { ...r, notes } : r)),
+      );
+    }
   }
 
   async function handleSaveStatus(clientId: string, newStatus: string) {
     if (!actor) return;
-    await (actor as backendInterface).updateClientStatus(
-      getAdminEmail(),
+    const prevRows = clientRows;
+    const result = await (actor as backendInterface).updateClientStatus(
       clientId,
       newStatus,
     );
-    setClientRows((prev) =>
-      prev.map((r) =>
-        r.id === clientId ? { ...r, projectStatus: newStatus } : r,
-      ),
-    );
+    if (result && "err" in result) {
+      setGsSyncToast({ msg: (result as { err: string }).err, ok: false });
+      setTimeout(() => setGsSyncToast(null), 5000);
+      setClientRows(prevRows);
+    } else if (result && ("ok" in result || "okAlreadyAdvanced" in result)) {
+      setClientRows((prev) =>
+        prev.map((r) =>
+          r.id === clientId ? { ...r, projectStatus: newStatus } : r,
+        ),
+      );
+      setGsSyncToast({ msg: "Status saved", ok: true });
+      setTimeout(() => setGsSyncToast(null), 5000);
+    } else {
+      setClientRows((prev) =>
+        prev.map((r) =>
+          r.id === clientId ? { ...r, projectStatus: newStatus } : r,
+        ),
+      );
+    }
   }
 
-  async function handleMarkInvoicePaid(invoiceId: string) {
+  async function handleMarkInvoicePaid(
+    invoiceId: string,
+    paymentIntentId: string,
+  ) {
     if (!actor) return;
-    await (actor as backendInterface).markInvoicePaid(invoiceId, "");
+    // Optimistic update
+    const previousRows = accountingRows;
     setAccountingRows((prev) =>
       prev.map((r) =>
         r.rowKey === `invoice-${invoiceId}` ? { ...r, status: "PAID" } : r,
       ),
     );
+    try {
+      const result = await (actor as backendInterface).markInvoicePaid(
+        invoiceId,
+        paymentIntentId,
+      );
+      if (result && typeof result === "object" && "err" in result) {
+        const errMsg =
+          (result as { err: string }).err || "Failed to mark invoice as paid.";
+        setGsSyncToast({ msg: errMsg, ok: false });
+        setTimeout(() => setGsSyncToast(null), 5000);
+        // Revert optimistic update
+        setAccountingRows(previousRows);
+      }
+    } catch {
+      setGsSyncToast({ msg: "Failed to mark invoice as paid.", ok: false });
+      setTimeout(() => setGsSyncToast(null), 5000);
+      setAccountingRows(previousRows);
+    }
   }
 
   // ── Filtering + sorting ────────────────────────────────────────────────────────
@@ -957,6 +1568,15 @@ export default function AdminSpreadsheetPage() {
       if (sortCol === "clientName") {
         av = a.clientName;
         bv = b.clientName;
+      } else if (sortCol === "firstName") {
+        av = a.firstName;
+        bv = b.firstName;
+      } else if (sortCol === "lastName") {
+        av = a.lastName;
+        bv = b.lastName;
+      } else if (sortCol === "clientEmail") {
+        av = a.clientEmail;
+        bv = b.clientEmail;
       } else if (sortCol === "idOrInvoiceNum") {
         av = a.idOrInvoiceNum;
         bv = b.idOrInvoiceNum;
@@ -1112,8 +1732,17 @@ export default function AdminSpreadsheetPage() {
       av = String(a.status ?? "");
       bv = String(b.status ?? "");
     } else if (col === "created_at") {
-      av = Number(a.created_at ?? 0);
-      bv = Number(b.created_at ?? 0);
+      return dir === "asc"
+        ? (a.created_at as bigint) > (b.created_at as bigint)
+          ? 1
+          : (a.created_at as bigint) < (b.created_at as bigint)
+            ? -1
+            : 0
+        : (b.created_at as bigint) > (a.created_at as bigint)
+          ? 1
+          : (b.created_at as bigint) < (a.created_at as bigint)
+            ? -1
+            : 0; // AGENTS.md: newest-first, b > a ? 1
     }
     if (typeof av === "number" && typeof bv === "number")
       return dir === "asc" ? av - bv : bv - av;
@@ -1151,8 +1780,32 @@ export default function AdminSpreadsheetPage() {
       av = String(a.status ?? "");
       bv = String(b.status ?? "");
     } else if (col === "createdAt") {
-      av = Number(a.createdAt ?? 0);
-      bv = Number(b.createdAt ?? 0);
+      const aCreated = a.createdAt as bigint | undefined;
+      const bCreated = b.createdAt as bigint | undefined;
+      if (dir === "asc") {
+        return aCreated !== undefined && bCreated !== undefined
+          ? aCreated > bCreated
+            ? 1
+            : aCreated < bCreated
+              ? -1
+              : 0
+          : aCreated !== undefined
+            ? 1
+            : bCreated !== undefined
+              ? -1
+              : 0;
+      }
+      return aCreated !== undefined && bCreated !== undefined
+        ? bCreated > aCreated
+          ? 1
+          : bCreated < aCreated
+            ? -1
+            : 0
+        : bCreated !== undefined
+          ? 1
+          : aCreated !== undefined
+            ? -1
+            : 0;
     }
     if (typeof av === "number" && typeof bv === "number")
       return dir === "asc" ? av - bv : bv - av;
@@ -1198,8 +1851,9 @@ export default function AdminSpreadsheetPage() {
   };
 
   const revRange = getRevDateRange();
+  const REVENUE_STATUSES = ["paid", "depositReceived", "live"];
   const paidRows = accountingRows.filter((r) =>
-    (r.status ?? "").toLowerCase().includes("paid"),
+    REVENUE_STATUSES.includes(r.status ?? ""),
   );
   const filteredPaidRows = revRange
     ? paidRows.filter((r) => {
@@ -1261,11 +1915,10 @@ export default function AdminSpreadsheetPage() {
     setGsSaving(true);
     setGsToast(null);
     try {
-      const adminEmail = getAdminEmail();
-      const result = await (actor as backendInterface).setGoogleSheetsConfig(
-        { scriptUrl: gsScriptUrl.trim(), sheetId: gsSheetId.trim() },
-        adminEmail,
-      );
+      const result = await (actor as backendInterface).setGoogleSheetsConfig({
+        scriptUrl: gsScriptUrl.trim(),
+        sheetId: gsSheetId.trim(),
+      });
       if (result && "ok" in result) {
         setGsConfigured(true);
         setGsToast({ msg: "Configuration saved successfully.", ok: true });
@@ -1289,8 +1942,7 @@ export default function AdminSpreadsheetPage() {
     setGsClearing(true);
     setGsToast(null);
     try {
-      const adminEmail = getAdminEmail();
-      await (actor as backendInterface).clearGoogleSheetsConfig(adminEmail);
+      await (actor as backendInterface).clearGoogleSheetsConfig();
       setGsScriptUrl("");
       setGsSheetId("");
       setGsConfigured(false);
@@ -1304,10 +1956,25 @@ export default function AdminSpreadsheetPage() {
   }
 
   async function syncToGoogleSheets(
-    viewName: "Accounting" | "ClientList" | "Leads" | "Revenue",
+    viewName:
+      | "Accounting"
+      | "ClientList"
+      | "Leads"
+      | "Revenue"
+      | "Orders"
+      | "EmailCampaigns"
+      | "Questionnaires"
+      | "Referrals",
     rows: (string | number)[][],
   ) {
-    if (!gsScriptUrl || !gsConfigured) return;
+    if (!gsScriptUrl || !gsConfigured || gsScriptUrl.trim() === "") {
+      setGsSyncToast({
+        msg: "Google Sheets is not configured — add your Apps Script URL in settings",
+        ok: false,
+      });
+      setTimeout(() => setGsSyncToast(null), 5000);
+      return;
+    }
     setGsSyncingView(viewName);
     setGsSyncToast(null);
     try {
@@ -1337,10 +2004,87 @@ export default function AdminSpreadsheetPage() {
     }
   }
 
+  async function handleSyncAll() {
+    if (!gsScriptUrl || !gsConfigured || gsScriptUrl.trim() === "") {
+      setGsSyncToast({
+        msg: "Google Sheets is not configured — add your Apps Script URL in settings",
+        ok: false,
+      });
+      setTimeout(() => setGsSyncToast(null), 5000);
+      return;
+    }
+    setSyncAllInProgress(true);
+    setSyncAllResults(null);
+    const results: Record<string, { ok: boolean; msg: string }> = {};
+    const tabs: Array<{
+      name: string;
+      viewName:
+        | "Accounting"
+        | "ClientList"
+        | "Leads"
+        | "Revenue"
+        | "Orders"
+        | "EmailCampaigns"
+        | "Questionnaires"
+        | "Referrals";
+      rows: () => (string | number)[][];
+    }> = [
+      {
+        name: "Accounting",
+        viewName: "Accounting",
+        rows: buildAccountingSheetRows,
+      },
+      {
+        name: "Client List",
+        viewName: "ClientList",
+        rows: buildClientListSheetRows,
+      },
+      { name: "Orders", viewName: "Orders", rows: buildOrdersSheetRows },
+      {
+        name: "Email Campaigns",
+        viewName: "EmailCampaigns",
+        rows: buildEmailCampaignsSheetRows,
+      },
+      {
+        name: "Questionnaires",
+        viewName: "Questionnaires",
+        rows: buildQuestionnairesSheetRows,
+      },
+      {
+        name: "Referrals",
+        viewName: "Referrals",
+        rows: buildReferralsSheetRows,
+      },
+    ];
+    for (const tab of tabs) {
+      if (!gsConfigured || !gsScriptUrl || gsScriptUrl.trim() === "") {
+        results[tab.name] = {
+          ok: false,
+          msg: "Google Sheets is not configured — add your Apps Script URL in settings",
+        };
+        continue;
+      }
+      try {
+        await syncToGoogleSheets(tab.viewName, tab.rows());
+        results[tab.name] = { ok: true, msg: "Synced" };
+      } catch (e) {
+        results[tab.name] = {
+          ok: false,
+          msg: e instanceof Error ? e.message : "Failed",
+        };
+      }
+    }
+    setSyncAllResults(results);
+    setSyncAllInProgress(false);
+  }
+
   function buildAccountingSheetRows(): (string | number)[][] {
     const header = [
       "Type",
       "Client Name",
+      "First Name",
+      "Last Name",
+      "Email",
       "ID / Invoice #",
       "Description / Tier",
       "Amount",
@@ -1350,6 +2094,9 @@ export default function AdminSpreadsheetPage() {
     const data = filteredAcct.map((r) => [
       r.rowType,
       r.clientName,
+      r.firstName,
+      r.lastName,
+      r.clientEmail,
       r.idOrInvoiceNum,
       r.descriptionOrTier,
       r.amount,
@@ -1370,6 +2117,9 @@ export default function AdminSpreadsheetPage() {
       "Current Milestone",
       "Join Date",
       "Notes",
+      "Has Account",
+      "Milestone Updated At",
+      "Brief Submission Status",
     ];
     const data = filteredClients.map((r) => [
       r.name,
@@ -1381,6 +2131,13 @@ export default function AdminSpreadsheetPage() {
       r.currentMilestone,
       r.joinDate,
       r.notes,
+      r.hasAccount ? "Yes" : "No",
+      r.milestoneUpdatedAt
+        ? new Date(
+            Number(r.milestoneUpdatedAt) / 1_000_000,
+          ).toLocaleDateString()
+        : "—",
+      r.briefStatus ?? "—",
     ]);
     return [header, ...data];
   }
@@ -1481,6 +2238,107 @@ export default function AdminSpreadsheetPage() {
     ];
     return [...summaryRows, ...chartRows, ...outstandingRows];
   }
+
+  const buildOrdersSheetRows = (): string[][] => {
+    const headers = [
+      "Order ID",
+      "Tier Code",
+      "Delivery Window",
+      "Launch Target",
+      "First Name",
+      "Last Name",
+      "Email",
+      "Status",
+      "Created Date",
+      "Description",
+    ];
+    return [
+      headers,
+      ...ordersTabData.map((r) => [
+        r.orderId,
+        r.tierCode,
+        r.deliveryWindow,
+        r.launchTarget,
+        r.firstName,
+        r.lastName,
+        r.email,
+        r.status,
+        r.createdDate,
+        r.description,
+      ]),
+    ];
+  };
+  const buildEmailCampaignsSheetRows = (): string[][] => {
+    const headers = [
+      "Campaign ID",
+      "Subject",
+      "Recipient Count",
+      "Status",
+      "Created Date",
+      "Scheduled Date",
+      "Sent Date",
+    ];
+    return [
+      headers,
+      ...emailCampaignsData.map((r) => [
+        r.id,
+        r.subject,
+        String(r.recipientCount),
+        r.status,
+        r.createdDate,
+        r.scheduledDate,
+        r.sentDate,
+      ]),
+    ];
+  };
+  const buildQuestionnairesSheetRows = (): string[][] => {
+    const headers = [
+      "Questionnaire ID",
+      "Client ID",
+      "Tier Code",
+      "Progress",
+      "Submitted",
+      "Reviewed",
+      "Answer Summary",
+      "Created",
+      "Updated",
+    ];
+    return [
+      headers,
+      ...questionnairesData.map((r) => [
+        r.id,
+        r.clientId,
+        r.tierCode,
+        r.progress,
+        r.submitted,
+        r.reviewed,
+        r.answerSummary,
+        r.createdAt,
+        r.updatedAt,
+      ]),
+    ];
+  };
+  const buildReferralsSheetRows = (): string[][] => {
+    const headers = [
+      "Referral Code",
+      "Referrer Name",
+      "Referrer Email",
+      "Total Clicks",
+      "Conversions",
+      "Conversion Rate",
+    ];
+    return [
+      headers,
+      ...referralsData.map((r) => [
+        r.code,
+        r.referrerName,
+        r.referrerEmail,
+        String(r.totalClicks),
+        String(r.conversions),
+        r.conversionRate,
+      ]),
+    ];
+  };
 
   // ── Excel export ──────────────────────────────────────────────────────────────
   function handleExport() {
@@ -1606,16 +2464,73 @@ export default function AdminSpreadsheetPage() {
       const data = filteredAcct.map((r) => ({
         Type: r.rowType,
         "Client Name": r.clientName,
+        "First Name": r.firstName,
+        "Last Name": r.lastName,
+        Email: r.clientEmail,
         "ID / Invoice #": r.idOrInvoiceNum,
         "Description / Tier": r.descriptionOrTier,
         Amount: r.amount,
+        "Tax Amount": ((r.amountRaw ?? 0) * globalTaxRate) / 100,
         Status: r.status,
         Date: r.date,
       }));
       const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Accounting");
+      // Add Payouts worksheet if data is available
+      if (payoutsData.length > 0) {
+        const payoutsExport = payoutsData.map((p) => ({
+          "Payout ID": p.id,
+          Amount: (p.amount / 100).toFixed(2),
+          Currency: (p.currency ?? "").toUpperCase(),
+          Status: p.status,
+          "Arrival Date": new Date(p.arrival_date * 1000).toLocaleDateString(
+            "en-US",
+            { month: "short", day: "numeric", year: "numeric" },
+          ),
+          "Bank Details": p.bank_account?.last4
+            ? `****${p.bank_account.last4}`
+            : (p.description ?? "—"),
+        }));
+        XLSX.utils.book_append_sheet(
+          wb,
+          XLSX.utils.json_to_sheet(payoutsExport),
+          "Payouts",
+        );
+      }
       XLSX.writeFile(wb, "Imperidome_Accounting.xlsx");
+    } else if (view === "orders") {
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        wb,
+        XLSX.utils.aoa_to_sheet(buildOrdersSheetRows()),
+        "Orders",
+      );
+      XLSX.writeFile(wb, "Imperidome_Orders.xlsx");
+    } else if (view === "emailcampaigns") {
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        wb,
+        XLSX.utils.aoa_to_sheet(buildEmailCampaignsSheetRows()),
+        "Email Campaigns",
+      );
+      XLSX.writeFile(wb, "Imperidome_EmailCampaigns.xlsx");
+    } else if (view === "questionnaires") {
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        wb,
+        XLSX.utils.aoa_to_sheet(buildQuestionnairesSheetRows()),
+        "Questionnaires",
+      );
+      XLSX.writeFile(wb, "Imperidome_Questionnaires.xlsx");
+    } else if (view === "referrals") {
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        wb,
+        XLSX.utils.aoa_to_sheet(buildReferralsSheetRows()),
+        "Referrals",
+      );
+      XLSX.writeFile(wb, "Imperidome_Referrals.xlsx");
     } else {
       const data = filteredClients.map((r) => ({
         Name: r.name,
@@ -1627,6 +2542,13 @@ export default function AdminSpreadsheetPage() {
         "Current Milestone": r.currentMilestone,
         "Join Date": r.joinDate,
         Notes: r.notes,
+        "Has Account": r.hasAccount ? "Yes" : "No",
+        "Milestone Updated At": r.milestoneUpdatedAt
+          ? new Date(
+              Number(r.milestoneUpdatedAt) / 1_000_000,
+            ).toLocaleDateString()
+          : "—",
+        "Brief Submission Status": r.briefStatus ?? "—",
       }));
       const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();
@@ -1636,10 +2558,12 @@ export default function AdminSpreadsheetPage() {
   }
 
   // ── Styles ─────────────────────────────────────────────────────────────────────
-  const CARD: React.CSSProperties = {
-    background: "rgba(17,19,34,0.7)",
-    border: "1px solid #1C1F33",
-    borderRadius: 8,
+  const CARD: CSSProperties = {
+    background: "rgba(10,11,20,0.85)",
+    border: "1px solid rgba(94,240,138,0.15)",
+    borderRadius: 12,
+    padding: 0,
+    boxShadow: "0 0 20px rgba(94,240,138,0.05)",
   };
 
   const loading = view === "accounting" ? acctLoading : clientsLoading;
@@ -1682,7 +2606,7 @@ export default function AdminSpreadsheetPage() {
     setCalcDisplay((prev) => {
       const raw = prev.replace(/×/g, "*").replace(/÷/g, "/").replace(/−/g, "-");
       try {
-        const result = Function(`"use strict"; return (${raw})`)() as number;
+        const result = safeEvalExpr(raw);
         const rs = String(result);
         setCalcExpr(`${rs} ${op} `);
         return rs;
@@ -1698,8 +2622,10 @@ export default function AdminSpreadsheetPage() {
       const full = calcExpr + prev;
       const raw = full.replace(/×/g, "*").replace(/÷/g, "/").replace(/−/g, "-");
       try {
-        const result = Function(`"use strict"; return (${raw})`)() as number;
-        const rs = Number.parseFloat(result.toFixed(10)).toString();
+        const result = safeEvalExpr(raw);
+        const rs = Number.isNaN(result)
+          ? "Error"
+          : Number.parseFloat(result.toFixed(10)).toString();
         setCalcExpr(`${full} =`);
         setCalcJustEvaled(true);
         return rs;
@@ -1810,6 +2736,7 @@ export default function AdminSpreadsheetPage() {
               {view === "leads" && "📋 Leads"}
               {view === "reviews" && "⭐ Reviews"}
               {view === "revenue" && "📈 Revenue"}
+              {view === "tax" && "Tax Report"}
               {view === "gsheets" && "⚙ Google Sheets"}
             </span>
           </button>
@@ -1827,17 +2754,22 @@ export default function AdminSpreadsheetPage() {
               maxWidth: "100%",
               overflowX: "auto",
               WebkitOverflowScrolling: "touch",
-              scrollbarWidth: "none" as React.CSSProperties["scrollbarWidth"],
+              scrollbarWidth: "none" as CSSProperties["scrollbarWidth"],
             }}
           >
             {(
               [
                 "accounting",
                 "clients",
+                "orders",
+                "emailcampaigns",
+                "questionnaires",
+                "referrals",
                 "tools",
                 "leads",
                 "reviews",
                 "revenue",
+                "tax",
                 "gsheets",
               ] as View[]
             ).map((v) => (
@@ -1872,6 +2804,10 @@ export default function AdminSpreadsheetPage() {
               >
                 {v === "accounting" && "💰 Accounting"}
                 {v === "clients" && "👤 Client List"}
+                {v === "orders" && "📦 Orders"}
+                {v === "emailcampaigns" && "📧 Email Campaigns"}
+                {v === "questionnaires" && "📝 Questionnaires"}
+                {v === "referrals" && "🔗 Referrals"}
                 {v === "tools" && (
                   <>
                     <Wrench size={13} />
@@ -2030,6 +2966,45 @@ export default function AdminSpreadsheetPage() {
                 )}
               </>
             )}
+            {view === "accounting" && (
+              <div className="flex items-center gap-2 flex-wrap mt-2">
+                <label
+                  htmlFor="accounting-tax-rate"
+                  className="text-xs text-gray-400 whitespace-nowrap"
+                >
+                  Tax Rate %
+                </label>
+                <input
+                  id="accounting-tax-rate"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  className="w-20 px-2 py-1 text-xs bg-gray-800 border border-gray-700 rounded text-white"
+                  value={globalTaxRate}
+                  onChange={(e) =>
+                    setGlobalTaxRateValue(Number(e.target.value))
+                  }
+                  onBlur={async (e) => {
+                    const rate = Number(e.target.value);
+                    try {
+                      const res = await (
+                        actor as backendInterface
+                      ).setGlobalTaxRate(rate);
+                      if (res?.__kind__ === "ok" || (res && "ok" in res)) {
+                        setTaxSaveMsg("Saved");
+                        setTimeout(() => setTaxSaveMsg(""), 2000);
+                      }
+                    } catch (err) {
+                      console.error(err);
+                    }
+                  }}
+                />
+                {taxSaveMsg && (
+                  <span className="text-xs text-green-400">{taxSaveMsg}</span>
+                )}
+              </div>
+            )}
 
             {/* Search */}
             <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
@@ -2160,7 +3135,23 @@ export default function AdminSpreadsheetPage() {
               type="button"
               data-ocid="spreadsheet.export.button"
               onClick={handleExport}
-              disabled={loading || visibleRows === 0}
+              disabled={
+                loading ||
+                ((): boolean => {
+                  const v: string = view;
+                  if (v === "orders") return ordersTabData.length === 0;
+                  if (v === "leads") return leadsData.length === 0;
+                  if (v === "reviews") return reviewsData.length === 0;
+                  if (v === "emailcampaigns")
+                    return emailCampaignsData.length === 0;
+                  if (v === "questionnaires")
+                    return questionnairesData.length === 0;
+                  if (v === "referrals") return referralsData.length === 0;
+                  if (v === "revenue") return accountingRows.length === 0;
+                  // Tools and Google Sheets tabs always have exportable content
+                  return false;
+                })()
+              }
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -2218,21 +3209,179 @@ export default function AdminSpreadsheetPage() {
           </div>
         )}
 
+        {view === "tax" && (
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="bg-gray-800 rounded-lg p-4">
+                <div className="text-xs text-gray-400">Total Orders</div>
+                <div className="text-xl font-bold text-white">
+                  {accountingRows.length}
+                </div>
+              </div>
+              <div className="bg-gray-800 rounded-lg p-4">
+                <div className="text-xs text-gray-400">Total Revenue</div>
+                <div className="text-xl font-bold text-white">
+                  {formatMoney(
+                    accountingRows.reduce((s, r) => s + (r.amountRaw ?? 0), 0),
+                  )}
+                </div>
+              </div>
+              <div className="bg-gray-800 rounded-lg p-4">
+                <div className="text-xs text-gray-400">Tax Collected</div>
+                <div className="text-xl font-bold text-green-400">
+                  {formatMoney(
+                    accountingRows.reduce(
+                      (s, r) => s + ((r.amountRaw ?? 0) * globalTaxRate) / 100,
+                      0,
+                    ),
+                  )}
+                </div>
+              </div>
+              <div className="bg-gray-800 rounded-lg p-4">
+                <div className="text-xs text-gray-400">Tax Rate</div>
+                <div className="text-xl font-bold text-white">
+                  {globalTaxRate.toFixed(2)}%
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={async () => {
+                  const XLSX = await import("xlsx");
+                  const wb = XLSX.utils.book_new();
+                  const wsData: (string | number)[][] = [
+                    [
+                      "Date",
+                      "Client",
+                      "Description",
+                      "Order Amount",
+                      "Tax Rate %",
+                      "Tax Amount",
+                      "Status",
+                    ],
+                    ...accountingRows.map((r) => [
+                      r.date,
+                      r.clientName,
+                      r.descriptionOrTier,
+                      r.amountRaw ?? 0,
+                      globalTaxRate,
+                      ((r.amountRaw ?? 0) * globalTaxRate) / 100,
+                      r.status,
+                    ]),
+                  ];
+                  const ws = XLSX.utils.aoa_to_sheet(wsData);
+                  XLSX.utils.book_append_sheet(wb, ws, "Tax Report");
+                  XLSX.writeFile(wb, "Imperidome_Tax_Report.xlsx");
+                }}
+                className="px-3 py-1.5 text-xs bg-green-700 hover:bg-green-600 text-white rounded"
+              >
+                Export XLSX
+              </button>
+            </div>
+            <div className="overflow-x-auto rounded-lg border border-gray-700">
+              <table className="w-full text-sm text-left text-gray-300">
+                <thead className="text-xs uppercase bg-gray-800 text-gray-400">
+                  <tr>
+                    <th className="px-3 py-2">Date</th>
+                    <th className="px-3 py-2">Client</th>
+                    <th className="px-3 py-2">Description</th>
+                    <th className="px-3 py-2 text-right">Order Amount</th>
+                    <th className="px-3 py-2 text-right">Tax Rate %</th>
+                    <th className="px-3 py-2 text-right">Tax Amount</th>
+                    <th className="px-3 py-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {accountingRows.map((r) => (
+                    <tr
+                      key={r.rowKey}
+                      className="border-b border-gray-700 hover:bg-gray-800/50"
+                    >
+                      <td className="px-3 py-2 whitespace-nowrap">{r.date}</td>
+                      <td className="px-3 py-2">{r.clientName}</td>
+                      <td className="px-3 py-2">{r.descriptionOrTier}</td>
+                      <td className="px-3 py-2 text-right">
+                        {formatMoney(r.amountRaw ?? 0)}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {globalTaxRate.toFixed(2)}%
+                      </td>
+                      <td className="px-3 py-2 text-right text-green-400">
+                        {formatMoney(
+                          ((r.amountRaw ?? 0) * globalTaxRate) / 100,
+                        )}
+                      </td>
+                      <td className="px-3 py-2">{r.status}</td>
+                    </tr>
+                  ))}
+                  {accountingRows.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={7}
+                        className="px-3 py-4 text-center text-gray-500"
+                      >
+                        No records
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {/* Google Sheets Tab */}
         {view === "gsheets" && (
-          <GoogleSheetsPanel
-            scriptUrl={gsScriptUrl}
-            sheetId={gsSheetId}
-            configured={gsConfigured}
-            saving={gsSaving}
-            clearing={gsClearing}
-            toast={gsToast}
-            onScriptUrlChange={setGsScriptUrl}
-            onSheetIdChange={setGsSheetId}
-            onSave={handleGssSave}
-            onClear={handleGssClear}
-            onShowHelp={() => setShowGSheetsHelp(true)}
-          />
+          <>
+            {/* Sync All Sheets */}
+            <div style={{ marginBottom: 20 }}>
+              <button
+                type="button"
+                onClick={handleSyncAll}
+                disabled={syncAllInProgress}
+                className="px-4 py-2 text-xs font-mono bg-[#5EF08A]/10 border border-[#5EF08A]/30 text-[#5EF08A] rounded hover:bg-[#5EF08A]/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {syncAllInProgress
+                  ? "Syncing All Sheets..."
+                  : "Sync All Sheets"}
+              </button>
+              {syncAllResults && (
+                <div
+                  style={{
+                    marginTop: 12,
+                    fontSize: 12,
+                    fontFamily: "monospace",
+                  }}
+                >
+                  {Object.entries(syncAllResults).map(([name, res]) => (
+                    <div
+                      key={name}
+                      style={{
+                        color: res.ok ? "#5EF08A" : "#ef4444",
+                        marginBottom: 4,
+                      }}
+                    >
+                      {res.ok ? "✓" : "✗"} {name}: {res.msg}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <GoogleSheetsPanel
+              scriptUrl={gsScriptUrl}
+              sheetId={gsSheetId}
+              configured={gsConfigured}
+              saving={gsSaving}
+              clearing={gsClearing}
+              toast={gsToast}
+              onScriptUrlChange={setGsScriptUrl}
+              onSheetIdChange={setGsSheetId}
+              onSave={handleGssSave}
+              onClear={handleGssClear}
+              onShowHelp={() => setShowGSheetsHelp(true)}
+            />
+          </>
         )}
 
         {/* Sync toast */}
@@ -2313,6 +3462,7 @@ export default function AdminSpreadsheetPage() {
                 onSort={acctSort.handleSort}
                 onMarkPaid={handleMarkInvoicePaid}
                 hasDateFilter={!!(dateFrom || dateTo)}
+                taxRate={globalTaxRate}
               />
             ) : (
               <ClientListTable
@@ -2325,6 +3475,216 @@ export default function AdminSpreadsheetPage() {
                 onSaveStatus={handleSaveStatus}
               />
             )}
+          </div>
+        )}
+
+        {/* ── Payouts Section (Accounting view) ────────────────────── */}
+        {view === "accounting" && (
+          <div style={{ ...CARD, padding: "20px 20px 24px" }}>
+            {/* PAYOUTS SECTION */}
+            <div>
+              {payoutsError && (
+                <div
+                  data-ocid="spreadsheet.accounting.payouts_error_state"
+                  style={{
+                    background: "rgba(239,68,68,0.08)",
+                    border: "1px solid rgba(239,68,68,0.3)",
+                    borderRadius: 8,
+                    padding: "10px 14px",
+                    color: "#f87171",
+                    fontSize: 13,
+                    marginBottom: 12,
+                  }}
+                >
+                  {payoutsError}
+                </div>
+              )}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  borderBottom: "1px solid #1C1F33",
+                  paddingBottom: 8,
+                  marginBottom: 16,
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: "'Courier New', monospace",
+                    fontSize: 11,
+                    letterSpacing: "0.1em",
+                    color: "#5EF08A",
+                    fontWeight: 700,
+                    textTransform: "uppercase" as const,
+                  }}
+                >
+                  Payouts
+                </span>
+                <span
+                  style={{
+                    fontFamily: "'Courier New', monospace",
+                    fontSize: 10,
+                    color: "#3A3D50",
+                    letterSpacing: "0.06em",
+                  }}
+                >
+                  {payoutsData.length} record
+                  {payoutsData.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+              <div style={{ overflowX: "auto" as const }}>
+                <table
+                  style={{ width: "100%", borderCollapse: "collapse" as const }}
+                >
+                  <thead>
+                    <tr>
+                      {[
+                        "Payout ID",
+                        "Amount",
+                        "Currency",
+                        "Status",
+                        "Arrival Date",
+                        "Bank Details",
+                      ].map((col) => (
+                        <th
+                          key={col}
+                          style={{
+                            position: "sticky" as const,
+                            top: 0,
+                            background: "rgba(7,8,16,0.95)",
+                            color: "#7A7D90",
+                            fontFamily: "'Courier New', monospace",
+                            fontSize: 11,
+                            letterSpacing: "0.06em",
+                            borderBottom: "1px solid #1C1F33",
+                            padding: "8px 12px",
+                            textAlign: "left" as const,
+                            whiteSpace: "nowrap" as const,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {col}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {payoutsData.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          style={{
+                            padding: "20px 12px",
+                            textAlign: "center" as const,
+                            color: "#3A3D50",
+                            fontFamily: "'Courier New', monospace",
+                            fontSize: 12,
+                            borderBottom: "1px solid #1C1F33",
+                          }}
+                        >
+                          No payouts found
+                        </td>
+                      </tr>
+                    ) : (
+                      payoutsData.map((p, i) => (
+                        <tr
+                          key={p.id}
+                          style={{
+                            borderBottom: "1px solid #1C1F33",
+                            background:
+                              i % 2 === 1
+                                ? "rgba(255,255,255,0.018)"
+                                : "transparent",
+                          }}
+                        >
+                          <td
+                            style={{
+                              padding: "8px 12px",
+                              fontFamily: "'Courier New', monospace",
+                              fontSize: 12,
+                              color: "#7A7D90",
+                              whiteSpace: "nowrap" as const,
+                            }}
+                          >
+                            {p.id.length > 14 ? `${p.id.slice(0, 14)}…` : p.id}
+                          </td>
+                          <td
+                            style={{
+                              padding: "8px 12px",
+                              fontFamily: "'Courier New', monospace",
+                              fontSize: 12,
+                              color: "#EEF0F8",
+                              fontWeight: 700,
+                              whiteSpace: "nowrap" as const,
+                            }}
+                          >
+                            ${(p.amount / 100).toFixed(2)}
+                          </td>
+                          <td
+                            style={{
+                              padding: "8px 12px",
+                              fontFamily: "'Courier New', monospace",
+                              fontSize: 12,
+                              color: "#7A7D90",
+                            }}
+                          >
+                            {(p.currency ?? "").toUpperCase()}
+                          </td>
+                          <td style={{ padding: "8px 12px" }}>
+                            <span
+                              style={{
+                                background:
+                                  p.status === "paid"
+                                    ? "#5EF08A"
+                                    : p.status === "in_transit"
+                                      ? "#F0C05E"
+                                      : "#F05E5E",
+                                color: "#000",
+                                padding: "2px 8px",
+                                borderRadius: 4,
+                                fontSize: 11,
+                                fontFamily: "'Courier New', monospace",
+                                fontWeight: 600,
+                                letterSpacing: "0.06em",
+                                textTransform: "uppercase" as const,
+                              }}
+                            >
+                              {p.status}
+                            </span>
+                          </td>
+                          <td
+                            style={{
+                              padding: "8px 12px",
+                              fontFamily: "'Courier New', monospace",
+                              fontSize: 12,
+                              color: "#7A7D90",
+                              whiteSpace: "nowrap" as const,
+                            }}
+                          >
+                            {new Date(
+                              p.arrival_date * 1000,
+                            ).toLocaleDateString()}
+                          </td>
+                          <td
+                            style={{
+                              padding: "8px 12px",
+                              fontFamily: "'Courier New', monospace",
+                              fontSize: 12,
+                              color: "#7A7D90",
+                            }}
+                          >
+                            {p.bank_account?.last4
+                              ? `****${p.bank_account.last4}`
+                              : p.description || "—"}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
 
@@ -2587,7 +3947,31 @@ export default function AdminSpreadsheetPage() {
               >
                 ?
               </button>
+              <button
+                type="button"
+                data-ocid="spreadsheet.leads.refresh.button"
+                onClick={() => setLeadsData([])}
+                disabled={leadsLoading}
+                className="px-3 py-1.5 text-xs font-mono bg-[#5EF08A]/10 border border-[#5EF08A]/30 text-[#5EF08A] rounded hover:bg-[#5EF08A]/20 transition-colors disabled:opacity-50"
+              >
+                Refresh
+              </button>
             </div>
+            {leadsError && (
+              <div
+                data-ocid="spreadsheet.leads.error_state"
+                style={{
+                  background: "rgba(239,68,68,0.08)",
+                  border: "1px solid rgba(239,68,68,0.3)",
+                  borderRadius: 8,
+                  padding: "12px 16px",
+                  color: "#f87171",
+                  fontSize: 14,
+                }}
+              >
+                {leadsError}
+              </div>
+            )}
             <div
               style={{ ...CARD, padding: 0, overflowX: "auto" }}
               data-ocid="spreadsheet.leads.table"
@@ -2998,8 +4382,32 @@ export default function AdminSpreadsheetPage() {
                 >
                   ?
                 </button>
+                <button
+                  type="button"
+                  data-ocid="spreadsheet.reviews.refresh.button"
+                  onClick={() => setReviewsData([])}
+                  disabled={reviewsLoading}
+                  className="px-3 py-1.5 text-xs font-mono bg-[#5EF08A]/10 border border-[#5EF08A]/30 text-[#5EF08A] rounded hover:bg-[#5EF08A]/20 transition-colors disabled:opacity-50"
+                >
+                  Refresh
+                </button>
               </div>
             </div>
+            {reviewsError && (
+              <div
+                data-ocid="spreadsheet.reviews.error_state"
+                style={{
+                  background: "rgba(239,68,68,0.08)",
+                  border: "1px solid rgba(239,68,68,0.3)",
+                  borderRadius: 8,
+                  padding: "12px 16px",
+                  color: "#f87171",
+                  fontSize: 14,
+                }}
+              >
+                {reviewsError}
+              </div>
+            )}
             <div
               style={{ ...CARD, padding: 0, overflowX: "auto" }}
               data-ocid="spreadsheet.reviews.table"
@@ -3176,6 +4584,778 @@ export default function AdminSpreadsheetPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {view === "orders" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-mono font-semibold text-[#5EF08A]">
+                Orders
+              </h2>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setOrdersTabData([])}
+                  disabled={ordersLoading}
+                  className="px-3 py-1.5 text-xs font-mono bg-[#5EF08A]/10 border border-[#5EF08A]/30 text-[#5EF08A] rounded hover:bg-[#5EF08A]/20 transition-colors disabled:opacity-50"
+                >
+                  {ordersLoading ? "Refreshing..." : "Refresh"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExport}
+                  className="px-3 py-1.5 text-xs font-mono bg-[#5EF08A]/10 border border-[#5EF08A]/30 text-[#5EF08A] rounded hover:bg-[#5EF08A]/20 transition-colors"
+                >
+                  Export Excel
+                </button>
+              </div>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                flexWrap: "wrap",
+                marginBottom: 16,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <label
+                  htmlFor="orders-date-from"
+                  style={{
+                    fontSize: 12,
+                    color: "#7A7D90",
+                    whiteSpace: "nowrap",
+                    fontWeight: 600,
+                  }}
+                >
+                  From
+                </label>
+                <input
+                  id="orders-date-from"
+                  type="date"
+                  value={ordersFromDate}
+                  onChange={(e) => setOrdersFromDate(e.target.value)}
+                  style={{
+                    border: "1px solid #1C1F33",
+                    borderRadius: 6,
+                    padding: "7px 10px",
+                    fontSize: 13,
+                    color: ordersFromDate ? "#EEF0F8" : "#7A7D90",
+                    background: "rgba(19,21,36,1)",
+                    outline: "none",
+                    height: 40,
+                    boxSizing: "border-box" as const,
+                    colorScheme: "dark" as const,
+                  }}
+                />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <label
+                  htmlFor="orders-date-to"
+                  style={{
+                    fontSize: 12,
+                    color: "#7A7D90",
+                    whiteSpace: "nowrap",
+                    fontWeight: 600,
+                  }}
+                >
+                  To
+                </label>
+                <input
+                  id="orders-date-to"
+                  type="date"
+                  value={ordersToDate}
+                  onChange={(e) => setOrdersToDate(e.target.value)}
+                  style={{
+                    border: "1px solid #1C1F33",
+                    borderRadius: 6,
+                    padding: "7px 10px",
+                    fontSize: 13,
+                    color: ordersToDate ? "#EEF0F8" : "#7A7D90",
+                    background: "rgba(19,21,36,1)",
+                    outline: "none",
+                    height: 40,
+                    boxSizing: "border-box" as const,
+                    colorScheme: "dark" as const,
+                  }}
+                />
+              </div>
+              {(ordersFromDate || ordersToDate) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOrdersFromDate("");
+                    setOrdersToDate("");
+                  }}
+                  style={{
+                    border: "1px solid #1C1F33",
+                    borderRadius: 6,
+                    padding: "0 12px",
+                    height: 40,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: "#7A7D90",
+                    background: "transparent",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {ordersLoading && (
+              <div className="flex justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#5EF08A]" />
+              </div>
+            )}
+            {ordersError && (
+              <div className="text-red-400 font-mono text-sm py-4">
+                {ordersError}
+              </div>
+            )}
+            {!ordersLoading && !ordersError && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs font-mono">
+                  <thead>
+                    <tr className="border-b border-[#5EF08A]/20">
+                      {[
+                        "Order ID",
+                        "Tier Code",
+                        "Delivery Window",
+                        "Launch Target",
+                        "First Name",
+                        "Last Name",
+                        "Email",
+                        "Status",
+                        "Created Date",
+                        "Description",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className="text-left py-2 px-3 text-[#5EF08A]/70 font-medium whitespace-nowrap"
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ordersTabData.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={10}
+                          className="text-center py-8 text-gray-500 font-mono"
+                        >
+                          No orders found
+                        </td>
+                      </tr>
+                    ) : (
+                      ordersTabData
+                        .filter((row) => {
+                          const d = row.createdDate ?? "";
+                          if (ordersFromDate && d < ordersFromDate)
+                            return false;
+                          if (ordersToDate && d > ordersToDate) return false;
+                          return true;
+                        })
+                        .map((r) => (
+                          <tr
+                            key={r.orderId}
+                            className="border-b border-gray-800 hover:bg-[#5EF08A]/5 transition-colors"
+                          >
+                            <td className="py-2 px-3 text-gray-300">
+                              {r.orderId}
+                            </td>
+                            <td className="py-2 px-3 text-gray-300">
+                              {r.tierCode}
+                            </td>
+                            <td className="py-2 px-3 text-gray-300">
+                              {r.deliveryWindow}
+                            </td>
+                            <td className="py-2 px-3 text-gray-300">
+                              {r.launchTarget}
+                            </td>
+                            <td className="py-2 px-3 text-gray-300">
+                              {r.firstName}
+                            </td>
+                            <td className="py-2 px-3 text-gray-300">
+                              {r.lastName}
+                            </td>
+                            <td className="py-2 px-3 text-gray-300">
+                              {r.email}
+                            </td>
+                            <td className="py-2 px-3">
+                              <span className="px-2 py-0.5 rounded text-xs bg-[#5EF08A]/10 text-[#5EF08A] border border-[#5EF08A]/20">
+                                {r.status}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-gray-300">
+                              {r.createdDate}
+                            </td>
+                            <td
+                              className="py-2 px-3 text-gray-300 max-w-[200px] truncate"
+                              title={r.description}
+                            >
+                              {r.description}
+                            </td>
+                          </tr>
+                        ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {view === "emailcampaigns" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-mono font-semibold text-[#5EF08A]">
+                Email Campaigns
+              </h2>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEmailCampaignsData([])}
+                  disabled={emailCampaignsLoading}
+                  className="px-3 py-1.5 text-xs font-mono bg-[#5EF08A]/10 border border-[#5EF08A]/30 text-[#5EF08A] rounded hover:bg-[#5EF08A]/20 transition-colors disabled:opacity-50"
+                >
+                  {emailCampaignsLoading ? "Refreshing..." : "Refresh"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExport}
+                  className="px-3 py-1.5 text-xs font-mono bg-[#5EF08A]/10 border border-[#5EF08A]/30 text-[#5EF08A] rounded hover:bg-[#5EF08A]/20 transition-colors"
+                >
+                  Export Excel
+                </button>
+              </div>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                flexWrap: "wrap",
+                marginBottom: 16,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <label
+                  htmlFor="campaigns-date-from"
+                  style={{
+                    fontSize: 12,
+                    color: "#7A7D90",
+                    whiteSpace: "nowrap",
+                    fontWeight: 600,
+                  }}
+                >
+                  From
+                </label>
+                <input
+                  id="campaigns-date-from"
+                  type="date"
+                  value={campaignsFromDate}
+                  onChange={(e) => setCampaignsFromDate(e.target.value)}
+                  style={{
+                    border: "1px solid #1C1F33",
+                    borderRadius: 6,
+                    padding: "7px 10px",
+                    fontSize: 13,
+                    color: campaignsFromDate ? "#EEF0F8" : "#7A7D90",
+                    background: "rgba(19,21,36,1)",
+                    outline: "none",
+                    height: 40,
+                    boxSizing: "border-box" as const,
+                    colorScheme: "dark" as const,
+                  }}
+                />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <label
+                  htmlFor="campaigns-date-to"
+                  style={{
+                    fontSize: 12,
+                    color: "#7A7D90",
+                    whiteSpace: "nowrap",
+                    fontWeight: 600,
+                  }}
+                >
+                  To
+                </label>
+                <input
+                  id="campaigns-date-to"
+                  type="date"
+                  value={campaignsToDate}
+                  onChange={(e) => setCampaignsToDate(e.target.value)}
+                  style={{
+                    border: "1px solid #1C1F33",
+                    borderRadius: 6,
+                    padding: "7px 10px",
+                    fontSize: 13,
+                    color: campaignsToDate ? "#EEF0F8" : "#7A7D90",
+                    background: "rgba(19,21,36,1)",
+                    outline: "none",
+                    height: 40,
+                    boxSizing: "border-box" as const,
+                    colorScheme: "dark" as const,
+                  }}
+                />
+              </div>
+              {(campaignsFromDate || campaignsToDate) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCampaignsFromDate("");
+                    setCampaignsToDate("");
+                  }}
+                  style={{
+                    border: "1px solid #1C1F33",
+                    borderRadius: 6,
+                    padding: "0 12px",
+                    height: 40,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: "#7A7D90",
+                    background: "transparent",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {emailCampaignsLoading && (
+              <div className="flex justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#5EF08A]" />
+              </div>
+            )}
+            {emailCampaignsError && (
+              <div className="text-red-400 font-mono text-sm py-4">
+                {emailCampaignsError}
+              </div>
+            )}
+            {!emailCampaignsLoading && !emailCampaignsError && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs font-mono">
+                  <thead>
+                    <tr className="border-b border-[#5EF08A]/20">
+                      {[
+                        "Campaign ID",
+                        "Subject",
+                        "Recipients",
+                        "Status",
+                        "Created Date",
+                        "Scheduled Date",
+                        "Sent Date",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className="text-left py-2 px-3 text-[#5EF08A]/70 font-medium whitespace-nowrap"
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {emailCampaignsData.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={7}
+                          className="text-center py-8 text-gray-500 font-mono"
+                        >
+                          No campaigns found
+                        </td>
+                      </tr>
+                    ) : (
+                      emailCampaignsData
+                        .filter((row) => {
+                          const d = row.createdDate ?? "";
+                          if (campaignsFromDate && d < campaignsFromDate)
+                            return false;
+                          if (campaignsToDate && d > campaignsToDate)
+                            return false;
+                          return true;
+                        })
+                        .map((r) => (
+                          <tr
+                            key={r.id}
+                            className="border-b border-gray-800 hover:bg-[#5EF08A]/5 transition-colors"
+                          >
+                            <td className="py-2 px-3 text-gray-300">{r.id}</td>
+                            <td
+                              className="py-2 px-3 text-gray-300 max-w-[200px] truncate"
+                              title={r.subject}
+                            >
+                              {r.subject}
+                            </td>
+                            <td className="py-2 px-3 text-gray-300">
+                              {r.recipientCount}
+                            </td>
+                            <td className="py-2 px-3">
+                              <span className="px-2 py-0.5 rounded text-xs bg-[#5EF08A]/10 text-[#5EF08A] border border-[#5EF08A]/20">
+                                {r.status}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-gray-300">
+                              {r.createdDate}
+                            </td>
+                            <td className="py-2 px-3 text-gray-300">
+                              {r.scheduledDate}
+                            </td>
+                            <td className="py-2 px-3 text-gray-300">
+                              {r.sentDate}
+                            </td>
+                          </tr>
+                        ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {view === "questionnaires" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-mono font-semibold text-[#5EF08A]">
+                Questionnaires
+              </h2>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setQuestionnairesData([])}
+                  disabled={questionnairesLoading}
+                  className="px-3 py-1.5 text-xs font-mono bg-[#5EF08A]/10 border border-[#5EF08A]/30 text-[#5EF08A] rounded hover:bg-[#5EF08A]/20 transition-colors disabled:opacity-50"
+                >
+                  {questionnairesLoading ? "Refreshing..." : "Refresh"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExport}
+                  className="px-3 py-1.5 text-xs font-mono bg-[#5EF08A]/10 border border-[#5EF08A]/30 text-[#5EF08A] rounded hover:bg-[#5EF08A]/20 transition-colors"
+                >
+                  Export Excel
+                </button>
+              </div>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                flexWrap: "wrap",
+                marginBottom: 16,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <label
+                  htmlFor="quest-date-from"
+                  style={{
+                    fontSize: 12,
+                    color: "#7A7D90",
+                    whiteSpace: "nowrap",
+                    fontWeight: 600,
+                  }}
+                >
+                  From
+                </label>
+                <input
+                  id="quest-date-from"
+                  type="date"
+                  value={questFromDate}
+                  onChange={(e) => setQuestFromDate(e.target.value)}
+                  style={{
+                    border: "1px solid #1C1F33",
+                    borderRadius: 6,
+                    padding: "7px 10px",
+                    fontSize: 13,
+                    color: questFromDate ? "#EEF0F8" : "#7A7D90",
+                    background: "rgba(19,21,36,1)",
+                    outline: "none",
+                    height: 40,
+                    boxSizing: "border-box" as const,
+                    colorScheme: "dark" as const,
+                  }}
+                />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <label
+                  htmlFor="quest-date-to"
+                  style={{
+                    fontSize: 12,
+                    color: "#7A7D90",
+                    whiteSpace: "nowrap",
+                    fontWeight: 600,
+                  }}
+                >
+                  To
+                </label>
+                <input
+                  id="quest-date-to"
+                  type="date"
+                  value={questToDate}
+                  onChange={(e) => setQuestToDate(e.target.value)}
+                  style={{
+                    border: "1px solid #1C1F33",
+                    borderRadius: 6,
+                    padding: "7px 10px",
+                    fontSize: 13,
+                    color: questToDate ? "#EEF0F8" : "#7A7D90",
+                    background: "rgba(19,21,36,1)",
+                    outline: "none",
+                    height: 40,
+                    boxSizing: "border-box" as const,
+                    colorScheme: "dark" as const,
+                  }}
+                />
+              </div>
+              {(questFromDate || questToDate) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuestFromDate("");
+                    setQuestToDate("");
+                  }}
+                  style={{
+                    border: "1px solid #1C1F33",
+                    borderRadius: 6,
+                    padding: "0 12px",
+                    height: 40,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: "#7A7D90",
+                    background: "transparent",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {questionnairesLoading && (
+              <div className="flex justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#5EF08A]" />
+              </div>
+            )}
+            {questionnairesError && (
+              <div className="text-red-400 font-mono text-sm py-4">
+                {questionnairesError}
+              </div>
+            )}
+            {!questionnairesLoading && !questionnairesError && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs font-mono">
+                  <thead>
+                    <tr className="border-b border-[#5EF08A]/20">
+                      {[
+                        "ID",
+                        "Client ID",
+                        "Tier Code",
+                        "Progress",
+                        "Submitted",
+                        "Reviewed",
+                        "Answer Summary",
+                        "Created",
+                        "Updated",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className="text-left py-2 px-3 text-[#5EF08A]/70 font-medium whitespace-nowrap"
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {questionnairesData.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={9}
+                          className="text-center py-8 text-gray-500 font-mono"
+                        >
+                          No questionnaires found
+                        </td>
+                      </tr>
+                    ) : (
+                      questionnairesData
+                        .filter((row) => {
+                          const ts = row.createdAt;
+                          if (!ts || ts === "—") return true;
+                          const d =
+                            ts.split("/").length === 3
+                              ? (() => {
+                                  const [m, day, y] = ts.split("/");
+                                  return `${y}-${m.padStart(2, "0")}-${day.padStart(2, "0")}`;
+                                })()
+                              : ts;
+                          if (questFromDate && d < questFromDate) return false;
+                          if (questToDate && d > questToDate) return false;
+                          return true;
+                        })
+                        .map((r) => (
+                          <tr
+                            key={r.id}
+                            className="border-b border-gray-800 hover:bg-[#5EF08A]/5 transition-colors"
+                          >
+                            <td className="py-2 px-3 text-gray-300">{r.id}</td>
+                            <td
+                              className="py-2 px-3 text-gray-300 max-w-[120px] truncate"
+                              title={r.clientId}
+                            >
+                              {r.clientId}
+                            </td>
+                            <td className="py-2 px-3 text-gray-300">
+                              {r.tierCode}
+                            </td>
+                            <td className="py-2 px-3 text-gray-300">
+                              {r.progress}
+                            </td>
+                            <td className="py-2 px-3">
+                              <span
+                                className={`px-2 py-0.5 rounded text-xs border ${r.submitted === "Yes" ? "bg-[#5EF08A]/10 text-[#5EF08A] border-[#5EF08A]/20" : "bg-gray-800 text-gray-400 border-gray-700"}`}
+                              >
+                                {r.submitted}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3">
+                              <span
+                                className={`px-2 py-0.5 rounded text-xs border ${r.reviewed === "Yes" ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-gray-800 text-gray-400 border-gray-700"}`}
+                              >
+                                {r.reviewed}
+                              </span>
+                            </td>
+                            <td
+                              className="py-2 px-3 text-gray-300 max-w-[200px] truncate"
+                              title={r.answerSummary}
+                            >
+                              {r.answerSummary}
+                            </td>
+                            <td className="py-2 px-3 text-gray-300">
+                              {r.createdAt}
+                            </td>
+                            <td className="py-2 px-3 text-gray-300">
+                              {r.updatedAt}
+                            </td>
+                          </tr>
+                        ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {view === "referrals" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-mono font-semibold text-[#5EF08A]">
+                Referrals
+              </h2>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setReferralsData([])}
+                  disabled={referralsLoading}
+                  className="px-3 py-1.5 text-xs font-mono bg-[#5EF08A]/10 border border-[#5EF08A]/30 text-[#5EF08A] rounded hover:bg-[#5EF08A]/20 transition-colors disabled:opacity-50"
+                >
+                  {referralsLoading ? "Refreshing..." : "Refresh"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExport}
+                  className="px-3 py-1.5 text-xs font-mono bg-[#5EF08A]/10 border border-[#5EF08A]/30 text-[#5EF08A] rounded hover:bg-[#5EF08A]/20 transition-colors"
+                >
+                  Export Excel
+                </button>
+              </div>
+            </div>
+            {referralsLoading && (
+              <div className="flex justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#5EF08A]" />
+              </div>
+            )}
+            {referralsError && (
+              <div className="text-red-400 font-mono text-sm py-4">
+                {referralsError}
+              </div>
+            )}
+            {!referralsLoading && !referralsError && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs font-mono">
+                  <thead>
+                    <tr className="border-b border-[#5EF08A]/20">
+                      {[
+                        "Referral Code",
+                        "Referrer Name",
+                        "Referrer Email",
+                        "Total Clicks",
+                        "Conversions",
+                        "Conversion Rate",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className="text-left py-2 px-3 text-[#5EF08A]/70 font-medium whitespace-nowrap"
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {referralsData.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          className="text-center py-8 text-gray-500 font-mono"
+                        >
+                          No referrals found
+                        </td>
+                      </tr>
+                    ) : (
+                      referralsData.map((r) => (
+                        <tr
+                          key={r.code}
+                          className="border-b border-gray-800 hover:bg-[#5EF08A]/5 transition-colors"
+                        >
+                          <td className="py-2 px-3 text-[#5EF08A] font-medium">
+                            {r.code}
+                          </td>
+                          <td className="py-2 px-3 text-gray-300">
+                            {r.referrerName}
+                          </td>
+                          <td className="py-2 px-3 text-gray-300">
+                            {r.referrerEmail}
+                          </td>
+                          <td className="py-2 px-3 text-gray-300">
+                            {r.totalClicks}
+                          </td>
+                          <td className="py-2 px-3 text-gray-300">
+                            {r.conversions}
+                          </td>
+                          <td className="py-2 px-3 text-gray-300">
+                            {r.conversionRate}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
@@ -3553,16 +5733,19 @@ export default function AdminSpreadsheetPage() {
                       data={monthlyRevenue}
                       margin={{ top: 10, right: 20, left: 20, bottom: 5 }}
                     >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="rgba(94,240,138,0.1)"
+                      />
                       <XAxis
                         dataKey="month"
-                        tick={{ fill: "#9ca3af", fontSize: 12 }}
+                        tick={{ fill: "#5EF08A", fontSize: 12 }}
                       />
                       <YAxis
                         tickFormatter={(v: number) =>
-                          `$${(v / 1000).toFixed(0)}k`
+                          `${(v / 1000).toFixed(0)}k`
                         }
-                        tick={{ fill: "#9ca3af", fontSize: 12 }}
+                        tick={{ fill: "#5EF08A", fontSize: 12 }}
                       />
                       <RechartsTooltip
                         formatter={(v: number | string) => [
@@ -3575,11 +5758,11 @@ export default function AdminSpreadsheetPage() {
                           color: "#f3f4f6",
                         }}
                       />
-                      <Bar dataKey="total" radius={[4, 4, 0, 0]}>
+                      <Bar dataKey="total" fill="#5EF08A" radius={[4, 4, 0, 0]}>
                         {monthlyRevenue.map((m) => (
                           <Cell
                             key={m.month}
-                            fill="#6366f1"
+                            fill="#5EF08A"
                             fillOpacity={m.inRange ? 1 : 0.25}
                           />
                         ))}
@@ -3879,6 +6062,10 @@ export default function AdminSpreadsheetPage() {
               { id: "reviews" as View, label: "⭐ Reviews" },
               { id: "revenue" as View, label: "📈 Revenue" },
               { id: "gsheets" as View, label: "⚙ Google Sheets" },
+              { id: "orders" as View, label: "📦 Orders" },
+              { id: "emailcampaigns" as View, label: "📧 Email Campaigns" },
+              { id: "questionnaires" as View, label: "📝 Questionnaires" },
+              { id: "referrals" as View, label: "🔗 Referrals" },
             ].map((item) => (
               <button
                 key={item.id}
@@ -3971,7 +6158,7 @@ interface ToolsPanelProps {
   onClearCancel: () => void;
 }
 
-const CALC_BTN: React.CSSProperties = {
+const CALC_BTN: CSSProperties = {
   border: "1px solid #1C1F33",
   borderRadius: 8,
   fontSize: 16,
@@ -4001,7 +6188,7 @@ function ToolsPanel({
 }: ToolsPanelProps) {
   const isError = calcDisplay === "Error";
 
-  const CARD_STYLE: React.CSSProperties = {
+  const CARD_STYLE: CSSProperties = {
     background: "rgba(17,19,34,0.7)",
     border: "1px solid #1C1F33",
     borderRadius: 12,
@@ -4015,7 +6202,7 @@ function ToolsPanel({
     wide = false,
     title,
   }: {
-    label: React.ReactNode;
+    label: ReactNode;
     onClick: () => void;
     variant?: "default" | "op" | "equals" | "clear" | "util";
     wide?: boolean;
@@ -4042,7 +6229,7 @@ function ToolsPanel({
       clear: "rgba(239,68,68,0.22)",
       util: "rgba(251,191,36,0.20)",
     };
-    const [hov, setHov] = React.useState(false);
+    const [hov, setHov] = useState(false);
     return (
       <button
         type="button"
@@ -4371,10 +6558,13 @@ function ToolsPanel({
 
 const ACCT_COLS = [
   { key: "rowType", label: "Type" },
-  { key: "clientName", label: "Client Name" },
+  { key: "firstName", label: "First Name" },
+  { key: "lastName", label: "Last Name" },
+  { key: "clientEmail", label: "Email" },
   { key: "idOrInvoiceNum", label: "ID / Invoice #" },
   { key: "descriptionOrTier", label: "Description / Tier" },
   { key: "amount", label: "Amount" },
+  { key: "taxAmount", label: "Tax Amount" },
   { key: "status", label: "Status" },
   { key: "date", label: "Date" },
 ];
@@ -4387,18 +6577,22 @@ function AccountingTable({
   onSort,
   onMarkPaid,
   hasDateFilter,
+  taxRate,
 }: {
   rows: AccountingRow[];
   loading: boolean;
   sortCol: string;
   sortDir: SortDir;
   onSort: (c: string) => void;
-  onMarkPaid: (id: string) => Promise<void>;
+  onMarkPaid: (id: string, paymentIntentId: string) => Promise<void>;
   hasDateFilter: boolean;
+  taxRate: number;
 }) {
   const totalCols = ACCT_COLS.length + 1;
   return (
-    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 920 }}>
+    <table
+      style={{ width: "100%", borderCollapse: "collapse", minWidth: 1080 }}
+    >
       <thead>
         <tr>
           {ACCT_COLS.map((c) => (
@@ -4494,9 +6688,34 @@ function AccountingTable({
                   fontSize: 13,
                   color: "#EEF0F8",
                   fontWeight: 500,
+                  whiteSpace: "nowrap",
                 }}
               >
-                {row.clientName}
+                {row.firstName || "—"}
+              </td>
+              <td
+                style={{
+                  padding: "11px 14px",
+                  fontSize: 13,
+                  color: "#EEF0F8",
+                  fontWeight: 500,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {row.lastName || "—"}
+              </td>
+              <td
+                style={{
+                  padding: "11px 14px",
+                  fontSize: 12,
+                  color: "#9DA0B3",
+                  maxWidth: 180,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {row.clientEmail || "—"}
               </td>
               <td
                 style={{
@@ -4532,6 +6751,9 @@ function AccountingTable({
               >
                 {row.amount}
               </td>
+              <td style={{ padding: "11px 14px", textAlign: "right" }}>
+                {formatMoney(((row.amountRaw ?? 0) * taxRate) / 100)}
+              </td>
               <td style={{ padding: "11px 14px" }}>
                 {row.rowType === "Invoice" ? (
                   <InvoiceStatusCell
@@ -4558,7 +6780,9 @@ function AccountingTable({
                   getText={() =>
                     [
                       row.rowType,
-                      row.clientName,
+                      row.firstName,
+                      row.lastName,
+                      row.clientEmail,
                       row.idOrInvoiceNum,
                       row.descriptionOrTier,
                       row.amount,
@@ -4605,12 +6829,12 @@ function GoogleSheetsPanel({
   onClear,
   onShowHelp,
 }: GoogleSheetsPanelProps) {
-  const CARD_STYLE: React.CSSProperties = {
+  const CARD_STYLE: CSSProperties = {
     background: "rgba(17,19,34,0.7)",
     border: "1px solid #1C1F33",
     borderRadius: 10,
   };
-  const inputStyle: React.CSSProperties = {
+  const inputStyle: CSSProperties = {
     width: "100%",
     border: "1px solid #1C1F33",
     borderRadius: 6,

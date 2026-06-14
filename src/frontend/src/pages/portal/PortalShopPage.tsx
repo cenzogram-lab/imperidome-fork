@@ -1,6 +1,6 @@
 import { Loader2, ShoppingBag, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { backendInterface } from "../../backend";
+import type { backendInterface } from "../../backend.d";
 import { useActor } from "../../hooks/useActor";
 import { useSession } from "../../hooks/useSession";
 import PortalLayout from "./PortalLayout";
@@ -16,6 +16,8 @@ interface PortalProduct {
   priceMonthly: number;
   priceAnnual: number;
   category: string;
+  imageUrl?: string | null;
+  tagline?: string | null;
 }
 
 type Frequency = "one-time" | "monthly" | "annual";
@@ -28,8 +30,9 @@ interface ToastState {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function formatPrice(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
+// Prices stored as Float dollars in backend — no division needed
+function formatPrice(dollars: number): string {
+  return `${dollars.toFixed(2)}`;
 }
 
 function getBestPrice(p: PortalProduct): { price: number; freq: Frequency } {
@@ -146,7 +149,7 @@ function RequestModal({
   };
 
   return (
-    <div
+    <dialog
       data-ocid="shop.dialog"
       style={{
         position: "fixed",
@@ -158,6 +161,12 @@ function RequestModal({
         padding: "16px",
         background: "rgba(0,0,0,0.7)",
         backdropFilter: "blur(4px)",
+        border: "none",
+        margin: 0,
+        maxWidth: "100vw",
+        maxHeight: "100vh",
+        width: "100%",
+        height: "100%",
       }}
       onClick={(e) => e.target === e.currentTarget && onClose()}
       onKeyDown={(e) =>
@@ -165,7 +174,8 @@ function RequestModal({
         e.target === e.currentTarget &&
         onClose()
       }
-      role="presentation"
+      open={true}
+      aria-modal="true"
     >
       <div
         style={{
@@ -344,7 +354,7 @@ function RequestModal({
           )}
         </button>
       </div>
-    </div>
+    </dialog>
   );
 }
 
@@ -369,10 +379,10 @@ function ProductCard({
         background: "rgba(17,19,34,0.8)",
         border: "1px solid #1C1F33",
         borderRadius: "14px",
-        padding: "24px",
+        overflow: "hidden",
         display: "flex",
         flexDirection: "column",
-        gap: "12px",
+        gap: "0",
         transition: "border-color 0.2s",
       }}
       onMouseEnter={(e) => {
@@ -383,113 +393,151 @@ function ProductCard({
         (e.currentTarget as HTMLDivElement).style.borderColor = "#1C1F33";
       }}
     >
-      {/* Category badge */}
-      {product.category && (
-        <span
+      {/* Product image */}
+      {product.imageUrl && (
+        <img
+          src={product.imageUrl}
+          alt={product.name}
           style={{
-            display: "inline-block",
-            padding: "3px 10px",
-            borderRadius: "20px",
-            background: "rgba(94,240,138,0.08)",
-            border: "1px solid rgba(94,240,138,0.2)",
-            color: "rgba(94,240,138,0.7)",
-            fontSize: "11px",
-            fontWeight: 600,
-            letterSpacing: "0.05em",
-            textTransform: "uppercase",
-            alignSelf: "flex-start",
+            width: "100%",
+            height: "128px",
+            objectFit: "cover",
+            display: "block",
           }}
-        >
-          {product.category}
-        </span>
+        />
       )}
-
-      {/* Name */}
-      <h3
-        style={{
-          margin: 0,
-          fontSize: "16px",
-          fontWeight: 700,
-          color: "#EEF0F8",
-          lineHeight: "1.3",
-        }}
-      >
-        {product.name}
-      </h3>
-
-      {/* Description */}
-      {product.description && (
-        <p
-          style={{
-            margin: 0,
-            fontSize: "13px",
-            color: "#7A7D90",
-            lineHeight: "1.6",
-            display: "-webkit-box",
-            WebkitLineClamp: 3,
-            WebkitBoxOrient: "vertical" as const,
-            overflow: "hidden",
-          }}
-        >
-          {product.description}
-        </p>
-      )}
-
-      {/* Spacer */}
-      <div style={{ flex: 1 }} />
-
-      {/* Price + CTA row */}
       <div
         style={{
+          padding: "24px",
           display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
+          flexDirection: "column",
           gap: "12px",
-          flexWrap: "wrap",
-          marginTop: "4px",
+          flex: 1,
         }}
       >
-        <div>
-          <span style={{ fontSize: "22px", fontWeight: 700, color: "#5EF08A" }}>
-            {formatPrice(price)}
-          </span>
+        {/* Category badge */}
+        {product.category && (
           <span
-            style={{ fontSize: "12px", color: "#7A7D90", marginLeft: "4px" }}
+            style={{
+              display: "inline-block",
+              padding: "3px 10px",
+              borderRadius: "20px",
+              background: "rgba(94,240,138,0.08)",
+              border: "1px solid rgba(94,240,138,0.2)",
+              color: "rgba(94,240,138,0.7)",
+              fontSize: "11px",
+              fontWeight: 600,
+              letterSpacing: "0.05em",
+              textTransform: "uppercase",
+              alignSelf: "flex-start",
+            }}
           >
-            {freqLabel(freq)}
+            {product.category}
           </span>
-        </div>
-        <button
-          type="button"
-          data-ocid={`shop.request_button.${index + 1}`}
-          onClick={() => onRequest(product)}
+        )}
+
+        {/* Name */}
+        <h3
           style={{
-            background: "rgba(94,240,138,0.1)",
-            border: "1px solid rgba(94,240,138,0.4)",
-            color: "#5EF08A",
-            padding: "11px 18px",
-            minHeight: "44px",
-            fontWeight: 600,
-            fontSize: "13px",
-            cursor: "pointer",
-            whiteSpace: "nowrap",
-            transition: "background 0.15s, border-color 0.15s",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background =
-              "rgba(94,240,138,0.2)";
-            (e.currentTarget as HTMLButtonElement).style.borderColor =
-              "rgba(94,240,138,0.7)";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background =
-              "rgba(94,240,138,0.1)";
-            (e.currentTarget as HTMLButtonElement).style.borderColor =
-              "rgba(94,240,138,0.4)";
+            margin: 0,
+            fontSize: "16px",
+            fontWeight: 700,
+            color: "#EEF0F8",
+            lineHeight: "1.3",
           }}
         >
-          Request Purchase
-        </button>
+          {product.name}
+        </h3>
+        {/* Tagline */}
+        {product.tagline && (
+          <p
+            style={{
+              margin: 0,
+              fontSize: "12px",
+              color: "rgba(94,240,138,0.7)",
+              fontStyle: "italic",
+            }}
+          >
+            {product.tagline}
+          </p>
+        )}
+
+        {/* Description */}
+        {product.description && (
+          <p
+            style={{
+              margin: 0,
+              fontSize: "13px",
+              color: "#7A7D90",
+              lineHeight: "1.6",
+              display: "-webkit-box",
+              WebkitLineClamp: 3,
+              WebkitBoxOrient: "vertical" as const,
+              overflow: "hidden",
+            }}
+          >
+            {product.description}
+          </p>
+        )}
+
+        {/* Spacer */}
+        <div style={{ flex: 1 }} />
+
+        {/* Price + CTA row */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px",
+            flexWrap: "wrap",
+            marginTop: "4px",
+          }}
+        >
+          <div>
+            <span
+              style={{ fontSize: "22px", fontWeight: 700, color: "#5EF08A" }}
+            >
+              {formatPrice(price)}
+            </span>
+            <span
+              style={{ fontSize: "12px", color: "#7A7D90", marginLeft: "4px" }}
+            >
+              {freqLabel(freq)}
+            </span>
+          </div>
+          <button
+            type="button"
+            data-ocid={`shop.request_button.${index + 1}`}
+            onClick={() => onRequest(product)}
+            style={{
+              background: "rgba(94,240,138,0.1)",
+              border: "1px solid rgba(94,240,138,0.4)",
+              color: "#5EF08A",
+              padding: "11px 18px",
+              minHeight: "44px",
+              fontWeight: 600,
+              fontSize: "13px",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+              transition: "background 0.15s, border-color 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background =
+                "rgba(94,240,138,0.2)";
+              (e.currentTarget as HTMLButtonElement).style.borderColor =
+                "rgba(94,240,138,0.7)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background =
+                "rgba(94,240,138,0.1)";
+              (e.currentTarget as HTMLButtonElement).style.borderColor =
+                "rgba(94,240,138,0.4)";
+            }}
+          >
+            Request Purchase
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -505,15 +553,21 @@ export default function PortalShopPage() {
 
   const [products, setProducts] = useState<PortalProduct[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadKey, setLoadKey] = useState(0);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<PortalProduct | null>(
     null,
   );
   const [submitting, setSubmitting] = useState(false);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadKey is an intentional refresh trigger
   useEffect(() => {
-    if (!actor || isFetching) return;
+    if (!actor || !userEmail || isFetching) return;
+    // userEmail included in dep array — see line below
     let cancelled = false;
+    setLoadError(null);
+    setLoading(true);
 
     async function load() {
       try {
@@ -531,11 +585,17 @@ export default function PortalShopPage() {
             priceMonthly: p.price_monthly ?? 0,
             priceAnnual: p.price_annual ?? 0,
             category: p.product_type,
+            imageUrl: p.imageUrl ?? null,
+            tagline: p.tagline ?? null,
           }));
           setProducts(mapped);
         }
-      } catch {
-        if (!cancelled) setProducts([]);
+      } catch (err) {
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : "Unknown error";
+          if (import.meta.env.DEV) console.warn("Shop load error:", msg);
+          setLoadError("Failed to load products. Please try again.");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -545,18 +605,33 @@ export default function PortalShopPage() {
     return () => {
       cancelled = true;
     };
-  }, [actor, isFetching]);
+  }, [actor, isFetching, loadKey, userEmail]);
 
   async function handleSubmitRequest(productId: string, freq: Frequency) {
     if (!actor || !userEmail) return;
     setSubmitting(true);
+    let productIdBigInt: bigint;
+    try {
+      productIdBigInt = BigInt(productId);
+    } catch {
+      setToast({
+        message: "Invalid product ID. Please refresh and try again.",
+        type: "error",
+      });
+      setSubmitting(false);
+      return;
+    }
     try {
       const result = await (actor as backendInterface).createPurchaseRequest(
         userEmail,
-        BigInt(productId),
+        productIdBigInt,
         freq,
       );
-      if (result && typeof result === "object" && "ok" in result) {
+      if (
+        result &&
+        typeof result === "object" &&
+        ("ok" in result || "okAlreadyAdvanced" in result)
+      ) {
         setToast({
           message:
             "Your request has been submitted — we will review it shortly.",
@@ -565,7 +640,7 @@ export default function PortalShopPage() {
         setSelectedProduct(null);
       } else {
         const errMsg =
-          result?.err && typeof result.err === "string"
+          "err" in result && typeof result.err === "string"
             ? result.err
             : "Failed to submit request. Please try again.";
         setToast({ message: errMsg, type: "error" });
@@ -650,8 +725,50 @@ export default function PortalShopPage() {
           </div>
         )}
 
+        {/* Load error banner */}
+        {!loading && loadError && (
+          <div
+            data-ocid="shop.error_state"
+            style={{
+              background: "rgba(239,68,68,0.1)",
+              border: "1px solid rgba(239,68,68,0.3)",
+              borderRadius: "12px",
+              padding: "20px 24px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "16px",
+              flexWrap: "wrap",
+            }}
+          >
+            <span
+              style={{ color: "#EF4444", fontSize: "14px", fontWeight: 600 }}
+            >
+              {loadError}
+            </span>
+            <button
+              type="button"
+              data-ocid="shop.error.retry_button"
+              onClick={() => setLoadKey((k) => k + 1)}
+              style={{
+                background: "rgba(239,68,68,0.15)",
+                border: "1px solid rgba(239,68,68,0.4)",
+                borderRadius: "8px",
+                color: "#EF4444",
+                fontSize: "13px",
+                fontWeight: 600,
+                padding: "8px 16px",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Try Again
+            </button>
+          </div>
+        )}
+
         {/* Empty */}
-        {!loading && products.length === 0 && (
+        {!loading && !loadError && products.length === 0 && (
           <div
             data-ocid="shop.empty_state"
             style={{
@@ -706,7 +823,7 @@ export default function PortalShopPage() {
         )}
 
         {/* Product grid */}
-        {!loading && products.length > 0 && (
+        {!loading && !loadError && products.length > 0 && (
           <div
             data-ocid="shop.list"
             style={{

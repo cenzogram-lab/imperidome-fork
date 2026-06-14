@@ -4,6 +4,7 @@ import type React from "react";
 import { useEffect, useState } from "react";
 import { EditableText } from "../components/EditableText";
 import { Footer } from "../components/Footer";
+import TypewriterText from "../components/TypewriterText";
 
 const SECTIONS = [
   { id: "sec-1", title: "1. Definitions" },
@@ -56,13 +57,18 @@ export default function TermsPage() {
       initial={{ opacity: 0, y: 30 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-100px" }}
-      className="bg-[#111322]/70 backdrop-blur-md border border-[#1C1F33] rounded-3xl p-8 mb-8 shadow-xl"
+      className="matrix-card rounded-3xl p-8 mb-8 shadow-xl"
     >
-      <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-        <span className="text-[#5EF08A]">{title.split(".")[0]}.</span>{" "}
-        {title.split(".").slice(1).join(".")}
+      <h2
+        className="text-2xl font-bold text-white mb-6 flex items-center gap-3"
+        style={{ fontFamily: "'Courier New', monospace" }}
+      >
+        <span className="text-[#5EF08A]">
+          <TypewriterText text={`${title.split(".")[0]}.`} speed={40} />
+        </span>{" "}
+        <TypewriterText text={title.split(".").slice(1).join(".")} speed={40} />
       </h2>
-      <div className="space-y-6 text-gray-300 leading-relaxed text-sm md:text-base">
+      <div className="space-y-6 text-[#9DA0B3] leading-relaxed text-sm md:text-base">
         {children}
       </div>
     </motion.section>
@@ -74,13 +80,13 @@ export default function TermsPage() {
         <div className="max-w-7xl mx-auto px-6 flex flex-col lg:flex-row gap-12">
           {/* STICKY SIDEBAR */}
           <div className="lg:w-1/4 hidden lg:block">
-            <div className="sticky top-24 bg-[#111322]/40 border border-[#1C1F33] rounded-3xl p-6">
-              <h3 className="text-white font-bold mb-4 uppercase tracking-widest text-sm flex items-center gap-2">
+            <div className="sticky top-24 matrix-card rounded-3xl p-6">
+              <h3
+                className="text-[#5EF08A] font-bold mb-4 uppercase tracking-widest text-sm flex items-center gap-2"
+                style={{ fontFamily: "'Courier New', monospace" }}
+              >
                 <FileText className="w-4 h-4 text-[#5EF08A]" />
-                <EditableText
-                  textKey="terms.sidebar.heading"
-                  defaultText="Directory"
-                />
+                <TypewriterText text="Directory" speed={60} />
               </h3>
               <nav className="space-y-2">
                 {SECTIONS.map((sec) => (
@@ -92,7 +98,7 @@ export default function TermsPage() {
                     className={`w-full text-left text-sm py-2 px-3 rounded-lg transition-all flex items-center justify-between ${
                       activeSection === sec.id
                         ? "bg-[#5EF08A]/10 text-[#5EF08A] font-bold"
-                        : "text-gray-400 hover:text-white hover:bg-[#1C1F33]"
+                        : "text-[#7A7D90] hover:text-white hover:bg-[#1C1F33]"
                     }`}
                   >
                     {sec.title}
@@ -112,27 +118,30 @@ export default function TermsPage() {
               <div>
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#5EF08A]/10 border border-[#5EF08A]/30 text-[#5EF08A] text-xs font-bold tracking-widest uppercase mb-4">
                   <Shield className="w-4 h-4" />
-                  <EditableText
-                    textKey="terms.header.badge"
-                    defaultText="Legal Documentation"
-                  />
+                  <TypewriterText text="Legal Documentation" speed={50} />
                 </div>
-                <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-2 text-white">
-                  <EditableText
-                    textKey="terms.hero.heading"
-                    defaultText="Website Design & Management Agreement"
+                <h1
+                  className="text-4xl md:text-5xl font-extrabold tracking-tight mb-2 text-white"
+                  style={{ fontFamily: "'Courier New', monospace" }}
+                >
+                  <TypewriterText
+                    text="Website Design & Management Agreement"
+                    speed={30}
                   />
                 </h1>
-                <p className="text-[#9CA3AF] text-lg">
-                  <EditableText
-                    textKey="terms.hero.subtext"
-                    defaultText="Complete Terms and Conditions — All Tiers"
+                <p className="text-[#7A7D90] text-lg">
+                  <TypewriterText
+                    text="Complete Terms and Conditions — All Tiers"
+                    speed={40}
                   />
                 </p>
-                <p className="text-xs text-gray-500 mt-2 font-bold uppercase tracking-widest">
-                  <EditableText
-                    textKey="terms.hero.version"
-                    defaultText="Version 1.0 · Effective Date: January 1, 2025"
+                <p
+                  className="text-xs text-[#7A7D90] mt-2 font-bold uppercase tracking-widest"
+                  style={{ fontFamily: "'Courier New', monospace" }}
+                >
+                  <TypewriterText
+                    text="Version 1.0 · Effective Date: January 1, 2025"
+                    speed={50}
                   />
                 </p>
               </div>
@@ -140,74 +149,53 @@ export default function TermsPage() {
                 type="button"
                 data-ocid="terms.print.button"
                 onClick={handlePrint}
-                className="px-6 py-3 rounded-xl border-2 border-[#5EF08A] text-[#5EF08A] font-bold hover:bg-[#5EF08A] hover:text-[#0A0B14] transition-all flex items-center gap-2"
+                className="matrix-btn-outline px-6 py-3 rounded-xl flex items-center gap-2"
               >
                 <Printer className="w-4 h-4" />
-                <EditableText
-                  textKey="terms.print_button_text"
-                  defaultText="Print to PDF"
-                />
+                <TypewriterText text="Print to PDF" speed={60} />
               </button>
             </div>
 
             {/* AGREEMENT DETAILS BLOCK */}
             <div className="bg-[#1C1F33] rounded-2xl p-6 mb-12 flex flex-wrap gap-x-12 gap-y-4 text-sm">
-              <div>
-                <span className="text-gray-500 block uppercase font-bold text-xs mb-1">
-                  <EditableText
-                    textKey="terms.meta.provider_label"
-                    defaultText="Provider"
-                  />
-                </span>
-                <span className="text-white font-medium">
-                  <EditableText
-                    textKey="terms.meta.provider_value"
-                    defaultText="Imperidome"
-                  />
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-500 block uppercase font-bold text-xs mb-1">
-                  <EditableText
-                    textKey="terms.meta.client_label"
-                    defaultText="Client Name"
-                  />
-                </span>
-                <span className="text-white font-medium">
-                  <EditableText
-                    textKey="terms.meta.client_value"
-                    defaultText="Auto-filled at checkout"
-                  />
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-500 block uppercase font-bold text-xs mb-1">
-                  <EditableText
-                    textKey="terms.meta.tier_label"
-                    defaultText="Project Tier"
-                  />
-                </span>
-                <span className="text-white font-medium">
-                  <EditableText
-                    textKey="terms.meta.tier_value"
-                    defaultText="Selected in Intake Form"
-                  />
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-500 block uppercase font-bold text-xs mb-1">
-                  <EditableText
-                    textKey="terms.meta.date_label"
-                    defaultText="Agreement Date"
-                  />
-                </span>
-                <span className="text-white font-medium">
-                  <EditableText
-                    textKey="terms.meta.date_value"
-                    defaultText="Time of checkout"
-                  />
-                </span>
-              </div>
+              {[
+                {
+                  lk: "terms.meta.provider_label",
+                  ld: "Provider",
+                  vk: "terms.meta.provider_value",
+                  vd: "Imperidome",
+                },
+                {
+                  lk: "terms.meta.client_label",
+                  ld: "Client Name",
+                  vk: "terms.meta.client_value",
+                  vd: "Auto-filled at checkout",
+                },
+                {
+                  lk: "terms.meta.tier_label",
+                  ld: "Project Tier",
+                  vk: "terms.meta.tier_value",
+                  vd: "Selected in Intake Form",
+                },
+                {
+                  lk: "terms.meta.date_label",
+                  ld: "Agreement Date",
+                  vk: "terms.meta.date_value",
+                  vd: "Time of checkout",
+                },
+              ].map((m) => (
+                <div key={m.lk}>
+                  <span
+                    className="text-[#7A7D90] block uppercase font-bold text-xs mb-1"
+                    style={{ fontFamily: "'Courier New', monospace" }}
+                  >
+                    <TypewriterText text={m.ld} speed={60} />
+                  </span>
+                  <span className="text-white font-medium">
+                    <TypewriterText text={m.vd} speed={50} />
+                  </span>
+                </div>
+              ))}
             </div>
 
             {/* SECTIONS */}
@@ -313,44 +301,37 @@ export default function TermsPage() {
                   defaultText="Feature requests falling outside the selected Tier constitute Scope Creep and will be quoted separately."
                 />
               </p>
-              <div className="bg-[#0A0B14] p-6 rounded-xl border border-[#1C1F33] my-6">
-                <strong className="text-white block mb-4">
+              <div className="bg-[#0A0B14] p-6 rounded-xl border border-[#5EF08A]/20 my-6">
+                <strong
+                  className="text-[#5EF08A] block mb-4"
+                  style={{ fontFamily: "'Courier New', monospace" }}
+                >
                   <EditableText
                     textKey="terms.sec2.limitations.heading"
                     defaultText="2.5 Platform Limitations:"
                   />
                 </strong>
                 <div className="flex flex-wrap gap-3">
-                  <span className="px-3 py-1 bg-[#5EF08A]/10 text-[#5EF08A] border border-[#5EF08A]/30 rounded-full text-xs font-bold">
-                    <EditableText
-                      textKey="terms.sec2.limit_1"
-                      defaultText="Stripe payments only"
-                    />
-                  </span>
-                  <span className="px-3 py-1 bg-[#5EF08A]/10 text-[#5EF08A] border border-[#5EF08A]/30 rounded-full text-xs font-bold">
-                    <EditableText
-                      textKey="terms.sec2.limit_2"
-                      defaultText="Google Maps link only (no embed)"
-                    />
-                  </span>
-                  <span className="px-3 py-1 bg-[#5EF08A]/10 text-[#5EF08A] border border-[#5EF08A]/30 rounded-full text-xs font-bold">
-                    <EditableText
-                      textKey="terms.sec2.limit_3"
-                      defaultText="No abandoned cart recovery"
-                    />
-                  </span>
-                  <span className="px-3 py-1 bg-[#5EF08A]/10 text-[#5EF08A] border border-[#5EF08A]/30 rounded-full text-xs font-bold">
-                    <EditableText
-                      textKey="terms.sec2.limit_4"
-                      defaultText="No native mobile apps"
-                    />
-                  </span>
-                  <span className="px-3 py-1 bg-[#5EF08A]/10 text-[#5EF08A] border border-[#5EF08A]/30 rounded-full text-xs font-bold">
-                    <EditableText
-                      textKey="terms.sec2.limit_5"
-                      defaultText="USD Currency Only"
-                    />
-                  </span>
+                  {[
+                    { k: "terms.sec2.limit_1", d: "Stripe payments only" },
+                    {
+                      k: "terms.sec2.limit_2",
+                      d: "Google Maps link only (no embed)",
+                    },
+                    {
+                      k: "terms.sec2.limit_3",
+                      d: "No abandoned cart recovery",
+                    },
+                    { k: "terms.sec2.limit_4", d: "No native mobile apps" },
+                    { k: "terms.sec2.limit_5", d: "USD Currency Only" },
+                  ].map((lim) => (
+                    <span
+                      key={lim.k}
+                      className="matrix-badge px-3 py-1 rounded-full text-xs font-bold"
+                    >
+                      <EditableText textKey={lim.k} defaultText={lim.d} />
+                    </span>
+                  ))}
                 </div>
               </div>
               <p>
@@ -432,9 +413,9 @@ export default function TermsPage() {
                 />
               </p>
               <div className="overflow-x-auto rounded-xl border border-[#1C1F33]">
-                <table className="w-full text-left border-collapse bg-[#0A0B14]">
+                <table className="matrix-table w-full text-left border-collapse bg-[#0A0B14]">
                   <thead>
-                    <tr className="bg-[#1C1F33] text-white text-sm">
+                    <tr className="bg-[#1C1F33] text-[#5EF08A] text-sm">
                       <th className="p-4">
                         <EditableText
                           textKey="terms.sec4.table.col_1"
@@ -449,77 +430,54 @@ export default function TermsPage() {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="text-sm text-gray-300">
-                    <tr className="border-b border-[#1C1F33]">
-                      <td className="p-4">
-                        <EditableText
-                          textKey="terms.sec4.table.row_1.tier"
-                          defaultText="Speedy Sites"
-                        />
-                      </td>
-                      <td className="p-4">
-                        <EditableText
-                          textKey="terms.sec4.table.row_1.time"
-                          defaultText="48 hours"
-                        />
-                      </td>
-                    </tr>
-                    <tr className="border-b border-[#1C1F33] bg-[#111322]">
-                      <td className="p-4">
-                        <EditableText
-                          textKey="terms.sec4.table.row_2.tier"
-                          defaultText="Tier 1 — Digital Presence"
-                        />
-                      </td>
-                      <td className="p-4">
-                        <EditableText
-                          textKey="terms.sec4.table.row_2.time"
-                          defaultText="5 business days"
-                        />
-                      </td>
-                    </tr>
-                    <tr className="border-b border-[#1C1F33]">
-                      <td className="p-4">
-                        <EditableText
-                          textKey="terms.sec4.table.row_3.tier"
-                          defaultText="Tier 2 — Authority Site"
-                        />
-                      </td>
-                      <td className="p-4">
-                        <EditableText
-                          textKey="terms.sec4.table.row_3.time"
-                          defaultText="7–10 business days"
-                        />
-                      </td>
-                    </tr>
-                    <tr className="border-b border-[#1C1F33] bg-[#111322]">
-                      <td className="p-4">
-                        <EditableText
-                          textKey="terms.sec4.table.row_4.tier"
-                          defaultText="Tier 3A & 3B"
-                        />
-                      </td>
-                      <td className="p-4">
-                        <EditableText
-                          textKey="terms.sec4.table.row_4.time"
-                          defaultText="10–14 business days"
-                        />
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="p-4">
-                        <EditableText
-                          textKey="terms.sec4.table.row_5.tier"
-                          defaultText="Tier 4A, 4B, 4C"
-                        />
-                      </td>
-                      <td className="p-4">
-                        <EditableText
-                          textKey="terms.sec4.table.row_5.time"
-                          defaultText="14–21 business days"
-                        />
-                      </td>
-                    </tr>
+                  <tbody className="text-sm text-[#9DA0B3]">
+                    {[
+                      {
+                        tk: "terms.sec4.table.row_1.tier",
+                        tmk: "terms.sec4.table.row_1.time",
+                        td: "Speedy Sites",
+                        tt: "48 hours",
+                      },
+                      {
+                        tk: "terms.sec4.table.row_2.tier",
+                        tmk: "terms.sec4.table.row_2.time",
+                        td: "Tier 1 — Digital Presence",
+                        tt: "5 business days",
+                      },
+                      {
+                        tk: "terms.sec4.table.row_3.tier",
+                        tmk: "terms.sec4.table.row_3.time",
+                        td: "Tier 2 — Authority Site",
+                        tt: "7–10 business days",
+                      },
+                      {
+                        tk: "terms.sec4.table.row_4.tier",
+                        tmk: "terms.sec4.table.row_4.time",
+                        td: "Tier 3A & 3B",
+                        tt: "10–14 business days",
+                      },
+                      {
+                        tk: "terms.sec4.table.row_5.tier",
+                        tmk: "terms.sec4.table.row_5.time",
+                        td: "Tier 4A, 4B, 4C",
+                        tt: "14–21 business days",
+                      },
+                    ].map((row, i) => (
+                      <tr
+                        key={row.tk}
+                        className={`border-b border-[#1C1F33] ${i % 2 === 1 ? "bg-[#111322]" : ""}`}
+                      >
+                        <td className="p-4">
+                          <EditableText textKey={row.tk} defaultText={row.td} />
+                        </td>
+                        <td className="p-4">
+                          <EditableText
+                            textKey={row.tmk}
+                            defaultText={row.tt}
+                          />
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -527,9 +485,9 @@ export default function TermsPage() {
 
             <FadeSection id="sec-5" title="5. Monthly Plan & Managed Services">
               <div className="overflow-x-auto rounded-xl border border-[#1C1F33] mb-6">
-                <table className="w-full text-left border-collapse bg-[#0A0B14]">
+                <table className="matrix-table w-full text-left border-collapse bg-[#0A0B14]">
                   <thead>
-                    <tr className="bg-[#1C1F33] text-white text-sm">
+                    <tr className="bg-[#1C1F33] text-[#5EF08A] text-sm">
                       <th className="p-4">
                         <EditableText
                           textKey="terms.sec5.table.col_1"
@@ -550,87 +508,59 @@ export default function TermsPage() {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="text-sm text-gray-300">
-                    <tr className="border-b border-[#1C1F33]">
-                      <td className="p-4 font-bold text-white">
-                        <EditableText
-                          textKey="terms.sec5.row_1.plan"
-                          defaultText="Hosting Only"
-                        />
-                      </td>
-                      <td className="p-4 text-[#5EF08A]">
-                        <EditableText
-                          textKey="terms.sec5.row_1.price"
-                          defaultText="$29"
-                        />
-                      </td>
-                      <td className="p-4">
-                        <EditableText
-                          textKey="terms.sec5.row_1.services"
-                          defaultText="Self-managed. No agency edits included."
-                        />
-                      </td>
-                    </tr>
-                    <tr className="border-b border-[#1C1F33] bg-[#111322]">
-                      <td className="p-4 font-bold text-white">
-                        <EditableText
-                          textKey="terms.sec5.row_2.plan"
-                          defaultText="Stay Sharp"
-                        />
-                      </td>
-                      <td className="p-4 text-[#5EF08A]">
-                        <EditableText
-                          textKey="terms.sec5.row_2.price"
-                          defaultText="$89"
-                        />
-                      </td>
-                      <td className="p-4">
-                        <EditableText
-                          textKey="terms.sec5.row_2.services"
-                          defaultText="3 edits/month, standard support."
-                        />
-                      </td>
-                    </tr>
-                    <tr className="border-b border-[#1C1F33]">
-                      <td className="p-4 font-bold text-white">
-                        <EditableText
-                          textKey="terms.sec5.row_3.plan"
-                          defaultText="Stay Ahead"
-                        />
-                      </td>
-                      <td className="p-4 text-[#5EF08A]">
-                        <EditableText
-                          textKey="terms.sec5.row_3.price"
-                          defaultText="$249"
-                        />
-                      </td>
-                      <td className="p-4">
-                        <EditableText
-                          textKey="terms.sec5.row_3.services"
-                          defaultText="Unlimited standard edits, priority support."
-                        />
-                      </td>
-                    </tr>
-                    <tr className="bg-[#111322]">
-                      <td className="p-4 font-bold text-white">
-                        <EditableText
-                          textKey="terms.sec5.row_4.plan"
-                          defaultText="Full Partner"
-                        />
-                      </td>
-                      <td className="p-4 text-[#5EF08A]">
-                        <EditableText
-                          textKey="terms.sec5.row_4.price"
-                          defaultText="$549"
-                        />
-                      </td>
-                      <td className="p-4">
-                        <EditableText
-                          textKey="terms.sec5.row_4.services"
-                          defaultText="E-com management, SEO, monthly reports."
-                        />
-                      </td>
-                    </tr>
+                  <tbody className="text-sm text-[#9DA0B3]">
+                    {[
+                      {
+                        pk: "terms.sec5.row_1.plan",
+                        prk: "terms.sec5.row_1.price",
+                        sk: "terms.sec5.row_1.services",
+                        pd: "Hosting Only",
+                        pp: "$29",
+                        ps: "Self-managed. No agency edits included.",
+                      },
+                      {
+                        pk: "terms.sec5.row_2.plan",
+                        prk: "terms.sec5.row_2.price",
+                        sk: "terms.sec5.row_2.services",
+                        pd: "Stay Sharp",
+                        pp: "$89",
+                        ps: "3 edits/month, standard support.",
+                      },
+                      {
+                        pk: "terms.sec5.row_3.plan",
+                        prk: "terms.sec5.row_3.price",
+                        sk: "terms.sec5.row_3.services",
+                        pd: "Stay Ahead",
+                        pp: "$249",
+                        ps: "Unlimited standard edits, priority support.",
+                      },
+                      {
+                        pk: "terms.sec5.row_4.plan",
+                        prk: "terms.sec5.row_4.price",
+                        sk: "terms.sec5.row_4.services",
+                        pd: "Full Partner",
+                        pp: "$549",
+                        ps: "E-com management, SEO, monthly reports.",
+                      },
+                    ].map((row, i) => (
+                      <tr
+                        key={row.pk}
+                        className={`border-b border-[#1C1F33] ${i % 2 === 1 ? "bg-[#111322]" : ""}`}
+                      >
+                        <td className="p-4 font-bold text-white">
+                          <EditableText textKey={row.pk} defaultText={row.pd} />
+                        </td>
+                        <td className="p-4 text-[#5EF08A]">
+                          <EditableText
+                            textKey={row.prk}
+                            defaultText={row.pp}
+                          />
+                        </td>
+                        <td className="p-4">
+                          <EditableText textKey={row.sk} defaultText={row.ps} />
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -652,55 +582,44 @@ export default function TermsPage() {
                   defaultText="The Build Fee covers creating the website. The Monthly Plan covers keeping it live on our managed infrastructure."
                 />
               </p>
-              <ul className="space-y-2 pl-4 border-l-2 border-[#1C1F33]">
-                <li>
-                  <strong className="text-amber-500">
-                    <EditableText
-                      textKey="terms.sec7.item_1.day"
-                      defaultText="Day 1:"
-                    />
-                  </strong>{" "}
-                  <EditableText
-                    textKey="terms.sec7.item_1.body"
-                    defaultText="Automatic Stripe retry. Client notified."
-                  />
-                </li>
-                <li>
-                  <strong className="text-amber-500">
-                    <EditableText
-                      textKey="terms.sec7.item_2.day"
-                      defaultText="Day 7:"
-                    />
-                  </strong>{" "}
-                  <EditableText
-                    textKey="terms.sec7.item_2.body"
-                    defaultText="Formal non-payment notice. 48 hours to resolve."
-                  />
-                </li>
-                <li>
-                  <strong className="text-red-500">
-                    <EditableText
-                      textKey="terms.sec7.item_3.day"
-                      defaultText="Day 9:"
-                    />
-                  </strong>{" "}
-                  <EditableText
-                    textKey="terms.sec7.item_3.body"
-                    defaultText="Website is unpublished and suspended."
-                  />
-                </li>
-                <li>
-                  <strong className="text-red-500">
-                    <EditableText
-                      textKey="terms.sec7.item_4.day"
-                      defaultText="Day 30:"
-                    />
-                  </strong>{" "}
-                  <EditableText
-                    textKey="terms.sec7.item_4.body"
-                    defaultText="Website archived."
-                  />
-                </li>
+              <ul className="space-y-2 pl-4 border-l-2 border-[#5EF08A]/30">
+                {[
+                  {
+                    dk: "terms.sec7.item_1.day",
+                    bk: "terms.sec7.item_1.body",
+                    dd: "Day 1:",
+                    db: "Automatic Stripe retry. Client notified.",
+                    cls: "text-amber-500",
+                  },
+                  {
+                    dk: "terms.sec7.item_2.day",
+                    bk: "terms.sec7.item_2.body",
+                    dd: "Day 7:",
+                    db: "Formal non-payment notice. 48 hours to resolve.",
+                    cls: "text-amber-500",
+                  },
+                  {
+                    dk: "terms.sec7.item_3.day",
+                    bk: "terms.sec7.item_3.body",
+                    dd: "Day 9:",
+                    db: "Website is unpublished and suspended.",
+                    cls: "text-red-500",
+                  },
+                  {
+                    dk: "terms.sec7.item_4.day",
+                    bk: "terms.sec7.item_4.body",
+                    dd: "Day 30:",
+                    db: "Website archived.",
+                    cls: "text-red-500",
+                  },
+                ].map((item) => (
+                  <li key={item.dk}>
+                    <strong className={item.cls}>
+                      <EditableText textKey={item.dk} defaultText={item.dd} />
+                    </strong>{" "}
+                    <EditableText textKey={item.bk} defaultText={item.db} />
+                  </li>
+                ))}
               </ul>
             </FadeSection>
 

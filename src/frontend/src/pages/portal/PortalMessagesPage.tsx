@@ -1,13 +1,12 @@
 import { Loader2, Send } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { backendInterface } from "../../backend";
+import type { KeyboardEvent } from "react";
+import type { backendInterface } from "../../backend.d";
+import TypewriterText from "../../components/TypewriterText";
 import { useActor } from "../../hooks/useActor";
 import { useSession } from "../../hooks/useSession";
 import PortalLayout from "./PortalLayout";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 interface ClientMessage {
   id: string;
   senderEmail: string;
@@ -18,16 +17,11 @@ interface ClientMessage {
   isRead: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-const ADMIN_EMAIL = "vincenzo@imperidome.com";
 const POLL_INTERVAL_MS = 10_000;
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 function formatTs(ts: bigint): string {
+  if (ts === 0n) return "—";
+  if (Number.isNaN(Number(ts))) return "—";
   const ms = Number(ts) / 1_000_000;
   const d = new Date(ms);
   const today = new Date();
@@ -35,25 +29,15 @@ function formatTs(ts: bigint): string {
     d.getFullYear() === today.getFullYear() &&
     d.getMonth() === today.getMonth() &&
     d.getDate() === today.getDate();
-
-  if (isToday) {
+  if (isToday)
     return d.toLocaleTimeString("en-US", {
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
     });
-  }
-
-  return `${d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: d.getFullYear() !== today.getFullYear() ? "numeric" : undefined,
-  })} · ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}`;
+  return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: d.getFullYear() !== today.getFullYear() ? "numeric" : undefined })} · ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}`;
 }
 
-// ---------------------------------------------------------------------------
-// Toast
-// ---------------------------------------------------------------------------
 interface ToastState {
   message: string;
   type: "success" | "error";
@@ -67,7 +51,6 @@ function Toast({
     const t = setTimeout(onDismiss, 5_000);
     return () => clearTimeout(t);
   }, [onDismiss]);
-
   return (
     <div
       data-ocid="messages.toast"
@@ -80,13 +63,9 @@ function Toast({
         borderRadius: "10px",
         background:
           toast.type === "success"
-            ? "rgba(5,46,22,0.95)"
-            : "rgba(69,10,10,0.95)",
-        border: `1px solid ${
-          toast.type === "success"
-            ? "rgba(94,240,138,0.4)"
-            : "rgba(239,68,68,0.4)"
-        }`,
+            ? "rgba(5,46,22,0.97)"
+            : "rgba(69,10,10,0.97)",
+        border: `1px solid ${toast.type === "success" ? "rgba(94,240,138,0.4)" : "rgba(239,68,68,0.4)"}`,
         color: toast.type === "success" ? "#86EFAC" : "#FCA5A5",
         fontSize: "14px",
         fontWeight: 600,
@@ -120,15 +99,10 @@ function Toast({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Message bubble
-// ---------------------------------------------------------------------------
-interface BubbleProps {
-  msg: ClientMessage;
-  isSelf: boolean;
-}
-
-function MessageBubble({ msg, isSelf }: BubbleProps) {
+function MessageBubble({
+  msg,
+  isSelf,
+}: { msg: ClientMessage; isSelf: boolean }) {
   return (
     <div
       key={msg.id}
@@ -141,7 +115,6 @@ function MessageBubble({ msg, isSelf }: BubbleProps) {
         maxWidth: "100%",
       }}
     >
-      {/* Sender name + timestamp */}
       <div
         style={{
           display: "flex",
@@ -155,34 +128,38 @@ function MessageBubble({ msg, isSelf }: BubbleProps) {
           style={{
             fontSize: "12px",
             fontWeight: 700,
-            color: isSelf ? "#86EFAC" : "#5EF08A",
+            color: "#5EF08A",
             letterSpacing: "0.02em",
+            fontFamily: "monospace",
           }}
         >
-          {isSelf ? "You" : "Imperidome Team"}
+          {isSelf ? "You" : "Support Team"}
         </span>
-        <span style={{ fontSize: "11px", color: "#4A4D63" }}>
+        <span
+          style={{
+            fontSize: "11px",
+            color: "#4A4D63",
+            fontFamily: "monospace",
+          }}
+        >
           {formatTs(msg.createdAt)}
         </span>
       </div>
-
-      {/* Bubble */}
       <div
         style={{
           maxWidth: "min(520px, 85%)",
           padding: "12px 16px",
           borderRadius: isSelf ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-          background: isSelf
-            ? "rgba(94,240,138,0.12)"
-            : "rgba(255,255,255,0.05)",
+          background: isSelf ? "rgba(7,8,16,0.8)" : "rgba(7,8,16,0.6)",
           border: isSelf
-            ? "1px solid rgba(94,240,138,0.2)"
-            : "1px solid rgba(255,255,255,0.08)",
+            ? "1px solid rgba(94,240,138,0.3)"
+            : "1px solid rgba(94,240,138,0.1)",
           color: "#EEF0F8",
           fontSize: "15px",
           lineHeight: "1.6",
           wordBreak: "break-word",
           whiteSpace: "pre-wrap",
+          boxShadow: isSelf ? "0 0 10px rgba(94,240,138,0.05)" : "none",
         }}
       >
         {msg.body}
@@ -191,87 +168,111 @@ function MessageBubble({ msg, isSelf }: BubbleProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main Page
-// ---------------------------------------------------------------------------
 export default function PortalMessagesPage() {
   const { session } = useSession();
   const { actor, isFetching } = useActor();
   const clientEmail = session?.email ?? "";
   const clientName = session?.firstName ?? "";
-
+  // adminEmail is fetched from env; no backend getAdminEmail() exists for portal clients
+  const [adminEmail, setAdminEmail] = useState<string>(
+    import.meta.env.VITE_ADMIN_EMAIL ?? "",
+  );
+  const [adminEmailLoading, setAdminEmailLoading] = useState(
+    !import.meta.env.VITE_ADMIN_EMAIL,
+  );
+  const adminEmailMissing = !adminEmailLoading && !adminEmail;
   const [messages, setMessages] = useState<ClientMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
-
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // ── Load messages + mark read ──────────────────────────────────────────────
+  useEffect(() => {
+    if (!adminEmail && !isFetching && actor) {
+      setAdminEmailLoading(true);
+      actor
+        .getAdminContactEmail()
+        .then((email: string) => {
+          setAdminEmail(email);
+          setAdminEmailLoading(false);
+        })
+        .catch(() => setAdminEmailLoading(false));
+    }
+  }, [isFetching, actor, adminEmail]);
+
   const loadMessages = useCallback(
     async (quiet = false) => {
-      if (!actor || !clientEmail) return;
+      if (!adminEmail) {
+        setLoading(false);
+        return;
+      }
+      if (!actor || !clientEmail) {
+        setLoading(false);
+        setLoadError(true);
+        return;
+      }
       if (!quiet) setLoading(true);
       try {
         const result = (await (actor as backendInterface).getMessages(
           clientEmail,
-          ADMIN_EMAIL,
+          adminEmail,
         )) as ClientMessage[];
         setMessages(result ?? []);
         if (!quiet) setLoadError(false);
-        // Mark messages from admin as read
-        await (actor as backendInterface).markMessagesRead(
-          clientEmail,
-          ADMIN_EMAIL,
-        );
       } catch {
         if (!quiet) setLoadError(true);
       } finally {
         if (!quiet) setLoading(false);
       }
+      // Mark as read in a separate try/catch so a failure here does not
+      // replace successfully loaded messages with an error state
+      try {
+        await (actor as backendInterface).markMessagesRead(
+          clientEmail,
+          adminEmail,
+        );
+      } catch (err) {
+        if (import.meta.env.DEV) console.warn("markMessagesRead failed:", err);
+      }
     },
-    [actor, clientEmail],
+    [actor, clientEmail, adminEmail],
   );
 
-  // ── Initial load ──────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!actor || isFetching || !clientEmail) return;
+    if (!actor || isFetching || !clientEmail || !adminEmail) return;
     loadMessages(false);
-  }, [actor, isFetching, clientEmail, loadMessages]);
-
-  // ── Polling ───────────────────────────────────────────────────────────────
+  }, [actor, isFetching, clientEmail, adminEmail, loadMessages]);
   useEffect(() => {
-    if (!actor || isFetching || !clientEmail) return;
-    const id = setInterval(() => loadMessages(true), POLL_INTERVAL_MS);
+    if (!actor || isFetching || !clientEmail || !adminEmail) return;
+    const id = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      loadMessages(true);
+    }, POLL_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [actor, isFetching, clientEmail, loadMessages]);
+  }, [actor, isFetching, clientEmail, adminEmail, loadMessages]);
 
-  // ── Auto-scroll to bottom on new messages ─────────────────────────────────
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional — scroll whenever messages array changes
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // ── Send ──────────────────────────────────────────────────────────────────
   async function handleSend() {
     const trimmed = body.trim();
     if (!trimmed || sending || !actor) return;
-
+    if (!clientEmail) return;
     setSending(true);
     try {
       const result = (await (actor as backendInterface).sendMessage(
         clientEmail,
-        ADMIN_EMAIL,
+        adminEmail,
         trimmed,
       )) as { ok: ClientMessage } | { err: string };
-
       if ("ok" in result) {
         setBody("");
-        // Optimistically append; next poll will reconcile
         setMessages((prev) => [...prev, result.ok]);
         textareaRef.current?.focus();
       } else {
@@ -290,27 +291,22 @@ export default function PortalMessagesPage() {
     }
   }
 
-  // ── Key handler: Shift+Enter for newlines, Enter does nothing special ──────
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    // Only the Send button submits — don't intercept Enter
-    void e;
+  function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
   }
-
   const canSend = body.trim().length > 0 && !sending;
-
-  // ── Layout constants ──────────────────────────────────────────────────────
   const inputBarHeight = 80;
 
   return (
     <PortalLayout pageTitle="Messages">
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.45; }
-        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
         .msg-textarea::placeholder { color: #4A4D63; }
-        .msg-textarea:focus { border-color: rgba(94,240,138,0.4) !important; outline: none; }
+        .msg-textarea:focus { border-color: rgba(94,240,138,0.5) !important; outline: none; box-shadow: 0 0 0 2px rgba(94,240,138,0.1); }
         .msg-send-btn:hover:not(:disabled) { background: rgba(94,240,138,0.95) !important; }
         .msg-send-btn:disabled { opacity: 0.45; cursor: not-allowed; }
       `}</style>
@@ -328,46 +324,59 @@ export default function PortalMessagesPage() {
           boxSizing: "border-box",
         }}
       >
-        {/* ── Page header ── */}
-        <div style={{ marginBottom: "16px", flexShrink: 0 }}>
-          <h1
+        {adminEmailMissing && (
+          <div
+            data-ocid="messages.admin-email-missing.error_state"
             style={{
-              margin: "0 0 4px",
-              fontSize: "22px",
-              fontWeight: 700,
-              color: "#EEF0F8",
+              padding: "20px 24px",
+              borderRadius: "10px",
+              background: "rgba(69,10,10,0.3)",
+              border: "1px solid rgba(239,68,68,0.25)",
+              color: "#FCA5A5",
+              fontSize: "14px",
+              textAlign: "center",
+              marginBottom: "16px",
             }}
           >
-            Messages
+            Messages are unavailable. Please contact support.
+          </div>
+        )}
+        <div style={{ marginBottom: "16px", flexShrink: 0 }}>
+          <h1 style={{ margin: "0 0 4px" }}>
+            <TypewriterText
+              text="Messages"
+              className="matrix-heading"
+              style={{ fontSize: "22px", fontWeight: 700 }}
+              speed={45}
+            />
           </h1>
           <p style={{ margin: 0, fontSize: "14px", color: "#7A7D90" }}>
             Chat directly with the Imperidome team.
           </p>
         </div>
 
-        {/* ── Chat card ── */}
         <div
           style={{
             flex: 1,
             display: "flex",
             flexDirection: "column",
             borderRadius: "12px",
-            border: "1px solid rgba(255,255,255,0.08)",
-            background: "rgba(17,19,34,0.8)",
+            border: "1px solid rgba(94,240,138,0.2)",
+            background: "rgba(7,8,16,0.9)",
             overflow: "hidden",
             minHeight: 0,
+            boxShadow: "0 0 20px rgba(94,240,138,0.05)",
           }}
         >
-          {/* ── Chat header strip ── */}
           <div
             style={{
               padding: "14px 20px",
-              borderBottom: "1px solid rgba(255,255,255,0.06)",
+              borderBottom: "1px solid rgba(94,240,138,0.1)",
               display: "flex",
               alignItems: "center",
               gap: "10px",
               flexShrink: 0,
-              background: "rgba(10,12,25,0.6)",
+              background: "rgba(7,8,16,0.8)",
             }}
           >
             <div
@@ -375,14 +384,16 @@ export default function PortalMessagesPage() {
                 width: "34px",
                 height: "34px",
                 borderRadius: "50%",
-                background: "linear-gradient(135deg, #5EF08A 0%, #22C55E 100%)",
+                background: "rgba(94,240,138,0.15)",
+                border: "1px solid rgba(94,240,138,0.3)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 flexShrink: 0,
-                fontSize: "14px",
+                fontSize: "12px",
                 fontWeight: 800,
-                color: "#061209",
+                color: "#5EF08A",
+                fontFamily: "monospace",
               }}
             >
               ID
@@ -394,17 +405,24 @@ export default function PortalMessagesPage() {
                   fontSize: "14px",
                   fontWeight: 700,
                   color: "#EEF0F8",
+                  fontFamily: "monospace",
                 }}
               >
-                Imperidome Team
+                Support Team
               </p>
-              <p style={{ margin: 0, fontSize: "12px", color: "#5EF08A" }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "12px",
+                  color: "#5EF08A",
+                  fontFamily: "monospace",
+                }}
+              >
                 {clientName ? `Chatting as ${clientName}` : "Support Thread"}
               </p>
             </div>
           </div>
 
-          {/* ── Message list ── */}
           <div
             ref={containerRef}
             data-ocid="messages.thread"
@@ -415,7 +433,6 @@ export default function PortalMessagesPage() {
               minHeight: 0,
             }}
           >
-            {/* Loading state */}
             {loading && (
               <div
                 data-ocid="messages.loading_state"
@@ -441,7 +458,7 @@ export default function PortalMessagesPage() {
                         height: "12px",
                         width: "80px",
                         borderRadius: "6px",
-                        background: "rgba(40,45,70,0.8)",
+                        background: "rgba(94,240,138,0.06)",
                         animation: "pulse 1.5s ease-in-out infinite",
                       }}
                     />
@@ -450,7 +467,7 @@ export default function PortalMessagesPage() {
                         height: "48px",
                         width: w,
                         borderRadius: "12px",
-                        background: "rgba(40,45,70,0.8)",
+                        background: "rgba(94,240,138,0.06)",
                         animation: "pulse 1.5s ease-in-out infinite",
                       }}
                     />
@@ -458,8 +475,6 @@ export default function PortalMessagesPage() {
                 ))}
               </div>
             )}
-
-            {/* Error state */}
             {!loading && loadError && (
               <div
                 data-ocid="messages.error_state"
@@ -476,8 +491,6 @@ export default function PortalMessagesPage() {
                 Unable to load messages. Please refresh the page and try again.
               </div>
             )}
-
-            {/* Empty state */}
             {!loading && !loadError && messages.length === 0 && (
               <div
                 data-ocid="messages.empty_state"
@@ -498,7 +511,7 @@ export default function PortalMessagesPage() {
                     height: "52px",
                     borderRadius: "50%",
                     background: "rgba(94,240,138,0.08)",
-                    border: "1px solid rgba(94,240,138,0.15)",
+                    border: "1px solid rgba(94,240,138,0.2)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -513,6 +526,7 @@ export default function PortalMessagesPage() {
                     fontSize: "15px",
                     fontWeight: 600,
                     color: "#B0B3C6",
+                    fontFamily: "monospace",
                   }}
                 >
                   No messages yet
@@ -522,8 +536,6 @@ export default function PortalMessagesPage() {
                 </p>
               </div>
             )}
-
-            {/* Messages */}
             {!loading &&
               !loadError &&
               messages.map((msg) => (
@@ -533,19 +545,16 @@ export default function PortalMessagesPage() {
                   isSelf={msg.senderEmail === clientEmail}
                 />
               ))}
-
-            {/* Scroll anchor */}
             <div ref={bottomRef} style={{ height: "1px" }} />
           </div>
 
-          {/* ── Compose bar ── */}
           <div
             data-ocid="messages.compose_bar"
             style={{
               height: `${inputBarHeight}px`,
               flexShrink: 0,
-              borderTop: "1px solid rgba(255,255,255,0.06)",
-              background: "rgba(10,12,25,0.5)",
+              borderTop: "1px solid rgba(94,240,138,0.1)",
+              background: "rgba(7,8,16,0.7)",
               display: "flex",
               alignItems: "center",
               gap: "10px",
@@ -567,8 +576,8 @@ export default function PortalMessagesPage() {
               style={{
                 flex: 1,
                 resize: "none",
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.1)",
+                background: "rgba(94,240,138,0.04)",
+                border: "1px solid rgba(94,240,138,0.15)",
                 borderRadius: "10px",
                 color: "#EEF0F8",
                 fontSize: "14px",

@@ -1,27 +1,20 @@
 {
-  "overview": "Imperidome is a production-grade full-stack SaaS platform for business and client management, deployed on the Internet Computer. It features a robust Admin Panel (24+ tabs), a comprehensive Client Portal (14 tabs), and a dynamic public-facing website. Now with a full Site Analytics page tracking live visitors, daily trends, page breakdowns, and geography.",
+  "overview": "Imperidome is a Stripe Connect-powered SaaS platform for digital agencies, with a full client portal, admin panel, and public site.",
   "features": [
-    "Site Analytics admin page with live visitor counter",
-    "30-second polling live visitor count with green pulse indicator",
-    "Time-grouped stats: Today, This Week, This Month, All Time",
-    "30-day daily visitor trend bar chart (Recharts)",
-    "Top 10 most visited pages breakdown table",
-    "Top 6 visitor countries breakdown",
-    "Silent anonymous visit tracking on all public pages",
-    "50,000 entry FIFO-capped stable storage for visit data",
-    "Admin CRM, Lead Pipeline, and Client Portal",
-    "Stripe payments, Google Calendar, Google Sheets sync"
+    "Delete legacy wrapper page and remap root route to homepage",
+    "Add trust badge section with Stripe and Internet Computer Protocol branding",
+    "Global terminology cleanup removing Matrix references",
+    "Services navbar dropdown with all 6 service offerings",
+    "Principal-gated admin panel with Stripe Connect payments",
+    "Client portal with billing history and subscriptions"
   ],
-  "category": "business",
+  "category": "saas-platform",
   "tags": [
-    "analytics",
+    "agency",
+    "stripe",
+    "client-portal",
     "admin",
-    "saas",
-    "crm",
-    "internet-computer",
-    "motoko",
-    "react",
-    "typescript"
+    "internet-computer"
   ],
-  "last_updated": "2026-05-09T19:45:03.594Z"
+  "last_updated": "2026-06-11T00:01:32.870Z"
 }

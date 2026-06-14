@@ -53,6 +53,7 @@ export const ShoppingItem = IDL.Record({
   'priceInCents' : IDL.Nat,
   'productDescription' : IDL.Text,
 });
+export const ProductId = IDL.Nat;
 export const BlogPostId = IDL.Nat;
 export const QuestionnaireId = IDL.Nat;
 export const AdHocInvoice = IDL.Record({
@@ -112,6 +113,7 @@ export const Order = IDL.Record({
   'created_at' : Timestamp,
   'launch_target' : IDL.Text,
   'client_id' : ClientId,
+  'amount' : IDL.Float64,
   'tier_code' : IDL.Text,
 });
 export const Questionnaire = IDL.Record({
@@ -127,6 +129,19 @@ export const Questionnaire = IDL.Record({
   'client_id' : ClientId,
   'submitted_at' : IDL.Opt(Timestamp),
   'tier_code' : IDL.Text,
+});
+export const BillingId = IDL.Nat;
+export const SubscriptionId = IDL.Nat;
+export const BillingHistory = IDL.Record({
+  'id' : BillingId,
+  'status' : IDL.Text,
+  'payment_date' : Timestamp,
+  'subscription_id' : SubscriptionId,
+  'description' : IDL.Text,
+  'created_at' : Timestamp,
+  'stripe_payment_intent_id' : IDL.Text,
+  'client_id' : ClientId,
+  'amount' : IDL.Float64,
 });
 export const AdminNotification = IDL.Record({
   'id' : IDL.Text,
@@ -159,6 +174,17 @@ export const BlogPost = IDL.Record({
   'featured_image_url' : IDL.Opt(IDL.Text),
   'featuredImageCaption' : IDL.Text,
 });
+export const EmailCampaignId = IDL.Nat;
+export const EmailCampaign = IDL.Record({
+  'id' : EmailCampaignId,
+  'status' : IDL.Text,
+  'subject' : IDL.Text,
+  'scheduledDate' : IDL.Opt(IDL.Int),
+  'body' : IDL.Text,
+  'createdAt' : IDL.Int,
+  'sentAt' : IDL.Opt(IDL.Int),
+  'recipients' : IDL.Vec(IDL.Text),
+});
 export const PortfolioItem = IDL.Record({
   'id' : IDL.Text,
   'seoMetaKeywords' : IDL.Opt(IDL.Text),
@@ -173,15 +199,36 @@ export const PortfolioItem = IDL.Record({
   'seoMetaDescription' : IDL.Opt(IDL.Text),
   'tier_code' : IDL.Text,
 });
-export const ProductId = IDL.Nat;
 export const Product = IDL.Record({
   'id' : ProductId,
+  'proofPoints' : IDL.Opt(IDL.Text),
+  'show_questionnaire' : IDL.Bool,
+  'seoMetaTitle' : IDL.Opt(IDL.Text),
+  'faqItems' : IDL.Opt(IDL.Text),
   'active' : IDL.Bool,
+  'payment_type' : IDL.Text,
   'price_monthly' : IDL.Opt(IDL.Float64),
+  'speedy_filter' : IDL.Opt(IDL.Text),
+  'tagline' : IDL.Opt(IDL.Text),
+  'plan_section' : IDL.Opt(IDL.Text),
   'name' : IDL.Text,
+  'tags' : IDL.Vec(IDL.Text),
   'description' : IDL.Text,
   'created_at' : Timestamp,
+  'closingCTA' : IDL.Opt(IDL.Text),
+  'bodySections' : IDL.Opt(IDL.Text),
+  'upgradePath' : IDL.Opt(IDL.Text),
+  'imageUrl' : IDL.Opt(IDL.Text),
   'product_type' : IDL.Text,
+  'recommendedPlan' : IDL.Opt(IDL.Text),
+  'heroSubheadline' : IDL.Opt(IDL.Text),
+  'detailDescription' : IDL.Opt(IDL.Text),
+  'seoMetaDescription' : IDL.Opt(IDL.Text),
+  'featureBullets' : IDL.Vec(IDL.Text),
+  'heroHeadline' : IDL.Opt(IDL.Text),
+  'bestFor' : IDL.Opt(IDL.Text),
+  'video_url_1' : IDL.Text,
+  'video_url_2' : IDL.Text,
   'price_onetime' : IDL.Opt(IDL.Float64),
   'tier_code' : IDL.Opt(IDL.Text),
   'price_annual' : IDL.Opt(IDL.Float64),
@@ -215,13 +262,20 @@ export const AvailabilitySettings = IDL.Record({
   'blockedDates' : IDL.Vec(IDL.Text),
   'weeklySchedule' : WeeklySchedule,
 });
+export const BusinessMetrics = IDL.Record({
+  'activeBookings' : IDL.Nat,
+  'saasPlanStatus' : IDL.Text,
+  'monthlyRevenueCents' : IDL.Nat,
+});
 export const SiteLinkEntry = IDL.Record({
   'url' : IDL.Text,
   'sentAt' : IDL.Int,
 });
 export const CrmClient = IDL.Record({
   'id' : IDL.Text,
+  'webhookSecret' : IDL.Opt(IDL.Text),
   'hasAccount' : IDL.Bool,
+  'deletionRequested' : IDL.Bool,
   'source' : IDL.Text,
   'name' : IDL.Text,
   'milestoneUpdatedAt' : IDL.Opt(IDL.Int),
@@ -229,10 +283,16 @@ export const CrmClient = IDL.Record({
   'created_at' : IDL.Int,
   'briefSubmittedAt' : IDL.Opt(IDL.Int),
   'email' : IDL.Text,
+  'connectedAt' : IDL.Opt(IDL.Int),
+  'stripeConnectAccountId' : IDL.Opt(IDL.Text),
   'notes' : IDL.Text,
   'currentMilestone' : IDL.Nat,
+  'platformFeePercentage' : IDL.Float64,
   'projectStatus' : IDL.Text,
+  'deletionRequestedAt' : IDL.Int,
   'phone' : IDL.Text,
+  'stripeConnectStatus' : IDL.Text,
+  'lastActivityAt' : IDL.Opt(IDL.Int),
   'briefStatus' : IDL.Opt(IDL.Text),
   'siteLinkLog' : IDL.Vec(SiteLinkEntry),
   'completionPaymentCharged' : IDL.Bool,
@@ -268,6 +328,9 @@ export const PurchaseRequest = IDL.Record({
 });
 export const DashboardMetrics = IDL.Record({
   'totalProducts' : IDL.Nat,
+  'ordersByStatus' : IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat)),
+  'totalOrders' : IDL.Nat,
+  'totalOrderValue' : IDL.Nat,
   'outstandingInvoices' : IDL.Nat,
   'recentActivity' : IDL.Vec(IDL.Text),
   'totalClients' : IDL.Nat,
@@ -340,19 +403,6 @@ export const ClientMessage = IDL.Record({
   'senderName' : IDL.Text,
   'senderEmail' : IDL.Text,
 });
-export const BillingId = IDL.Nat;
-export const SubscriptionId = IDL.Nat;
-export const BillingHistory = IDL.Record({
-  'id' : BillingId,
-  'status' : IDL.Text,
-  'payment_date' : Timestamp,
-  'subscription_id' : SubscriptionId,
-  'description' : IDL.Text,
-  'created_at' : Timestamp,
-  'stripe_payment_intent_id' : IDL.Text,
-  'client_id' : ClientId,
-  'amount' : IDL.Float64,
-});
 export const EditRequestId = IDL.Nat;
 export const EditRequest = IDL.Record({
   'id' : EditRequestId,
@@ -370,14 +420,19 @@ export const EditRequest = IDL.Record({
 export const Subscription = IDL.Record({
   'id' : SubscriptionId,
   'status' : IDL.Text,
+  'nextBillingDate' : IDL.Int,
   'updated_at' : Timestamp,
   'plan_code' : IDL.Text,
   'plan_name' : IDL.Text,
   'billing_cycle' : IDL.Text,
+  'clientEmail' : IDL.Text,
   'created_at' : Timestamp,
+  'stripeCustomerId' : IDL.Opt(IDL.Text),
   'stripe_subscription_id' : IDL.Text,
   'client_id' : ClientId,
+  'reminderSentAt' : IDL.Opt(IDL.Int),
   'next_payment_date' : Timestamp,
+  'paymentFailed' : IDL.Bool,
 });
 export const NotificationLogEntry = IDL.Record({
   'id' : IDL.Text,
@@ -393,6 +448,13 @@ export const PendingNotification = IDL.Record({
   'title' : IDL.Text,
   'body' : IDL.Text,
   'createdAt' : IDL.Int,
+});
+export const SocialMediaConfig = IDL.Record({
+  'instagramUrl' : IDL.Text,
+  'youtubeUrl' : IDL.Text,
+  'facebookUrl' : IDL.Text,
+  'linkedinUrl' : IDL.Text,
+  'tiktokUrl' : IDL.Text,
 });
 export const PushSubscription = IDL.Record({
   'endpoint' : IDL.Text,
@@ -417,12 +479,27 @@ export const ReferralStat = IDL.Record({
   'referrerEmail' : IDL.Text,
   'totalClicks' : IDL.Nat,
 });
+export const StripeConfiguration = IDL.Record({
+  'allowedCountries' : IDL.Vec(IDL.Text),
+  'secretKey' : IDL.Text,
+});
 export const StripeSessionStatus = IDL.Variant({
   'completed' : IDL.Record({
     'userPrincipal' : IDL.Opt(IDL.Text),
     'response' : IDL.Text,
   }),
   'failed' : IDL.Record({ 'error' : IDL.Text }),
+});
+export const SubAdmin = IDL.Record({
+  'allowedTabs' : IDL.Vec(IDL.Text),
+  'createdAt' : IDL.Int,
+  'email' : IDL.Text,
+});
+export const WebhookAuditEntry = IDL.Record({
+  'received_at' : IDL.Int,
+  'event_id' : IDL.Text,
+  'processing_result' : IDL.Text,
+  'event_type' : IDL.Text,
 });
 export const LoginResult = IDL.Variant({
   'ok' : IDL.Record({
@@ -431,10 +508,6 @@ export const LoginResult = IDL.Variant({
     'firstName' : IDL.Text,
   }),
   'err' : IDL.Text,
-});
-export const StripeConfiguration = IDL.Record({
-  'allowedCountries' : IDL.Vec(IDL.Text),
-  'secretKey' : IDL.Text,
 });
 export const http_header = IDL.Record({
   'value' : IDL.Text,
@@ -483,9 +556,13 @@ export const idlService = IDL.Service({
     ),
   '_immutableObjectStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
   '_initializeAccessControl' : IDL.Func([], [], []),
+  'activateSubscription' : IDL.Func(
+      [IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
+      [],
+    ),
   'addBuild' : IDL.Func(
       [
-        IDL.Text,
         IDL.Text,
         IDL.Text,
         IDL.Opt(IDL.Text),
@@ -507,36 +584,51 @@ export const idlService = IDL.Service({
       [IDL.Text],
       [],
     ),
-  'addFleetCanister' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
-  'addFleetSite' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
-  'addFleetSoftware' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
+  'addFleetCanister' : IDL.Func([IDL.Text, IDL.Text], [], []),
+  'addFleetSite' : IDL.Func([IDL.Text, IDL.Text], [], []),
+  'addFleetSoftware' : IDL.Func([IDL.Text, IDL.Text], [], []),
   'addMarqueeLogo' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Text, IDL.Text],
       [IDL.Variant({ 'ok' : MarqueeLogo, 'err' : IDL.Text })],
       [],
     ),
+  'addSubAdmin' : IDL.Func(
+      [IDL.Text, IDL.Vec(IDL.Text)],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
   'adminUpdateClientProfile' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
       [],
     ),
   'approvePurchaseRequest' : IDL.Func(
-      [IDL.Text, IDL.Nat, IDL.Text, IDL.Text],
+      [IDL.Nat, IDL.Text, IDL.Text],
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
       [],
     ),
   'approveReview' : IDL.Func(
-      [IDL.Text, ReviewId],
+      [ReviewId],
       [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
       [],
     ),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
   'assignMeetingToLead' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
       [IDL.Record({ 'ok' : IDL.Bool, 'meetLink' : IDL.Text })],
       [],
     ),
-  'blockDate' : IDL.Func([IDL.Text, IDL.Text], [], []),
+  'blockDate' : IDL.Func([IDL.Text], [], []),
+  'cancelEmailCampaign' : IDL.Func(
+      [IDL.Nat],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
+  'cancelSubscription' : IDL.Func(
+      [IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
+      [],
+    ),
   'changePassword' : IDL.Func(
       [
         IDL.Record({
@@ -560,28 +652,27 @@ export const idlService = IDL.Service({
       [],
     ),
   'clearGoogleCalendarConfig' : IDL.Func(
-      [IDL.Text],
+      [],
       [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
       [],
     ),
   'clearGoogleSheetsConfig' : IDL.Func(
-      [IDL.Text],
+      [],
       [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
       [],
     ),
   'clearNotificationLog' : IDL.Func(
-      [IDL.Text],
+      [],
       [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
       [],
     ),
   'clearPendingPushNotifications' : IDL.Func(
-      [IDL.Text],
+      [],
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
       [],
     ),
   'convertLeadToClient' : IDL.Func(
       [
-        IDL.Text,
         IDL.Text,
         IDL.Text,
         IDL.Text,
@@ -594,13 +685,12 @@ export const idlService = IDL.Service({
       [],
     ),
   'createAdHocInvoiceSession' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Text, IDL.Nat, IDL.Text, IDL.Text],
+      [IDL.Text, IDL.Text, IDL.Nat, IDL.Text, IDL.Text],
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
       [],
     ),
   'createBlogPost' : IDL.Func(
       [
-        IDL.Text,
         IDL.Text,
         IDL.Text,
         IDL.Text,
@@ -617,23 +707,28 @@ export const idlService = IDL.Service({
       [],
     ),
   'createCheckoutSession' : IDL.Func(
-      [IDL.Vec(ShoppingItem), IDL.Text, IDL.Text],
-      [IDL.Text],
+      [IDL.Vec(ShoppingItem), IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
       [],
     ),
   'createCompletionPaymentSession' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Text, IDL.Text, IDL.Text],
       [IDL.Text],
       [],
     ),
   'createDraftLead' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
       [IDL.Record({ 'ok' : IDL.Bool, 'leadId' : IDL.Text })],
       [],
     ),
   'createEditRequest' : IDL.Func(
       [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
       [UpsertResult],
+      [],
+    ),
+  'createEmailCampaign' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Vec(IDL.Text), IDL.Opt(IDL.Int)],
+      [IDL.Variant({ 'ok' : IDL.Nat, 'err' : IDL.Text })],
       [],
     ),
   'createLead' : IDL.Func(
@@ -649,12 +744,34 @@ export const idlService = IDL.Service({
         IDL.Text,
         IDL.Text,
         IDL.Text,
-        IDL.Text,
         IDL.Bool,
         IDL.Opt(IDL.Text),
         IDL.Opt(IDL.Text),
       ],
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
+      [],
+    ),
+  'createProduct' : IDL.Func(
+      [
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Opt(IDL.Float64),
+        IDL.Opt(IDL.Float64),
+        IDL.Opt(IDL.Float64),
+        IDL.Opt(IDL.Text),
+        IDL.Vec(IDL.Text),
+        IDL.Opt(IDL.Text),
+        IDL.Opt(IDL.Text),
+        IDL.Opt(IDL.Text),
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Bool,
+        IDL.Opt(IDL.Text),
+        IDL.Opt(IDL.Text),
+      ],
+      [IDL.Variant({ 'ok' : ProductId, 'err' : IDL.Text })],
       [],
     ),
   'createPurchaseRequest' : IDL.Func(
@@ -667,38 +784,57 @@ export const idlService = IDL.Service({
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
       [],
     ),
-  'declinePurchaseRequest' : IDL.Func(
-      [IDL.Text, IDL.Nat, IDL.Opt(IDL.Text)],
+  'createStripePortalSession' : IDL.Func(
+      [IDL.Text],
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
       [],
     ),
-  'deleteBlogPost' : IDL.Func([IDL.Text, BlogPostId], [], []),
+  'declinePurchaseRequest' : IDL.Func(
+      [IDL.Nat, IDL.Opt(IDL.Text)],
+      [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
+      [],
+    ),
+  'deleteBlogPost' : IDL.Func([BlogPostId], [], []),
   'deleteBuild' : IDL.Func(
-      [IDL.Text, IDL.Text],
+      [IDL.Text],
       [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
       [],
     ),
   'deleteClient' : IDL.Func(
-      [IDL.Text, IDL.Text],
+      [IDL.Text],
       [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
       [],
     ),
   'deleteClientFile' : IDL.Func(
-      [IDL.Text, IDL.Text],
+      [IDL.Text],
       [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
       [],
     ),
-  'deleteLead' : IDL.Func([IDL.Text, IDL.Text], [], []),
+  'deleteLead' : IDL.Func([IDL.Text], [], []),
   'deleteMarqueeLogo' : IDL.Func(
-      [IDL.Text, IDL.Text],
+      [IDL.Text],
       [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
       [],
     ),
-  'deletePortfolioItem' : IDL.Func([IDL.Text, IDL.Text], [UpsertResult], []),
-  'deleteQuestionnaire' : IDL.Func([IDL.Text, QuestionnaireId], [], []),
+  'deletePortfolioItem' : IDL.Func([IDL.Text], [UpsertResult], []),
+  'deleteProduct' : IDL.Func(
+      [IDL.Nat],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
+  'deleteQuestionnaire' : IDL.Func([QuestionnaireId], [], []),
+  'deleteReferral' : IDL.Func(
+      [IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
+  'deleteReview' : IDL.Func(
+      [ReviewId],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
   'editBuild' : IDL.Func(
       [
-        IDL.Text,
         IDL.Text,
         IDL.Text,
         IDL.Text,
@@ -709,32 +845,35 @@ export const idlService = IDL.Service({
       [IDL.Variant({ 'ok' : Build, 'err' : IDL.Text })],
       [],
     ),
-  'generateAdminOTP' : IDL.Func([IDL.Text], [IDL.Text], []),
-  'generatePartnerLink' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Text],
+  'generateAdminOTP' : IDL.Func(
       [IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
       [],
     ),
-  'getAdHocClientInvoices' : IDL.Func(
-      [IDL.Text, IDL.Text],
-      [IDL.Vec(AdHocInvoice)],
-      [],
-    ),
+  'generatePartnerLink' : IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
+  'getAdHocClientInvoices' : IDL.Func([IDL.Text], [IDL.Vec(AdHocInvoice)], []),
   'getAdminAllActivity' : IDL.Func([], [IDL.Vec(ActivityLog)], ['query']),
-  'getAdminAllClients' : IDL.Func([IDL.Text], [IDL.Vec(UserProfile)], []),
-  'getAdminAllOrders' : IDL.Func([IDL.Text], [IDL.Vec(Order)], ['query']),
+  'getAdminAllClients' : IDL.Func([], [IDL.Vec(UserProfile)], []),
+  'getAdminAllOrders' : IDL.Func([], [IDL.Vec(Order)], ['query']),
   'getAdminAllQuestionnaires' : IDL.Func(
-      [IDL.Text],
+      [],
       [IDL.Vec(Questionnaire)],
       ['query'],
     ),
-  'getAdminNotifications' : IDL.Func(
-      [IDL.Text],
-      [IDL.Vec(AdminNotification)],
+  'getAdminBillingHistory' : IDL.Func(
+      [],
+      [IDL.Variant({ 'ok' : IDL.Vec(BillingHistory), 'err' : IDL.Text })],
       [],
     ),
+  'getAdminContactEmail' : IDL.Func([], [IDL.Text], ['query']),
+  'getAdminNotifications' : IDL.Func([], [IDL.Vec(AdminNotification)], []),
   'getAdminStats' : IDL.Func([], [AdminStats], ['query']),
   'getAllBlogPostsAdmin' : IDL.Func([], [IDL.Vec(BlogPost)], []),
+  'getAllEmailCampaigns' : IDL.Func(
+      [],
+      [IDL.Variant({ 'ok' : IDL.Vec(EmailCampaign), 'err' : IDL.Text })],
+      [],
+    ),
   'getAllPortfolioAdmin' : IDL.Func([], [IDL.Vec(PortfolioItem)], []),
   'getAllProductsAdmin' : IDL.Func([], [IDL.Vec(Product)], []),
   'getAllSiteText' : IDL.Func(
@@ -745,7 +884,8 @@ export const idlService = IDL.Service({
   'getApprovedReviews' : IDL.Func([], [IDL.Vec(Review)], ['query']),
   'getAvailability' : IDL.Func([], [AvailabilitySettings], ['query']),
   'getBlogPostBySlug' : IDL.Func([IDL.Text], [IDL.Opt(BlogPost)], ['query']),
-  'getBuilds' : IDL.Func([IDL.Text], [IDL.Vec(Build)], []),
+  'getBuilds' : IDL.Func([], [IDL.Vec(Build)], []),
+  'getBusinessMetrics' : IDL.Func([], [BusinessMetrics], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getCanisterCycles' : IDL.Func(
       [IDL.Text],
@@ -758,11 +898,21 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'getClientBriefStatus' : IDL.Func([IDL.Text], [IDL.Opt(IDL.Text)], []),
+  'getClientBusinessMetrics' : IDL.Func(
+      [IDL.Text],
+      [IDL.Variant({ 'ok' : BusinessMetrics, 'err' : IDL.Text })],
+      [],
+    ),
   'getClientByEmail' : IDL.Func([IDL.Text], [IDL.Opt(CrmClient)], []),
+  'getClientByPrincipal' : IDL.Func(
+      [IDL.Principal],
+      [IDL.Opt(UserProfile)],
+      ['query'],
+    ),
   'getClientFileUrl' : IDL.Func(
       [IDL.Text, IDL.Text],
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
-      ['query'],
+      [],
     ),
   'getClientInvoices' : IDL.Func(
       [IDL.Principal],
@@ -774,15 +924,21 @@ export const idlService = IDL.Service({
       [IDL.Variant({ 'ok' : IDL.Opt(IDL.Nat), 'err' : IDL.Text })],
       [],
     ),
+  'getClientOrderVolumes' : IDL.Func(
+      [],
+      [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Float64))],
+      ['query'],
+    ),
   'getClientOrders' : IDL.Func([IDL.Principal], [IDL.Vec(Order)], ['query']),
   'getClientPurchaseRequests' : IDL.Func(
       [IDL.Text],
       [IDL.Vec(PurchaseRequest)],
       ['query'],
     ),
-  'getClients' : IDL.Func([IDL.Text], [IDL.Vec(CrmClient)], []),
+  'getClients' : IDL.Func([], [IDL.Vec(CrmClient)], []),
+  'getConnectedClients' : IDL.Func([], [IDL.Vec(CrmClient)], ['query']),
   'getConversionStats' : IDL.Func(
-      [IDL.Text, IDL.Opt(IDL.Int), IDL.Opt(IDL.Int)],
+      [IDL.Opt(IDL.Int), IDL.Opt(IDL.Int)],
       [
         IDL.Record({
           'convertedLeads' : IDL.Nat,
@@ -793,46 +949,60 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'getCountryBreakdown' : IDL.Func(
-      [IDL.Text],
+      [],
       [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat, IDL.Float64))],
       ['query'],
     ),
   'getCycles' : IDL.Func([], [IDL.Nat], ['query']),
   'getDailyVisitorChart' : IDL.Func(
-      [IDL.Text],
+      [],
       [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat))],
       ['query'],
     ),
   'getDashboardMetrics' : IDL.Func([], [DashboardMetrics], ['query']),
-  'getEmailLogs' : IDL.Func([IDL.Text], [IDL.Vec(EmailLog)], ['query']),
+  'getEmailHealth' : IDL.Func(
+      [],
+      [
+        IDL.Record({
+          'totalFailures' : IDL.Nat,
+          'lastFailureTimestamp' : IDL.Int,
+          'last24hFailures' : IDL.Nat,
+        }),
+      ],
+      [],
+    ),
+  'getEmailLogs' : IDL.Func([], [IDL.Vec(EmailLog)], ['query']),
   'getEmailTemplates' : IDL.Func([], [IDL.Vec(EmailTemplate)], ['query']),
   'getFilesForClient' : IDL.Func(
       [IDL.Text, IDL.Text],
       [IDL.Vec(ClientFileMetadata)],
-      ['query'],
+      [],
     ),
-  'getFleetSites' : IDL.Func([], [IDL.Vec(FleetCanister)], ['query']),
-  'getFleetSoftware' : IDL.Func([], [IDL.Vec(FleetCanister)], ['query']),
+  'getFleetSites' : IDL.Func([], [IDL.Vec(FleetCanister)], []),
+  'getFleetSoftware' : IDL.Func([], [IDL.Vec(FleetCanister)], []),
+  'getGlobalTaxRate' : IDL.Func([], [IDL.Float64], ['query']),
   'getGoogleCalendarConfig' : IDL.Func(
-      [IDL.Text],
+      [],
       [IDL.Variant({ 'ok' : GoogleCalendarConfig, 'err' : IDL.Text })],
       [],
     ),
   'getGoogleSheetsConfig' : IDL.Func(
-      [IDL.Text],
+      [],
       [IDL.Variant({ 'ok' : GoogleSheetsConfig, 'err' : IDL.Text })],
       [],
     ),
-  'getLeads' : IDL.Func([IDL.Text], [IDL.Vec(Lead)], ['query']),
-  'getLiveVisitorCount' : IDL.Func([IDL.Text], [IDL.Nat], ['query']),
+  'getLeads' : IDL.Func([], [IDL.Vec(Lead)], ['query']),
+  'getLiveVisitorCount' : IDL.Func([], [IDL.Nat], ['query']),
+  'getLogoUrl' : IDL.Func([], [IDL.Text], ['query']),
   'getMarqueeLogos' : IDL.Func([], [IDL.Vec(MarqueeLogo)], ['query']),
-  'getMessages' : IDL.Func(
-      [IDL.Text, IDL.Text],
-      [IDL.Vec(ClientMessage)],
-      ['query'],
-    ),
+  'getMessages' : IDL.Func([IDL.Text, IDL.Text], [IDL.Vec(ClientMessage)], []),
   'getMyActivity' : IDL.Func([], [IDL.Vec(ActivityLog)], ['query']),
   'getMyAdHocInvoices' : IDL.Func([], [IDL.Vec(AdHocInvoice)], ['query']),
+  'getMyAdminPermissions' : IDL.Func(
+      [],
+      [IDL.Variant({ 'ok' : IDL.Vec(IDL.Text), 'err' : IDL.Text })],
+      [],
+    ),
   'getMyBillingHistory' : IDL.Func([], [IDL.Vec(BillingHistory)], ['query']),
   'getMyEditRequests' : IDL.Func([], [IDL.Vec(EditRequest)], ['query']),
   'getMyInvoices' : IDL.Func([], [IDL.Vec(Invoice)], ['query']),
@@ -855,33 +1025,36 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'getNotificationLog' : IDL.Func(
-      [IDL.Text],
+      [],
       [IDL.Variant({ 'ok' : IDL.Vec(NotificationLogEntry), 'err' : IDL.Text })],
       [],
     ),
   'getOrCreateMyReferralCode' : IDL.Func([], [IDL.Text], []),
   'getPendingPushNotifications' : IDL.Func(
-      [IDL.Text],
+      [],
       [IDL.Variant({ 'ok' : IDL.Vec(PendingNotification), 'err' : IDL.Text })],
       [],
     ),
-  'getPendingReviews' : IDL.Func([IDL.Text], [IDL.Vec(Review)], ['query']),
+  'getPendingReviews' : IDL.Func([], [IDL.Vec(Review)], ['query']),
+  'getPendingSubscriptions' : IDL.Func([], [IDL.Vec(Subscription)], []),
   'getPortalShopProductIds' : IDL.Func([], [IDL.Vec(IDL.Nat)], ['query']),
   'getPortalShopProducts' : IDL.Func([], [IDL.Vec(Product)], ['query']),
+  'getProductImageUrl' : IDL.Func([IDL.Nat], [IDL.Opt(IDL.Text)], ['query']),
   'getProducts' : IDL.Func([], [IDL.Vec(Product)], ['query']),
   'getProductsByType' : IDL.Func([IDL.Text], [IDL.Vec(Product)], ['query']),
   'getPublicAvailability' : IDL.Func([], [AvailabilitySettings], ['query']),
   'getPublicBuilds' : IDL.Func([], [IDL.Vec(Build)], ['query']),
   'getPublicBuildsCount' : IDL.Func([], [IDL.Nat], ['query']),
+  'getPublicSocialMediaConfig' : IDL.Func([], [SocialMediaConfig], ['query']),
   'getPublishedBlogPosts' : IDL.Func([], [IDL.Vec(BlogPost)], ['query']),
   'getPublishedPortfolio' : IDL.Func([], [IDL.Vec(PortfolioItem)], ['query']),
   'getPurchaseRequests' : IDL.Func(
-      [IDL.Text],
+      [],
       [IDL.Variant({ 'ok' : IDL.Vec(PurchaseRequest), 'err' : IDL.Text })],
       [],
     ),
   'getPushSubscription' : IDL.Func(
-      [IDL.Text],
+      [],
       [IDL.Variant({ 'ok' : IDL.Opt(PushSubscription), 'err' : IDL.Text })],
       [],
     ),
@@ -895,65 +1068,83 @@ export const idlService = IDL.Service({
       [IDL.Opt(Questionnaire)],
       ['query'],
     ),
-  'getReferralStats' : IDL.Func([IDL.Text], [IDL.Vec(ReferralStat)], []),
-  'getRejectedReviews' : IDL.Func([IDL.Text], [IDL.Vec(Review)], ['query']),
-  'getRescheduleHistory' : IDL.Func(
-      [IDL.Text, IDL.Text],
-      [IDL.Vec(IDL.Int)],
-      ['query'],
-    ),
+  'getReferralStats' : IDL.Func([], [IDL.Vec(ReferralStat)], []),
+  'getRejectedReviews' : IDL.Func([], [IDL.Vec(Review)], ['query']),
+  'getReminderLeadDays' : IDL.Func([], [IDL.Nat], []),
+  'getRescheduleHistory' : IDL.Func([IDL.Text], [IDL.Vec(IDL.Int)], ['query']),
   'getRescheduleLeadByToken' : IDL.Func(
       [IDL.Text],
       [IDL.Opt(IDL.Record({ 'isExpired' : IDL.Bool, 'lead' : Lead }))],
       ['query'],
     ),
+  'getSiteBaseUrl' : IDL.Func([], [IDL.Text], ['query']),
   'getSiteLinkLog' : IDL.Func(
-      [IDL.Text, IDL.Text],
+      [IDL.Text],
       [IDL.Variant({ 'ok' : IDL.Vec(SiteLinkEntry), 'err' : IDL.Text })],
       ['query'],
     ),
   'getSiteText' : IDL.Func([IDL.Text], [IDL.Opt(IDL.Text)], ['query']),
+  'getSocialMediaConfig' : IDL.Func(
+      [],
+      [IDL.Variant({ 'ok' : SocialMediaConfig, 'err' : IDL.Text })],
+      [],
+    ),
   'getStripeCharges' : IDL.Func(
-      [IDL.Text],
+      [],
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
       [],
     ),
+  'getStripeConfiguration' : IDL.Func(
+      [],
+      [IDL.Opt(StripeConfiguration)],
+      ['query'],
+    ),
   'getStripeCustomers' : IDL.Func(
-      [IDL.Text],
+      [],
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
       [],
     ),
   'getStripeDashboardData' : IDL.Func(
-      [IDL.Text],
+      [],
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
       [],
     ),
   'getStripePayouts' : IDL.Func(
-      [IDL.Text],
+      [],
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
       [],
     ),
   'getStripePublishableKey' : IDL.Func([], [IDL.Text], ['query']),
   'getStripeSessionStatus' : IDL.Func([IDL.Text], [StripeSessionStatus], []),
   'getStripeSubscriptions' : IDL.Func(
-      [IDL.Text],
+      [],
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
       [],
     ),
   'getStripeTestMode' : IDL.Func([], [IDL.Bool], ['query']),
+  'getSubAdmins' : IDL.Func(
+      [],
+      [
+        IDL.Variant({
+          'ok' : IDL.Vec(IDL.Tuple(IDL.Text, SubAdmin)),
+          'err' : IDL.Text,
+        }),
+      ],
+      [],
+    ),
   'getTopPages' : IDL.Func(
-      [IDL.Text],
+      [],
       [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat, IDL.Float64))],
       ['query'],
     ),
   'getUnreadMessageCounts' : IDL.Func(
-      [IDL.Text],
+      [],
       [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat))],
       ['query'],
     ),
   'getVapidPublicKey' : IDL.Func([], [IDL.Text], ['query']),
   'getVisitorStats' : IDL.Func(
-      [IDL.Text],
+      [],
       [
         IDL.Record({
           'todayUnique' : IDL.Nat,
@@ -968,8 +1159,9 @@ export const idlService = IDL.Service({
       ],
       ['query'],
     ),
+  'getWebhookAuditLog' : IDL.Func([], [IDL.Vec(WebhookAuditEntry)], []),
   'handleStripeWebhook' : IDL.Func(
-      [IDL.Text, IDL.Text],
+      [IDL.Text, IDL.Text, IDL.Text],
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
       [],
     ),
@@ -989,9 +1181,9 @@ export const idlService = IDL.Service({
       [LoginResult],
       [],
     ),
-  'markAllNotificationsRead' : IDL.Func([IDL.Text], [], []),
+  'markAllNotificationsRead' : IDL.Func([], [], []),
   'markCompletionPaymentCharged' : IDL.Func(
-      [IDL.Text, IDL.Text],
+      [IDL.Text],
       [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
       [],
     ),
@@ -1001,13 +1193,18 @@ export const idlService = IDL.Service({
       [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
       [],
     ),
-  'markNotificationRead' : IDL.Func([IDL.Text, IDL.Text], [], []),
-  'markQuestionnaireReviewed' : IDL.Func([IDL.Text, QuestionnaireId], [], []),
-  'publishBlogPost' : IDL.Func([IDL.Text, BlogPostId], [], []),
-  'publishPortfolioItem' : IDL.Func([IDL.Text, IDL.Text], [UpsertResult], []),
+  'markNotificationRead' : IDL.Func([IDL.Text], [], []),
+  'markQuestionnaireReviewed' : IDL.Func([QuestionnaireId], [], []),
+  'publishBlogPost' : IDL.Func([BlogPostId], [], []),
+  'publishPortfolioItem' : IDL.Func([IDL.Text], [UpsertResult], []),
   'recordVisit' : IDL.Func(
       [IDL.Text, IDL.Int, IDL.Text, IDL.Opt(IDL.Text)],
       [IDL.Bool],
+      [],
+    ),
+  'registerAdminPrincipal' : IDL.Func(
+      [],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
       [],
     ),
   'registerUser' : IDL.Func(
@@ -1023,32 +1220,62 @@ export const idlService = IDL.Service({
       [],
     ),
   'rejectReview' : IDL.Func(
-      [IDL.Text, ReviewId],
+      [ReviewId],
       [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
       [],
     ),
-  'removeFleetCanister' : IDL.Func([IDL.Text, IDL.Text], [], []),
-  'removeFleetSite' : IDL.Func([IDL.Text, IDL.Text], [], []),
-  'removeFleetSoftware' : IDL.Func([IDL.Text, IDL.Text], [], []),
+  'removeAdminPrincipal' : IDL.Func(
+      [IDL.Principal],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
+  'removeFleetCanister' : IDL.Func([IDL.Text], [], []),
+  'removeFleetSite' : IDL.Func([IDL.Text], [], []),
+  'removeFleetSoftware' : IDL.Func([IDL.Text], [], []),
+  'removeProductImage' : IDL.Func(
+      [IDL.Nat],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
   'removePushSubscription' : IDL.Func(
-      [IDL.Text],
+      [],
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
       [],
     ),
+  'removeSubAdmin' : IDL.Func(
+      [IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
   'reorderMarqueeLogos' : IDL.Func(
-      [IDL.Vec(IDL.Text), IDL.Text],
+      [IDL.Vec(IDL.Text)],
       [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
       [],
     ),
+  'requestAccountDeletion' : IDL.Func(
+      [],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
   'requestPasswordReset' : IDL.Func([IDL.Text], [IDL.Text], []),
+  'rescheduleEmailCampaign' : IDL.Func(
+      [IDL.Nat, IDL.Int],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
   'rescheduleLead' : IDL.Func(
       [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
       [IDL.Record({ 'ok' : IDL.Bool, 'message' : IDL.Text })],
       [],
     ),
-  'resendEmail' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [IDL.Bool], []),
+  'reseedCatalog' : IDL.Func(
+      [],
+      [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
+      [],
+    ),
+  'resendEmail' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
   'resendSiteLink' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Text, IDL.Text],
       [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
       [],
     ),
@@ -1057,17 +1284,12 @@ export const idlService = IDL.Service({
       [IDL.Text],
       [],
     ),
-  'saveEmailTemplate' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
-      [],
-      [],
-    ),
+  'saveEmailTemplate' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
   'savePushSubscription' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Text, IDL.Text, IDL.Text],
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
       [],
     ),
-  'sendAccountDeletionRequest' : IDL.Func([], [], []),
   'sendDepositInvoice' : IDL.Func(
       [IDL.Principal, IDL.Text, IDL.Nat, IDL.Text, Timestamp],
       [IDL.Text],
@@ -1078,36 +1300,91 @@ export const idlService = IDL.Service({
       [IDL.Variant({ 'ok' : ClientMessage, 'err' : IDL.Text })],
       [],
     ),
+  'sendNowEmailCampaign' : IDL.Func(
+      [IDL.Nat],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
   'sendOrderStatusEmail' : IDL.Func([IDL.Principal, Status, IDL.Text], [], []),
   'sendRescheduleLink' : IDL.Func(
-      [IDL.Text, IDL.Text],
+      [IDL.Text],
       [IDL.Record({ 'message' : IDL.Text, 'success' : IDL.Bool })],
       [],
     ),
   'sendSiteLink' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Text, IDL.Text],
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
       [],
     ),
-  'setAvailability' : IDL.Func([IDL.Text, AvailabilitySettings], [], []),
+  'sendUpcomingBillingReminders' : IDL.Func(
+      [],
+      [IDL.Variant({ 'ok' : IDL.Nat, 'err' : IDL.Text })],
+      [],
+    ),
+  'setAdminEmail' : IDL.Func(
+      [IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
+  'setAvailability' : IDL.Func([AvailabilitySettings], [], []),
+  'setClientWebhookSecret' : IDL.Func(
+      [IDL.Text, IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
+  'setGlobalTaxRate' : IDL.Func(
+      [IDL.Float64],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
   'setGoogleCalendarConfig' : IDL.Func(
-      [GoogleCalendarConfig, IDL.Text],
+      [GoogleCalendarConfig],
       [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
       [],
     ),
   'setGoogleSheetsConfig' : IDL.Func(
-      [GoogleSheetsConfig, IDL.Text],
+      [GoogleSheetsConfig],
       [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
       [],
     ),
-  'setStripeConfiguration' : IDL.Func([StripeConfiguration, IDL.Text], [], []),
-  'setStripePublishableKey' : IDL.Func([IDL.Text, IDL.Text], [], []),
-  'setStripeSecretKey' : IDL.Func([IDL.Text, IDL.Text], [], []),
-  'setStripeTestMode' : IDL.Func([IDL.Bool, IDL.Text], [], []),
-  'setStripeWebhookSecret' : IDL.Func([IDL.Text, IDL.Text], [], []),
+  'setLogoUrl' : IDL.Func(
+      [IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
+  'setReminderLeadDays' : IDL.Func(
+      [IDL.Nat],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
+  'setSiteAuditFallbackPrice' : IDL.Func(
+      [IDL.Int],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
+  'setSiteBaseUrl' : IDL.Func(
+      [IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
+  'setSocialMediaConfig' : IDL.Func(
+      [SocialMediaConfig],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
+  'setStripeConfiguration' : IDL.Func([StripeConfiguration], [], []),
+  'setStripePublishableKey' : IDL.Func([IDL.Text], [], []),
+  'setStripeSecretKey' : IDL.Func([IDL.Text], [], []),
+  'setStripeTestMode' : IDL.Func([IDL.Bool], [], []),
+  'setStripeWebhookSecret' : IDL.Func([IDL.Text], [], []),
   'setVapidKeys' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Text, IDL.Text],
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
+      [],
+    ),
+  'setWebhookSharedSecret' : IDL.Func(
+      [IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
       [],
     ),
   'submitCancellationRequest' : IDL.Func([IDL.Text], [UpsertResult], []),
@@ -1118,11 +1395,11 @@ export const idlService = IDL.Service({
       [],
     ),
   'togglePortalShopProduct' : IDL.Func(
-      [IDL.Text, IDL.Nat],
+      [IDL.Nat],
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
       [],
     ),
-  'toggleProductStatus' : IDL.Func([IDL.Text, IDL.Text], [UpsertResult], []),
+  'toggleProductStatus' : IDL.Func([IDL.Text], [UpsertResult], []),
   'trackReferralClick' : IDL.Func([IDL.Text], [], []),
   'trackReferralConversion' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
   'transform' : IDL.Func(
@@ -1130,12 +1407,15 @@ export const idlService = IDL.Service({
       [TransformationOutput],
       ['query'],
     ),
-  'unblockDate' : IDL.Func([IDL.Text, IDL.Text], [], []),
-  'unpublishBlogPost' : IDL.Func([IDL.Text, BlogPostId], [], []),
-  'unpublishPortfolioItem' : IDL.Func([IDL.Text, IDL.Text], [UpsertResult], []),
+  'unblockDate' : IDL.Func(
+      [IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
+  'unpublishBlogPost' : IDL.Func([BlogPostId], [], []),
+  'unpublishPortfolioItem' : IDL.Func([IDL.Text], [UpsertResult], []),
   'updateBlogPost' : IDL.Func(
       [
-        IDL.Text,
         BlogPostId,
         IDL.Text,
         IDL.Text,
@@ -1153,49 +1433,43 @@ export const idlService = IDL.Service({
       [],
     ),
   'updateCategoryVisibility' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Bool],
+      [IDL.Text, IDL.Bool],
       [UpsertResult],
       [],
     ),
   'updateClientBriefStatus' : IDL.Func([IDL.Text], [UpsertResult], []),
-  'updateClientHasAccount' : IDL.Func(
-      [IDL.Text, IDL.Bool, IDL.Text],
-      [UpsertResult],
-      [],
-    ),
+  'updateClientHasAccount' : IDL.Func([IDL.Text, IDL.Bool], [UpsertResult], []),
   'updateClientMilestone' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Nat],
+      [IDL.Text, IDL.Nat],
       [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
       [],
     ),
-  'updateClientNotes' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Text],
-      [UpsertResult],
+  'updateClientNotes' : IDL.Func([IDL.Text, IDL.Text], [UpsertResult], []),
+  'updateClientPlatformFee' : IDL.Func(
+      [IDL.Text, IDL.Float64],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
       [],
     ),
-  'updateClientStatus' : IDL.Func(
+  'updateClientStatus' : IDL.Func([IDL.Text, IDL.Text], [UpsertResult], []),
+  'updateClientStripeAccountId' : IDL.Func(
       [IDL.Text, IDL.Text, IDL.Text],
-      [UpsertResult],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
       [],
     ),
-  'updateLeadStatus' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Text],
-      [UpsertResult],
+  'updateEmailCampaign' : IDL.Func(
+      [IDL.Nat, IDL.Text, IDL.Text, IDL.Vec(IDL.Text), IDL.Opt(IDL.Int)],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
       [],
     ),
+  'updateLeadStatus' : IDL.Func([IDL.Text, IDL.Text], [UpsertResult], []),
   'updateMarqueeLogo' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Text, IDL.Text, IDL.Text],
       [IDL.Variant({ 'ok' : MarqueeLogo, 'err' : IDL.Text })],
       [],
     ),
-  'updateOrderStatus' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Text],
-      [UpsertResult],
-      [],
-    ),
+  'updateOrderStatus' : IDL.Func([IDL.Text, IDL.Text], [UpsertResult], []),
   'updatePortfolioItem' : IDL.Func(
       [
-        IDL.Text,
         IDL.Text,
         IDL.Text,
         IDL.Text,
@@ -1210,15 +1484,62 @@ export const idlService = IDL.Service({
       [UpsertResult],
       [],
     ),
-  'updateProductPrice' : IDL.Func(
+  'updateProductDescription' : IDL.Func(
+      [IDL.Text, IDL.Text],
+      [UpsertResult],
+      [],
+    ),
+  'updateProductDetailContent' : IDL.Func(
       [
         IDL.Text,
+        IDL.Opt(IDL.Text),
+        IDL.Opt(IDL.Text),
+        IDL.Opt(IDL.Text),
+        IDL.Opt(IDL.Text),
+        IDL.Opt(IDL.Text),
+        IDL.Opt(IDL.Text),
+        IDL.Opt(IDL.Text),
+        IDL.Opt(IDL.Text),
+        IDL.Opt(IDL.Text),
+      ],
+      [UpsertResult],
+      [],
+    ),
+  'updateProductImage' : IDL.Func([IDL.Text, IDL.Text], [UpsertResult], []),
+  'updateProductPaymentType' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
+  'updateProductPlanSection' : IDL.Func(
+      [ProductId, IDL.Opt(IDL.Text)],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
+  'updateProductPrice' : IDL.Func(
+      [
         IDL.Text,
         IDL.Opt(IDL.Float64),
         IDL.Opt(IDL.Float64),
         IDL.Opt(IDL.Float64),
       ],
       [UpsertResult],
+      [],
+    ),
+  'updateProductRichFields' : IDL.Func(
+      [
+        IDL.Text,
+        IDL.Opt(IDL.Text),
+        IDL.Vec(IDL.Text),
+        IDL.Opt(IDL.Text),
+        IDL.Opt(IDL.Text),
+        IDL.Opt(IDL.Text),
+        IDL.Text,
+        IDL.Text,
+        IDL.Bool,
+      ],
+      [UpsertResult],
+      [],
+    ),
+  'updateProductSpeedyFilter' : IDL.Func(
+      [ProductId, IDL.Opt(IDL.Text)],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
       [],
     ),
   'updateProfile' : IDL.Func(
@@ -1236,17 +1557,26 @@ export const idlService = IDL.Service({
       [],
     ),
   'updateQuestionDefinitions' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Vec(QuestionDefinition)],
+      [IDL.Text, IDL.Vec(QuestionDefinition)],
       [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
       [],
     ),
-  'updateSiteText' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [IDL.Bool], []),
+  'updateSiteText' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
+  'updateSubAdminTabs' : IDL.Func(
+      [IDL.Text, IDL.Vec(IDL.Text)],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
   'uploadFileToClient' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Vec(IDL.Nat8), IDL.Text, IDL.Text],
+      [IDL.Text, IDL.Vec(IDL.Nat8), IDL.Text, IDL.Text],
       [IDL.Variant({ 'ok' : ClientFileMetadata, 'err' : IDL.Text })],
       [],
     ),
-  'verifyAdminOTP' : IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
+  'verifyAdminOTP' : IDL.Func(
+      [IDL.Text, IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
+      [],
+    ),
   'verifyAndRecordPurchase' : IDL.Func(
       [IDL.Text, IDL.Text, IDL.Text, IDL.Vec(IDL.Text)],
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
@@ -1303,6 +1633,7 @@ export const idlFactory = ({ IDL }) => {
     'priceInCents' : IDL.Nat,
     'productDescription' : IDL.Text,
   });
+  const ProductId = IDL.Nat;
   const BlogPostId = IDL.Nat;
   const QuestionnaireId = IDL.Nat;
   const AdHocInvoice = IDL.Record({
@@ -1362,6 +1693,7 @@ export const idlFactory = ({ IDL }) => {
     'created_at' : Timestamp,
     'launch_target' : IDL.Text,
     'client_id' : ClientId,
+    'amount' : IDL.Float64,
     'tier_code' : IDL.Text,
   });
   const Questionnaire = IDL.Record({
@@ -1377,6 +1709,19 @@ export const idlFactory = ({ IDL }) => {
     'client_id' : ClientId,
     'submitted_at' : IDL.Opt(Timestamp),
     'tier_code' : IDL.Text,
+  });
+  const BillingId = IDL.Nat;
+  const SubscriptionId = IDL.Nat;
+  const BillingHistory = IDL.Record({
+    'id' : BillingId,
+    'status' : IDL.Text,
+    'payment_date' : Timestamp,
+    'subscription_id' : SubscriptionId,
+    'description' : IDL.Text,
+    'created_at' : Timestamp,
+    'stripe_payment_intent_id' : IDL.Text,
+    'client_id' : ClientId,
+    'amount' : IDL.Float64,
   });
   const AdminNotification = IDL.Record({
     'id' : IDL.Text,
@@ -1409,6 +1754,17 @@ export const idlFactory = ({ IDL }) => {
     'featured_image_url' : IDL.Opt(IDL.Text),
     'featuredImageCaption' : IDL.Text,
   });
+  const EmailCampaignId = IDL.Nat;
+  const EmailCampaign = IDL.Record({
+    'id' : EmailCampaignId,
+    'status' : IDL.Text,
+    'subject' : IDL.Text,
+    'scheduledDate' : IDL.Opt(IDL.Int),
+    'body' : IDL.Text,
+    'createdAt' : IDL.Int,
+    'sentAt' : IDL.Opt(IDL.Int),
+    'recipients' : IDL.Vec(IDL.Text),
+  });
   const PortfolioItem = IDL.Record({
     'id' : IDL.Text,
     'seoMetaKeywords' : IDL.Opt(IDL.Text),
@@ -1423,15 +1779,36 @@ export const idlFactory = ({ IDL }) => {
     'seoMetaDescription' : IDL.Opt(IDL.Text),
     'tier_code' : IDL.Text,
   });
-  const ProductId = IDL.Nat;
   const Product = IDL.Record({
     'id' : ProductId,
+    'proofPoints' : IDL.Opt(IDL.Text),
+    'show_questionnaire' : IDL.Bool,
+    'seoMetaTitle' : IDL.Opt(IDL.Text),
+    'faqItems' : IDL.Opt(IDL.Text),
     'active' : IDL.Bool,
+    'payment_type' : IDL.Text,
     'price_monthly' : IDL.Opt(IDL.Float64),
+    'speedy_filter' : IDL.Opt(IDL.Text),
+    'tagline' : IDL.Opt(IDL.Text),
+    'plan_section' : IDL.Opt(IDL.Text),
     'name' : IDL.Text,
+    'tags' : IDL.Vec(IDL.Text),
     'description' : IDL.Text,
     'created_at' : Timestamp,
+    'closingCTA' : IDL.Opt(IDL.Text),
+    'bodySections' : IDL.Opt(IDL.Text),
+    'upgradePath' : IDL.Opt(IDL.Text),
+    'imageUrl' : IDL.Opt(IDL.Text),
     'product_type' : IDL.Text,
+    'recommendedPlan' : IDL.Opt(IDL.Text),
+    'heroSubheadline' : IDL.Opt(IDL.Text),
+    'detailDescription' : IDL.Opt(IDL.Text),
+    'seoMetaDescription' : IDL.Opt(IDL.Text),
+    'featureBullets' : IDL.Vec(IDL.Text),
+    'heroHeadline' : IDL.Opt(IDL.Text),
+    'bestFor' : IDL.Opt(IDL.Text),
+    'video_url_1' : IDL.Text,
+    'video_url_2' : IDL.Text,
     'price_onetime' : IDL.Opt(IDL.Float64),
     'tier_code' : IDL.Opt(IDL.Text),
     'price_annual' : IDL.Opt(IDL.Float64),
@@ -1465,10 +1842,17 @@ export const idlFactory = ({ IDL }) => {
     'blockedDates' : IDL.Vec(IDL.Text),
     'weeklySchedule' : WeeklySchedule,
   });
+  const BusinessMetrics = IDL.Record({
+    'activeBookings' : IDL.Nat,
+    'saasPlanStatus' : IDL.Text,
+    'monthlyRevenueCents' : IDL.Nat,
+  });
   const SiteLinkEntry = IDL.Record({ 'url' : IDL.Text, 'sentAt' : IDL.Int });
   const CrmClient = IDL.Record({
     'id' : IDL.Text,
+    'webhookSecret' : IDL.Opt(IDL.Text),
     'hasAccount' : IDL.Bool,
+    'deletionRequested' : IDL.Bool,
     'source' : IDL.Text,
     'name' : IDL.Text,
     'milestoneUpdatedAt' : IDL.Opt(IDL.Int),
@@ -1476,10 +1860,16 @@ export const idlFactory = ({ IDL }) => {
     'created_at' : IDL.Int,
     'briefSubmittedAt' : IDL.Opt(IDL.Int),
     'email' : IDL.Text,
+    'connectedAt' : IDL.Opt(IDL.Int),
+    'stripeConnectAccountId' : IDL.Opt(IDL.Text),
     'notes' : IDL.Text,
     'currentMilestone' : IDL.Nat,
+    'platformFeePercentage' : IDL.Float64,
     'projectStatus' : IDL.Text,
+    'deletionRequestedAt' : IDL.Int,
     'phone' : IDL.Text,
+    'stripeConnectStatus' : IDL.Text,
+    'lastActivityAt' : IDL.Opt(IDL.Int),
     'briefStatus' : IDL.Opt(IDL.Text),
     'siteLinkLog' : IDL.Vec(SiteLinkEntry),
     'completionPaymentCharged' : IDL.Bool,
@@ -1515,6 +1905,9 @@ export const idlFactory = ({ IDL }) => {
   });
   const DashboardMetrics = IDL.Record({
     'totalProducts' : IDL.Nat,
+    'ordersByStatus' : IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat)),
+    'totalOrders' : IDL.Nat,
+    'totalOrderValue' : IDL.Nat,
     'outstandingInvoices' : IDL.Nat,
     'recentActivity' : IDL.Vec(IDL.Text),
     'totalClients' : IDL.Nat,
@@ -1587,19 +1980,6 @@ export const idlFactory = ({ IDL }) => {
     'senderName' : IDL.Text,
     'senderEmail' : IDL.Text,
   });
-  const BillingId = IDL.Nat;
-  const SubscriptionId = IDL.Nat;
-  const BillingHistory = IDL.Record({
-    'id' : BillingId,
-    'status' : IDL.Text,
-    'payment_date' : Timestamp,
-    'subscription_id' : SubscriptionId,
-    'description' : IDL.Text,
-    'created_at' : Timestamp,
-    'stripe_payment_intent_id' : IDL.Text,
-    'client_id' : ClientId,
-    'amount' : IDL.Float64,
-  });
   const EditRequestId = IDL.Nat;
   const EditRequest = IDL.Record({
     'id' : EditRequestId,
@@ -1617,14 +1997,19 @@ export const idlFactory = ({ IDL }) => {
   const Subscription = IDL.Record({
     'id' : SubscriptionId,
     'status' : IDL.Text,
+    'nextBillingDate' : IDL.Int,
     'updated_at' : Timestamp,
     'plan_code' : IDL.Text,
     'plan_name' : IDL.Text,
     'billing_cycle' : IDL.Text,
+    'clientEmail' : IDL.Text,
     'created_at' : Timestamp,
+    'stripeCustomerId' : IDL.Opt(IDL.Text),
     'stripe_subscription_id' : IDL.Text,
     'client_id' : ClientId,
+    'reminderSentAt' : IDL.Opt(IDL.Int),
     'next_payment_date' : Timestamp,
+    'paymentFailed' : IDL.Bool,
   });
   const NotificationLogEntry = IDL.Record({
     'id' : IDL.Text,
@@ -1640,6 +2025,13 @@ export const idlFactory = ({ IDL }) => {
     'title' : IDL.Text,
     'body' : IDL.Text,
     'createdAt' : IDL.Int,
+  });
+  const SocialMediaConfig = IDL.Record({
+    'instagramUrl' : IDL.Text,
+    'youtubeUrl' : IDL.Text,
+    'facebookUrl' : IDL.Text,
+    'linkedinUrl' : IDL.Text,
+    'tiktokUrl' : IDL.Text,
   });
   const PushSubscription = IDL.Record({
     'endpoint' : IDL.Text,
@@ -1664,12 +2056,27 @@ export const idlFactory = ({ IDL }) => {
     'referrerEmail' : IDL.Text,
     'totalClicks' : IDL.Nat,
   });
+  const StripeConfiguration = IDL.Record({
+    'allowedCountries' : IDL.Vec(IDL.Text),
+    'secretKey' : IDL.Text,
+  });
   const StripeSessionStatus = IDL.Variant({
     'completed' : IDL.Record({
       'userPrincipal' : IDL.Opt(IDL.Text),
       'response' : IDL.Text,
     }),
     'failed' : IDL.Record({ 'error' : IDL.Text }),
+  });
+  const SubAdmin = IDL.Record({
+    'allowedTabs' : IDL.Vec(IDL.Text),
+    'createdAt' : IDL.Int,
+    'email' : IDL.Text,
+  });
+  const WebhookAuditEntry = IDL.Record({
+    'received_at' : IDL.Int,
+    'event_id' : IDL.Text,
+    'processing_result' : IDL.Text,
+    'event_type' : IDL.Text,
   });
   const LoginResult = IDL.Variant({
     'ok' : IDL.Record({
@@ -1678,10 +2085,6 @@ export const idlFactory = ({ IDL }) => {
       'firstName' : IDL.Text,
     }),
     'err' : IDL.Text,
-  });
-  const StripeConfiguration = IDL.Record({
-    'allowedCountries' : IDL.Vec(IDL.Text),
-    'secretKey' : IDL.Text,
   });
   const http_header = IDL.Record({ 'value' : IDL.Text, 'name' : IDL.Text });
   const http_request_result = IDL.Record({
@@ -1727,9 +2130,13 @@ export const idlFactory = ({ IDL }) => {
       ),
     '_immutableObjectStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
     '_initializeAccessControl' : IDL.Func([], [], []),
+    'activateSubscription' : IDL.Func(
+        [IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
+        [],
+      ),
     'addBuild' : IDL.Func(
         [
-          IDL.Text,
           IDL.Text,
           IDL.Text,
           IDL.Opt(IDL.Text),
@@ -1751,36 +2158,51 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Text],
         [],
       ),
-    'addFleetCanister' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
-    'addFleetSite' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
-    'addFleetSoftware' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
+    'addFleetCanister' : IDL.Func([IDL.Text, IDL.Text], [], []),
+    'addFleetSite' : IDL.Func([IDL.Text, IDL.Text], [], []),
+    'addFleetSoftware' : IDL.Func([IDL.Text, IDL.Text], [], []),
     'addMarqueeLogo' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Text, IDL.Text],
         [IDL.Variant({ 'ok' : MarqueeLogo, 'err' : IDL.Text })],
         [],
       ),
+    'addSubAdmin' : IDL.Func(
+        [IDL.Text, IDL.Vec(IDL.Text)],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
     'adminUpdateClientProfile' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
         [],
       ),
     'approvePurchaseRequest' : IDL.Func(
-        [IDL.Text, IDL.Nat, IDL.Text, IDL.Text],
+        [IDL.Nat, IDL.Text, IDL.Text],
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
         [],
       ),
     'approveReview' : IDL.Func(
-        [IDL.Text, ReviewId],
+        [ReviewId],
         [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
         [],
       ),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
     'assignMeetingToLead' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
         [IDL.Record({ 'ok' : IDL.Bool, 'meetLink' : IDL.Text })],
         [],
       ),
-    'blockDate' : IDL.Func([IDL.Text, IDL.Text], [], []),
+    'blockDate' : IDL.Func([IDL.Text], [], []),
+    'cancelEmailCampaign' : IDL.Func(
+        [IDL.Nat],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
+    'cancelSubscription' : IDL.Func(
+        [IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
+        [],
+      ),
     'changePassword' : IDL.Func(
         [
           IDL.Record({
@@ -1804,28 +2226,27 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'clearGoogleCalendarConfig' : IDL.Func(
-        [IDL.Text],
+        [],
         [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
         [],
       ),
     'clearGoogleSheetsConfig' : IDL.Func(
-        [IDL.Text],
+        [],
         [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
         [],
       ),
     'clearNotificationLog' : IDL.Func(
-        [IDL.Text],
+        [],
         [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
         [],
       ),
     'clearPendingPushNotifications' : IDL.Func(
-        [IDL.Text],
+        [],
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
         [],
       ),
     'convertLeadToClient' : IDL.Func(
         [
-          IDL.Text,
           IDL.Text,
           IDL.Text,
           IDL.Text,
@@ -1838,13 +2259,12 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'createAdHocInvoiceSession' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Text, IDL.Nat, IDL.Text, IDL.Text],
+        [IDL.Text, IDL.Text, IDL.Nat, IDL.Text, IDL.Text],
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
         [],
       ),
     'createBlogPost' : IDL.Func(
         [
-          IDL.Text,
           IDL.Text,
           IDL.Text,
           IDL.Text,
@@ -1861,23 +2281,28 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'createCheckoutSession' : IDL.Func(
-        [IDL.Vec(ShoppingItem), IDL.Text, IDL.Text],
-        [IDL.Text],
+        [IDL.Vec(ShoppingItem), IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
         [],
       ),
     'createCompletionPaymentSession' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Text, IDL.Text, IDL.Text],
         [IDL.Text],
         [],
       ),
     'createDraftLead' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
         [IDL.Record({ 'ok' : IDL.Bool, 'leadId' : IDL.Text })],
         [],
       ),
     'createEditRequest' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
         [UpsertResult],
+        [],
+      ),
+    'createEmailCampaign' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Vec(IDL.Text), IDL.Opt(IDL.Int)],
+        [IDL.Variant({ 'ok' : IDL.Nat, 'err' : IDL.Text })],
         [],
       ),
     'createLead' : IDL.Func(
@@ -1893,12 +2318,34 @@ export const idlFactory = ({ IDL }) => {
           IDL.Text,
           IDL.Text,
           IDL.Text,
-          IDL.Text,
           IDL.Bool,
           IDL.Opt(IDL.Text),
           IDL.Opt(IDL.Text),
         ],
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
+        [],
+      ),
+    'createProduct' : IDL.Func(
+        [
+          IDL.Text,
+          IDL.Text,
+          IDL.Text,
+          IDL.Opt(IDL.Float64),
+          IDL.Opt(IDL.Float64),
+          IDL.Opt(IDL.Float64),
+          IDL.Opt(IDL.Text),
+          IDL.Vec(IDL.Text),
+          IDL.Opt(IDL.Text),
+          IDL.Opt(IDL.Text),
+          IDL.Opt(IDL.Text),
+          IDL.Text,
+          IDL.Text,
+          IDL.Text,
+          IDL.Bool,
+          IDL.Opt(IDL.Text),
+          IDL.Opt(IDL.Text),
+        ],
+        [IDL.Variant({ 'ok' : ProductId, 'err' : IDL.Text })],
         [],
       ),
     'createPurchaseRequest' : IDL.Func(
@@ -1911,38 +2358,57 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
         [],
       ),
-    'declinePurchaseRequest' : IDL.Func(
-        [IDL.Text, IDL.Nat, IDL.Opt(IDL.Text)],
+    'createStripePortalSession' : IDL.Func(
+        [IDL.Text],
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
         [],
       ),
-    'deleteBlogPost' : IDL.Func([IDL.Text, BlogPostId], [], []),
+    'declinePurchaseRequest' : IDL.Func(
+        [IDL.Nat, IDL.Opt(IDL.Text)],
+        [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
+        [],
+      ),
+    'deleteBlogPost' : IDL.Func([BlogPostId], [], []),
     'deleteBuild' : IDL.Func(
-        [IDL.Text, IDL.Text],
+        [IDL.Text],
         [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
         [],
       ),
     'deleteClient' : IDL.Func(
-        [IDL.Text, IDL.Text],
+        [IDL.Text],
         [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
         [],
       ),
     'deleteClientFile' : IDL.Func(
-        [IDL.Text, IDL.Text],
+        [IDL.Text],
         [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
         [],
       ),
-    'deleteLead' : IDL.Func([IDL.Text, IDL.Text], [], []),
+    'deleteLead' : IDL.Func([IDL.Text], [], []),
     'deleteMarqueeLogo' : IDL.Func(
-        [IDL.Text, IDL.Text],
+        [IDL.Text],
         [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
         [],
       ),
-    'deletePortfolioItem' : IDL.Func([IDL.Text, IDL.Text], [UpsertResult], []),
-    'deleteQuestionnaire' : IDL.Func([IDL.Text, QuestionnaireId], [], []),
+    'deletePortfolioItem' : IDL.Func([IDL.Text], [UpsertResult], []),
+    'deleteProduct' : IDL.Func(
+        [IDL.Nat],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
+    'deleteQuestionnaire' : IDL.Func([QuestionnaireId], [], []),
+    'deleteReferral' : IDL.Func(
+        [IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
+    'deleteReview' : IDL.Func(
+        [ReviewId],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
     'editBuild' : IDL.Func(
         [
-          IDL.Text,
           IDL.Text,
           IDL.Text,
           IDL.Text,
@@ -1953,32 +2419,39 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Variant({ 'ok' : Build, 'err' : IDL.Text })],
         [],
       ),
-    'generateAdminOTP' : IDL.Func([IDL.Text], [IDL.Text], []),
-    'generatePartnerLink' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Text],
+    'generateAdminOTP' : IDL.Func(
         [IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
         [],
       ),
+    'generatePartnerLink' : IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
     'getAdHocClientInvoices' : IDL.Func(
-        [IDL.Text, IDL.Text],
+        [IDL.Text],
         [IDL.Vec(AdHocInvoice)],
         [],
       ),
     'getAdminAllActivity' : IDL.Func([], [IDL.Vec(ActivityLog)], ['query']),
-    'getAdminAllClients' : IDL.Func([IDL.Text], [IDL.Vec(UserProfile)], []),
-    'getAdminAllOrders' : IDL.Func([IDL.Text], [IDL.Vec(Order)], ['query']),
+    'getAdminAllClients' : IDL.Func([], [IDL.Vec(UserProfile)], []),
+    'getAdminAllOrders' : IDL.Func([], [IDL.Vec(Order)], ['query']),
     'getAdminAllQuestionnaires' : IDL.Func(
-        [IDL.Text],
+        [],
         [IDL.Vec(Questionnaire)],
         ['query'],
       ),
-    'getAdminNotifications' : IDL.Func(
-        [IDL.Text],
-        [IDL.Vec(AdminNotification)],
+    'getAdminBillingHistory' : IDL.Func(
+        [],
+        [IDL.Variant({ 'ok' : IDL.Vec(BillingHistory), 'err' : IDL.Text })],
         [],
       ),
+    'getAdminContactEmail' : IDL.Func([], [IDL.Text], ['query']),
+    'getAdminNotifications' : IDL.Func([], [IDL.Vec(AdminNotification)], []),
     'getAdminStats' : IDL.Func([], [AdminStats], ['query']),
     'getAllBlogPostsAdmin' : IDL.Func([], [IDL.Vec(BlogPost)], []),
+    'getAllEmailCampaigns' : IDL.Func(
+        [],
+        [IDL.Variant({ 'ok' : IDL.Vec(EmailCampaign), 'err' : IDL.Text })],
+        [],
+      ),
     'getAllPortfolioAdmin' : IDL.Func([], [IDL.Vec(PortfolioItem)], []),
     'getAllProductsAdmin' : IDL.Func([], [IDL.Vec(Product)], []),
     'getAllSiteText' : IDL.Func(
@@ -1989,7 +2462,8 @@ export const idlFactory = ({ IDL }) => {
     'getApprovedReviews' : IDL.Func([], [IDL.Vec(Review)], ['query']),
     'getAvailability' : IDL.Func([], [AvailabilitySettings], ['query']),
     'getBlogPostBySlug' : IDL.Func([IDL.Text], [IDL.Opt(BlogPost)], ['query']),
-    'getBuilds' : IDL.Func([IDL.Text], [IDL.Vec(Build)], []),
+    'getBuilds' : IDL.Func([], [IDL.Vec(Build)], []),
+    'getBusinessMetrics' : IDL.Func([], [BusinessMetrics], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getCanisterCycles' : IDL.Func(
         [IDL.Text],
@@ -2002,11 +2476,21 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'getClientBriefStatus' : IDL.Func([IDL.Text], [IDL.Opt(IDL.Text)], []),
+    'getClientBusinessMetrics' : IDL.Func(
+        [IDL.Text],
+        [IDL.Variant({ 'ok' : BusinessMetrics, 'err' : IDL.Text })],
+        [],
+      ),
     'getClientByEmail' : IDL.Func([IDL.Text], [IDL.Opt(CrmClient)], []),
+    'getClientByPrincipal' : IDL.Func(
+        [IDL.Principal],
+        [IDL.Opt(UserProfile)],
+        ['query'],
+      ),
     'getClientFileUrl' : IDL.Func(
         [IDL.Text, IDL.Text],
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
-        ['query'],
+        [],
       ),
     'getClientInvoices' : IDL.Func(
         [IDL.Principal],
@@ -2018,15 +2502,21 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Variant({ 'ok' : IDL.Opt(IDL.Nat), 'err' : IDL.Text })],
         [],
       ),
+    'getClientOrderVolumes' : IDL.Func(
+        [],
+        [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Float64))],
+        ['query'],
+      ),
     'getClientOrders' : IDL.Func([IDL.Principal], [IDL.Vec(Order)], ['query']),
     'getClientPurchaseRequests' : IDL.Func(
         [IDL.Text],
         [IDL.Vec(PurchaseRequest)],
         ['query'],
       ),
-    'getClients' : IDL.Func([IDL.Text], [IDL.Vec(CrmClient)], []),
+    'getClients' : IDL.Func([], [IDL.Vec(CrmClient)], []),
+    'getConnectedClients' : IDL.Func([], [IDL.Vec(CrmClient)], ['query']),
     'getConversionStats' : IDL.Func(
-        [IDL.Text, IDL.Opt(IDL.Int), IDL.Opt(IDL.Int)],
+        [IDL.Opt(IDL.Int), IDL.Opt(IDL.Int)],
         [
           IDL.Record({
             'convertedLeads' : IDL.Nat,
@@ -2037,46 +2527,64 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'getCountryBreakdown' : IDL.Func(
-        [IDL.Text],
+        [],
         [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat, IDL.Float64))],
         ['query'],
       ),
     'getCycles' : IDL.Func([], [IDL.Nat], ['query']),
     'getDailyVisitorChart' : IDL.Func(
-        [IDL.Text],
+        [],
         [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat))],
         ['query'],
       ),
     'getDashboardMetrics' : IDL.Func([], [DashboardMetrics], ['query']),
-    'getEmailLogs' : IDL.Func([IDL.Text], [IDL.Vec(EmailLog)], ['query']),
+    'getEmailHealth' : IDL.Func(
+        [],
+        [
+          IDL.Record({
+            'totalFailures' : IDL.Nat,
+            'lastFailureTimestamp' : IDL.Int,
+            'last24hFailures' : IDL.Nat,
+          }),
+        ],
+        [],
+      ),
+    'getEmailLogs' : IDL.Func([], [IDL.Vec(EmailLog)], ['query']),
     'getEmailTemplates' : IDL.Func([], [IDL.Vec(EmailTemplate)], ['query']),
     'getFilesForClient' : IDL.Func(
         [IDL.Text, IDL.Text],
         [IDL.Vec(ClientFileMetadata)],
-        ['query'],
+        [],
       ),
-    'getFleetSites' : IDL.Func([], [IDL.Vec(FleetCanister)], ['query']),
-    'getFleetSoftware' : IDL.Func([], [IDL.Vec(FleetCanister)], ['query']),
+    'getFleetSites' : IDL.Func([], [IDL.Vec(FleetCanister)], []),
+    'getFleetSoftware' : IDL.Func([], [IDL.Vec(FleetCanister)], []),
+    'getGlobalTaxRate' : IDL.Func([], [IDL.Float64], ['query']),
     'getGoogleCalendarConfig' : IDL.Func(
-        [IDL.Text],
+        [],
         [IDL.Variant({ 'ok' : GoogleCalendarConfig, 'err' : IDL.Text })],
         [],
       ),
     'getGoogleSheetsConfig' : IDL.Func(
-        [IDL.Text],
+        [],
         [IDL.Variant({ 'ok' : GoogleSheetsConfig, 'err' : IDL.Text })],
         [],
       ),
-    'getLeads' : IDL.Func([IDL.Text], [IDL.Vec(Lead)], ['query']),
-    'getLiveVisitorCount' : IDL.Func([IDL.Text], [IDL.Nat], ['query']),
+    'getLeads' : IDL.Func([], [IDL.Vec(Lead)], ['query']),
+    'getLiveVisitorCount' : IDL.Func([], [IDL.Nat], ['query']),
+    'getLogoUrl' : IDL.Func([], [IDL.Text], ['query']),
     'getMarqueeLogos' : IDL.Func([], [IDL.Vec(MarqueeLogo)], ['query']),
     'getMessages' : IDL.Func(
         [IDL.Text, IDL.Text],
         [IDL.Vec(ClientMessage)],
-        ['query'],
+        [],
       ),
     'getMyActivity' : IDL.Func([], [IDL.Vec(ActivityLog)], ['query']),
     'getMyAdHocInvoices' : IDL.Func([], [IDL.Vec(AdHocInvoice)], ['query']),
+    'getMyAdminPermissions' : IDL.Func(
+        [],
+        [IDL.Variant({ 'ok' : IDL.Vec(IDL.Text), 'err' : IDL.Text })],
+        [],
+      ),
     'getMyBillingHistory' : IDL.Func([], [IDL.Vec(BillingHistory)], ['query']),
     'getMyEditRequests' : IDL.Func([], [IDL.Vec(EditRequest)], ['query']),
     'getMyInvoices' : IDL.Func([], [IDL.Vec(Invoice)], ['query']),
@@ -2099,7 +2607,7 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'getNotificationLog' : IDL.Func(
-        [IDL.Text],
+        [],
         [
           IDL.Variant({
             'ok' : IDL.Vec(NotificationLogEntry),
@@ -2110,7 +2618,7 @@ export const idlFactory = ({ IDL }) => {
       ),
     'getOrCreateMyReferralCode' : IDL.Func([], [IDL.Text], []),
     'getPendingPushNotifications' : IDL.Func(
-        [IDL.Text],
+        [],
         [
           IDL.Variant({
             'ok' : IDL.Vec(PendingNotification),
@@ -2119,23 +2627,26 @@ export const idlFactory = ({ IDL }) => {
         ],
         [],
       ),
-    'getPendingReviews' : IDL.Func([IDL.Text], [IDL.Vec(Review)], ['query']),
+    'getPendingReviews' : IDL.Func([], [IDL.Vec(Review)], ['query']),
+    'getPendingSubscriptions' : IDL.Func([], [IDL.Vec(Subscription)], []),
     'getPortalShopProductIds' : IDL.Func([], [IDL.Vec(IDL.Nat)], ['query']),
     'getPortalShopProducts' : IDL.Func([], [IDL.Vec(Product)], ['query']),
+    'getProductImageUrl' : IDL.Func([IDL.Nat], [IDL.Opt(IDL.Text)], ['query']),
     'getProducts' : IDL.Func([], [IDL.Vec(Product)], ['query']),
     'getProductsByType' : IDL.Func([IDL.Text], [IDL.Vec(Product)], ['query']),
     'getPublicAvailability' : IDL.Func([], [AvailabilitySettings], ['query']),
     'getPublicBuilds' : IDL.Func([], [IDL.Vec(Build)], ['query']),
     'getPublicBuildsCount' : IDL.Func([], [IDL.Nat], ['query']),
+    'getPublicSocialMediaConfig' : IDL.Func([], [SocialMediaConfig], ['query']),
     'getPublishedBlogPosts' : IDL.Func([], [IDL.Vec(BlogPost)], ['query']),
     'getPublishedPortfolio' : IDL.Func([], [IDL.Vec(PortfolioItem)], ['query']),
     'getPurchaseRequests' : IDL.Func(
-        [IDL.Text],
+        [],
         [IDL.Variant({ 'ok' : IDL.Vec(PurchaseRequest), 'err' : IDL.Text })],
         [],
       ),
     'getPushSubscription' : IDL.Func(
-        [IDL.Text],
+        [],
         [IDL.Variant({ 'ok' : IDL.Opt(PushSubscription), 'err' : IDL.Text })],
         [],
       ),
@@ -2149,10 +2660,11 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Opt(Questionnaire)],
         ['query'],
       ),
-    'getReferralStats' : IDL.Func([IDL.Text], [IDL.Vec(ReferralStat)], []),
-    'getRejectedReviews' : IDL.Func([IDL.Text], [IDL.Vec(Review)], ['query']),
+    'getReferralStats' : IDL.Func([], [IDL.Vec(ReferralStat)], []),
+    'getRejectedReviews' : IDL.Func([], [IDL.Vec(Review)], ['query']),
+    'getReminderLeadDays' : IDL.Func([], [IDL.Nat], []),
     'getRescheduleHistory' : IDL.Func(
-        [IDL.Text, IDL.Text],
+        [IDL.Text],
         [IDL.Vec(IDL.Int)],
         ['query'],
       ),
@@ -2161,53 +2673,74 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Opt(IDL.Record({ 'isExpired' : IDL.Bool, 'lead' : Lead }))],
         ['query'],
       ),
+    'getSiteBaseUrl' : IDL.Func([], [IDL.Text], ['query']),
     'getSiteLinkLog' : IDL.Func(
-        [IDL.Text, IDL.Text],
+        [IDL.Text],
         [IDL.Variant({ 'ok' : IDL.Vec(SiteLinkEntry), 'err' : IDL.Text })],
         ['query'],
       ),
     'getSiteText' : IDL.Func([IDL.Text], [IDL.Opt(IDL.Text)], ['query']),
+    'getSocialMediaConfig' : IDL.Func(
+        [],
+        [IDL.Variant({ 'ok' : SocialMediaConfig, 'err' : IDL.Text })],
+        [],
+      ),
     'getStripeCharges' : IDL.Func(
-        [IDL.Text],
+        [],
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
         [],
       ),
+    'getStripeConfiguration' : IDL.Func(
+        [],
+        [IDL.Opt(StripeConfiguration)],
+        ['query'],
+      ),
     'getStripeCustomers' : IDL.Func(
-        [IDL.Text],
+        [],
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
         [],
       ),
     'getStripeDashboardData' : IDL.Func(
-        [IDL.Text],
+        [],
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
         [],
       ),
     'getStripePayouts' : IDL.Func(
-        [IDL.Text],
+        [],
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
         [],
       ),
     'getStripePublishableKey' : IDL.Func([], [IDL.Text], ['query']),
     'getStripeSessionStatus' : IDL.Func([IDL.Text], [StripeSessionStatus], []),
     'getStripeSubscriptions' : IDL.Func(
-        [IDL.Text],
+        [],
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
         [],
       ),
     'getStripeTestMode' : IDL.Func([], [IDL.Bool], ['query']),
+    'getSubAdmins' : IDL.Func(
+        [],
+        [
+          IDL.Variant({
+            'ok' : IDL.Vec(IDL.Tuple(IDL.Text, SubAdmin)),
+            'err' : IDL.Text,
+          }),
+        ],
+        [],
+      ),
     'getTopPages' : IDL.Func(
-        [IDL.Text],
+        [],
         [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat, IDL.Float64))],
         ['query'],
       ),
     'getUnreadMessageCounts' : IDL.Func(
-        [IDL.Text],
+        [],
         [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat))],
         ['query'],
       ),
     'getVapidPublicKey' : IDL.Func([], [IDL.Text], ['query']),
     'getVisitorStats' : IDL.Func(
-        [IDL.Text],
+        [],
         [
           IDL.Record({
             'todayUnique' : IDL.Nat,
@@ -2222,8 +2755,9 @@ export const idlFactory = ({ IDL }) => {
         ],
         ['query'],
       ),
+    'getWebhookAuditLog' : IDL.Func([], [IDL.Vec(WebhookAuditEntry)], []),
     'handleStripeWebhook' : IDL.Func(
-        [IDL.Text, IDL.Text],
+        [IDL.Text, IDL.Text, IDL.Text],
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
         [],
       ),
@@ -2248,9 +2782,9 @@ export const idlFactory = ({ IDL }) => {
         [LoginResult],
         [],
       ),
-    'markAllNotificationsRead' : IDL.Func([IDL.Text], [], []),
+    'markAllNotificationsRead' : IDL.Func([], [], []),
     'markCompletionPaymentCharged' : IDL.Func(
-        [IDL.Text, IDL.Text],
+        [IDL.Text],
         [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
         [],
       ),
@@ -2260,13 +2794,18 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
         [],
       ),
-    'markNotificationRead' : IDL.Func([IDL.Text, IDL.Text], [], []),
-    'markQuestionnaireReviewed' : IDL.Func([IDL.Text, QuestionnaireId], [], []),
-    'publishBlogPost' : IDL.Func([IDL.Text, BlogPostId], [], []),
-    'publishPortfolioItem' : IDL.Func([IDL.Text, IDL.Text], [UpsertResult], []),
+    'markNotificationRead' : IDL.Func([IDL.Text], [], []),
+    'markQuestionnaireReviewed' : IDL.Func([QuestionnaireId], [], []),
+    'publishBlogPost' : IDL.Func([BlogPostId], [], []),
+    'publishPortfolioItem' : IDL.Func([IDL.Text], [UpsertResult], []),
     'recordVisit' : IDL.Func(
         [IDL.Text, IDL.Int, IDL.Text, IDL.Opt(IDL.Text)],
         [IDL.Bool],
+        [],
+      ),
+    'registerAdminPrincipal' : IDL.Func(
+        [],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
         [],
       ),
     'registerUser' : IDL.Func(
@@ -2282,32 +2821,62 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'rejectReview' : IDL.Func(
-        [IDL.Text, ReviewId],
+        [ReviewId],
         [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
         [],
       ),
-    'removeFleetCanister' : IDL.Func([IDL.Text, IDL.Text], [], []),
-    'removeFleetSite' : IDL.Func([IDL.Text, IDL.Text], [], []),
-    'removeFleetSoftware' : IDL.Func([IDL.Text, IDL.Text], [], []),
+    'removeAdminPrincipal' : IDL.Func(
+        [IDL.Principal],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
+    'removeFleetCanister' : IDL.Func([IDL.Text], [], []),
+    'removeFleetSite' : IDL.Func([IDL.Text], [], []),
+    'removeFleetSoftware' : IDL.Func([IDL.Text], [], []),
+    'removeProductImage' : IDL.Func(
+        [IDL.Nat],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
     'removePushSubscription' : IDL.Func(
-        [IDL.Text],
+        [],
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
         [],
       ),
+    'removeSubAdmin' : IDL.Func(
+        [IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
     'reorderMarqueeLogos' : IDL.Func(
-        [IDL.Vec(IDL.Text), IDL.Text],
+        [IDL.Vec(IDL.Text)],
         [IDL.Variant({ 'ok' : IDL.Bool, 'err' : IDL.Text })],
         [],
       ),
+    'requestAccountDeletion' : IDL.Func(
+        [],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
     'requestPasswordReset' : IDL.Func([IDL.Text], [IDL.Text], []),
+    'rescheduleEmailCampaign' : IDL.Func(
+        [IDL.Nat, IDL.Int],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
     'rescheduleLead' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
         [IDL.Record({ 'ok' : IDL.Bool, 'message' : IDL.Text })],
         [],
       ),
-    'resendEmail' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [IDL.Bool], []),
+    'reseedCatalog' : IDL.Func(
+        [],
+        [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
+        [],
+      ),
+    'resendEmail' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
     'resendSiteLink' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Text, IDL.Text],
         [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
         [],
       ),
@@ -2316,17 +2885,12 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Text],
         [],
       ),
-    'saveEmailTemplate' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
-        [],
-        [],
-      ),
+    'saveEmailTemplate' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
     'savePushSubscription' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Text, IDL.Text, IDL.Text],
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
         [],
       ),
-    'sendAccountDeletionRequest' : IDL.Func([], [], []),
     'sendDepositInvoice' : IDL.Func(
         [IDL.Principal, IDL.Text, IDL.Nat, IDL.Text, Timestamp],
         [IDL.Text],
@@ -2337,44 +2901,95 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Variant({ 'ok' : ClientMessage, 'err' : IDL.Text })],
         [],
       ),
+    'sendNowEmailCampaign' : IDL.Func(
+        [IDL.Nat],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
     'sendOrderStatusEmail' : IDL.Func(
         [IDL.Principal, Status, IDL.Text],
         [],
         [],
       ),
     'sendRescheduleLink' : IDL.Func(
-        [IDL.Text, IDL.Text],
+        [IDL.Text],
         [IDL.Record({ 'message' : IDL.Text, 'success' : IDL.Bool })],
         [],
       ),
     'sendSiteLink' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Text, IDL.Text],
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
         [],
       ),
-    'setAvailability' : IDL.Func([IDL.Text, AvailabilitySettings], [], []),
+    'sendUpcomingBillingReminders' : IDL.Func(
+        [],
+        [IDL.Variant({ 'ok' : IDL.Nat, 'err' : IDL.Text })],
+        [],
+      ),
+    'setAdminEmail' : IDL.Func(
+        [IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
+    'setAvailability' : IDL.Func([AvailabilitySettings], [], []),
+    'setClientWebhookSecret' : IDL.Func(
+        [IDL.Text, IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
+    'setGlobalTaxRate' : IDL.Func(
+        [IDL.Float64],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
     'setGoogleCalendarConfig' : IDL.Func(
-        [GoogleCalendarConfig, IDL.Text],
+        [GoogleCalendarConfig],
         [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
         [],
       ),
     'setGoogleSheetsConfig' : IDL.Func(
-        [GoogleSheetsConfig, IDL.Text],
+        [GoogleSheetsConfig],
         [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
         [],
       ),
-    'setStripeConfiguration' : IDL.Func(
-        [StripeConfiguration, IDL.Text],
-        [],
+    'setLogoUrl' : IDL.Func(
+        [IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
         [],
       ),
-    'setStripePublishableKey' : IDL.Func([IDL.Text, IDL.Text], [], []),
-    'setStripeSecretKey' : IDL.Func([IDL.Text, IDL.Text], [], []),
-    'setStripeTestMode' : IDL.Func([IDL.Bool, IDL.Text], [], []),
-    'setStripeWebhookSecret' : IDL.Func([IDL.Text, IDL.Text], [], []),
+    'setReminderLeadDays' : IDL.Func(
+        [IDL.Nat],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
+    'setSiteAuditFallbackPrice' : IDL.Func(
+        [IDL.Int],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
+    'setSiteBaseUrl' : IDL.Func(
+        [IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
+    'setSocialMediaConfig' : IDL.Func(
+        [SocialMediaConfig],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
+    'setStripeConfiguration' : IDL.Func([StripeConfiguration], [], []),
+    'setStripePublishableKey' : IDL.Func([IDL.Text], [], []),
+    'setStripeSecretKey' : IDL.Func([IDL.Text], [], []),
+    'setStripeTestMode' : IDL.Func([IDL.Bool], [], []),
+    'setStripeWebhookSecret' : IDL.Func([IDL.Text], [], []),
     'setVapidKeys' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Text, IDL.Text],
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
+        [],
+      ),
+    'setWebhookSharedSecret' : IDL.Func(
+        [IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
         [],
       ),
     'submitCancellationRequest' : IDL.Func([IDL.Text], [UpsertResult], []),
@@ -2385,11 +3000,11 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'togglePortalShopProduct' : IDL.Func(
-        [IDL.Text, IDL.Nat],
+        [IDL.Nat],
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
         [],
       ),
-    'toggleProductStatus' : IDL.Func([IDL.Text, IDL.Text], [UpsertResult], []),
+    'toggleProductStatus' : IDL.Func([IDL.Text], [UpsertResult], []),
     'trackReferralClick' : IDL.Func([IDL.Text], [], []),
     'trackReferralConversion' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Text],
@@ -2401,16 +3016,15 @@ export const idlFactory = ({ IDL }) => {
         [TransformationOutput],
         ['query'],
       ),
-    'unblockDate' : IDL.Func([IDL.Text, IDL.Text], [], []),
-    'unpublishBlogPost' : IDL.Func([IDL.Text, BlogPostId], [], []),
-    'unpublishPortfolioItem' : IDL.Func(
-        [IDL.Text, IDL.Text],
-        [UpsertResult],
+    'unblockDate' : IDL.Func(
+        [IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
         [],
       ),
+    'unpublishBlogPost' : IDL.Func([BlogPostId], [], []),
+    'unpublishPortfolioItem' : IDL.Func([IDL.Text], [UpsertResult], []),
     'updateBlogPost' : IDL.Func(
         [
-          IDL.Text,
           BlogPostId,
           IDL.Text,
           IDL.Text,
@@ -2428,49 +3042,47 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'updateCategoryVisibility' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Bool],
+        [IDL.Text, IDL.Bool],
         [UpsertResult],
         [],
       ),
     'updateClientBriefStatus' : IDL.Func([IDL.Text], [UpsertResult], []),
     'updateClientHasAccount' : IDL.Func(
-        [IDL.Text, IDL.Bool, IDL.Text],
+        [IDL.Text, IDL.Bool],
         [UpsertResult],
         [],
       ),
     'updateClientMilestone' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Nat],
+        [IDL.Text, IDL.Nat],
         [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
         [],
       ),
-    'updateClientNotes' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Text],
-        [UpsertResult],
+    'updateClientNotes' : IDL.Func([IDL.Text, IDL.Text], [UpsertResult], []),
+    'updateClientPlatformFee' : IDL.Func(
+        [IDL.Text, IDL.Float64],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
         [],
       ),
-    'updateClientStatus' : IDL.Func(
+    'updateClientStatus' : IDL.Func([IDL.Text, IDL.Text], [UpsertResult], []),
+    'updateClientStripeAccountId' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Text],
-        [UpsertResult],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
         [],
       ),
-    'updateLeadStatus' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Text],
-        [UpsertResult],
+    'updateEmailCampaign' : IDL.Func(
+        [IDL.Nat, IDL.Text, IDL.Text, IDL.Vec(IDL.Text), IDL.Opt(IDL.Int)],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
         [],
       ),
+    'updateLeadStatus' : IDL.Func([IDL.Text, IDL.Text], [UpsertResult], []),
     'updateMarqueeLogo' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Text, IDL.Text, IDL.Text],
         [IDL.Variant({ 'ok' : MarqueeLogo, 'err' : IDL.Text })],
         [],
       ),
-    'updateOrderStatus' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Text],
-        [UpsertResult],
-        [],
-      ),
+    'updateOrderStatus' : IDL.Func([IDL.Text, IDL.Text], [UpsertResult], []),
     'updatePortfolioItem' : IDL.Func(
         [
-          IDL.Text,
           IDL.Text,
           IDL.Text,
           IDL.Text,
@@ -2485,15 +3097,62 @@ export const idlFactory = ({ IDL }) => {
         [UpsertResult],
         [],
       ),
-    'updateProductPrice' : IDL.Func(
+    'updateProductDescription' : IDL.Func(
+        [IDL.Text, IDL.Text],
+        [UpsertResult],
+        [],
+      ),
+    'updateProductDetailContent' : IDL.Func(
         [
           IDL.Text,
+          IDL.Opt(IDL.Text),
+          IDL.Opt(IDL.Text),
+          IDL.Opt(IDL.Text),
+          IDL.Opt(IDL.Text),
+          IDL.Opt(IDL.Text),
+          IDL.Opt(IDL.Text),
+          IDL.Opt(IDL.Text),
+          IDL.Opt(IDL.Text),
+          IDL.Opt(IDL.Text),
+        ],
+        [UpsertResult],
+        [],
+      ),
+    'updateProductImage' : IDL.Func([IDL.Text, IDL.Text], [UpsertResult], []),
+    'updateProductPaymentType' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
+    'updateProductPlanSection' : IDL.Func(
+        [ProductId, IDL.Opt(IDL.Text)],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
+    'updateProductPrice' : IDL.Func(
+        [
           IDL.Text,
           IDL.Opt(IDL.Float64),
           IDL.Opt(IDL.Float64),
           IDL.Opt(IDL.Float64),
         ],
         [UpsertResult],
+        [],
+      ),
+    'updateProductRichFields' : IDL.Func(
+        [
+          IDL.Text,
+          IDL.Opt(IDL.Text),
+          IDL.Vec(IDL.Text),
+          IDL.Opt(IDL.Text),
+          IDL.Opt(IDL.Text),
+          IDL.Opt(IDL.Text),
+          IDL.Text,
+          IDL.Text,
+          IDL.Bool,
+        ],
+        [UpsertResult],
+        [],
+      ),
+    'updateProductSpeedyFilter' : IDL.Func(
+        [ProductId, IDL.Opt(IDL.Text)],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
         [],
       ),
     'updateProfile' : IDL.Func(
@@ -2511,17 +3170,26 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'updateQuestionDefinitions' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Vec(QuestionDefinition)],
+        [IDL.Text, IDL.Vec(QuestionDefinition)],
         [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
         [],
       ),
-    'updateSiteText' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [IDL.Bool], []),
+    'updateSiteText' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
+    'updateSubAdminTabs' : IDL.Func(
+        [IDL.Text, IDL.Vec(IDL.Text)],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
     'uploadFileToClient' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Vec(IDL.Nat8), IDL.Text, IDL.Text],
+        [IDL.Text, IDL.Vec(IDL.Nat8), IDL.Text, IDL.Text],
         [IDL.Variant({ 'ok' : ClientFileMetadata, 'err' : IDL.Text })],
         [],
       ),
-    'verifyAdminOTP' : IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
+    'verifyAdminOTP' : IDL.Func(
+        [IDL.Text, IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
+        [],
+      ),
     'verifyAndRecordPurchase' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Text, IDL.Vec(IDL.Text)],
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],

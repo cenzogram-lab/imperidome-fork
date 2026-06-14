@@ -1,6 +1,6 @@
 import { Activity } from "lucide-react";
-import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import {
   Bar,
   BarChart,
@@ -16,14 +16,14 @@ import { getSession } from "../../hooks/useSession";
 import AdminLayout from "./AdminLayout";
 
 // ─── Styles ────────────────────────────────────────────────────────────────────
-const CARD: React.CSSProperties = {
+const CARD: CSSProperties = {
   background: "rgba(17,19,34,0.7)",
   border: "1px solid #1C1F33",
   borderRadius: 10,
   padding: "20px 24px",
 };
 
-const TABLE_TH: React.CSSProperties = {
+const TABLE_TH: CSSProperties = {
   textAlign: "left",
   padding: "11px 14px",
   fontSize: 11,
@@ -38,7 +38,7 @@ const TABLE_TH: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-const TABLE_TD: React.CSSProperties = {
+const TABLE_TD: CSSProperties = {
   padding: "11px 14px",
   fontSize: 13,
   color: "#EEF0F8",
@@ -99,7 +99,7 @@ function PulseDot() {
             width: 14,
             height: 14,
             borderRadius: "50%",
-            background: "#5EF08A",
+            background: "#22C55E",
             opacity: 0.25,
             animation: "liveRingPulse 1.8s ease-out infinite",
           }}
@@ -109,7 +109,7 @@ function PulseDot() {
             width: 8,
             height: 8,
             borderRadius: "50%",
-            background: "#5EF08A",
+            background: "#22C55E",
             position: "relative",
           }}
         />
@@ -121,7 +121,6 @@ function PulseDot() {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function AdminAnalyticsPage() {
   const { actor, isFetching } = useActor();
-  const adminEmail = getSession()?.email ?? "";
 
   // Live visitor state
   const [liveCount, setLiveCount] = useState<number | null>(null);
@@ -146,95 +145,99 @@ export default function AdminAnalyticsPage() {
   );
   const [countriesLoading, setCountriesLoading] = useState(true);
 
+  // Error states for each analytics section
+  const [visitorError, setVisitorError] = useState<string | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [chartError, setChartError] = useState<string | null>(null);
+  const [pagesError, setPagesError] = useState<string | null>(null);
+  const [countryError, setCountryError] = useState<string | null>(null);
+
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const actorRef = useRef(actor);
+  useEffect(() => {
+    actorRef.current = actor;
+  }, [actor]);
 
-  // Fetch live count
-  async function fetchLiveCount() {
-    if (!actor) return;
-    try {
-      const result = await (actor as backendInterface).getLiveVisitorCount(
-        adminEmail,
-      );
-      setLiveCount(Number(result));
-      setLastUpdated(new Date());
-    } catch {
-      // fail silently — keep old value
-    } finally {
-      setLiveLoading(false);
-    }
-  }
-
-  // Fetch all static data on mount
-  async function fetchStats() {
-    if (!actor) return;
-    try {
-      const raw = await (actor as backendInterface).getVisitorStats(adminEmail);
-      setStats({
-        todayUnique: Number(raw.todayUnique),
-        todaySessions: Number(raw.todaySessions),
-        weekUnique: Number(raw.weekUnique),
-        weekSessions: Number(raw.weekSessions),
-        monthUnique: Number(raw.monthUnique),
-        monthSessions: Number(raw.monthSessions),
-        allTimeUnique: Number(raw.allTimeUnique),
-        allTimeSessions: Number(raw.allTimeSessions),
-      });
-    } catch {
-      // fail silently
-    } finally {
-      setStatsLoading(false);
-    }
-  }
-
-  async function fetchChart() {
-    if (!actor) return;
-    try {
-      const raw = await (actor as backendInterface).getDailyVisitorChart(
-        adminEmail,
-      );
-      const points: ChartPoint[] = raw.map(([dateStr, count]) => ({
-        date: dateStr,
-        visitors: Number(count),
-      }));
-      setChartData(points);
-    } catch {
-      // fail silently
-    } finally {
-      setChartLoading(false);
-    }
-  }
-
-  async function fetchTopPages() {
-    if (!actor) return;
-    try {
-      const raw = await (actor as backendInterface).getTopPages(adminEmail);
-      setTopPages(raw.map(([path, count, pct]) => [path, Number(count), pct]));
-    } catch {
-      // fail silently
-    } finally {
-      setPagesLoading(false);
-    }
-  }
-
-  async function fetchCountries() {
-    if (!actor) return;
-    try {
-      const raw = await (actor as backendInterface).getCountryBreakdown(
-        adminEmail,
-      );
-      setCountries(
-        raw.map(([country, count, pct]) => [country, Number(count), pct]),
-      );
-    } catch {
-      // fail silently
-    } finally {
-      setCountriesLoading(false);
-    }
-  }
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: fetch functions are stable references defined outside the effect
   useEffect(() => {
     if (!actor || isFetching) return;
+
+    async function fetchLiveCount() {
+      if (!actor) return;
+      try {
+        const result = await (actor as backendInterface).getLiveVisitorCount();
+        setLiveCount(Number(result));
+        setLastUpdated(new Date());
+      } catch {
+        setVisitorError("Failed to load visitor data");
+      } finally {
+        setLiveLoading(false);
+      }
+    }
+
+    async function fetchStats() {
+      if (!actor) return;
+      try {
+        const raw = await (actor as backendInterface).getVisitorStats();
+        setStats({
+          todayUnique: Number(raw.todayUnique),
+          todaySessions: Number(raw.todaySessions),
+          weekUnique: Number(raw.weekUnique),
+          weekSessions: Number(raw.weekSessions),
+          monthUnique: Number(raw.monthUnique),
+          monthSessions: Number(raw.monthSessions),
+          allTimeUnique: Number(raw.allTimeUnique),
+          allTimeSessions: Number(raw.allTimeSessions),
+        });
+      } catch {
+        setStatsError("Failed to load statistics");
+      } finally {
+        setStatsLoading(false);
+      }
+    }
+
+    async function fetchChart() {
+      if (!actor) return;
+      try {
+        const raw = await (actor as backendInterface).getDailyVisitorChart();
+        const points: ChartPoint[] = raw.map(([dateStr, count]) => ({
+          date: dateStr,
+          visitors: Number(count),
+        }));
+        setChartData(points);
+      } catch {
+        setChartError("Failed to load chart data");
+      } finally {
+        setChartLoading(false);
+      }
+    }
+
+    async function fetchTopPages() {
+      if (!actor) return;
+      try {
+        const raw = await (actor as backendInterface).getTopPages();
+        setTopPages(
+          raw.map(([path, count, pct]) => [path, Number(count), pct]),
+        );
+      } catch {
+        setPagesError("Failed to load top pages");
+      } finally {
+        setPagesLoading(false);
+      }
+    }
+
+    async function fetchCountries() {
+      if (!actor) return;
+      try {
+        const raw = await (actor as backendInterface).getCountryBreakdown();
+        setCountries(
+          raw.map(([country, count, pct]) => [country, Number(count), pct]),
+        );
+      } catch {
+        setCountryError("Failed to load country data");
+      } finally {
+        setCountriesLoading(false);
+      }
+    }
 
     fetchLiveCount();
     fetchStats();
@@ -242,8 +245,10 @@ export default function AdminAnalyticsPage() {
     fetchTopPages();
     fetchCountries();
 
-    // Poll live count every 30 seconds
+    // Poll live count every 30 seconds — use actorRef so stale closure doesn't hold old actor
     intervalRef.current = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      if (!actorRef.current) return;
       fetchLiveCount();
     }, 30_000);
 
@@ -294,7 +299,7 @@ export default function AdminAnalyticsPage() {
             justifyContent: "space-between",
             flexWrap: "wrap",
             gap: 16,
-            borderColor: "rgba(94,240,138,0.25)",
+            borderColor: "rgba(34,197,94,0.25)",
             background: "rgba(17,19,34,0.85)",
           }}
         >
@@ -304,15 +309,15 @@ export default function AdminAnalyticsPage() {
                 width: 52,
                 height: 52,
                 borderRadius: 12,
-                background: "rgba(94,240,138,0.12)",
-                border: "1px solid rgba(94,240,138,0.25)",
+                background: "rgba(34,197,94,0.10)",
+                border: "1px solid rgba(34,197,94,0.20)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 flexShrink: 0,
               }}
             >
-              <Activity size={22} color="#5EF08A" />
+              <Activity size={22} color="#22C55E" />
             </div>
             <div>
               <div
@@ -328,7 +333,7 @@ export default function AdminAnalyticsPage() {
                   style={{
                     fontSize: 12,
                     fontWeight: 700,
-                    color: "#5EF08A",
+                    color: "#22C55E",
                     textTransform: "uppercase",
                     letterSpacing: "0.08em",
                   }}
@@ -340,7 +345,8 @@ export default function AdminAnalyticsPage() {
                 style={{
                   fontSize: 40,
                   fontWeight: 900,
-                  color: "#EEF0F8",
+                  color: "#22C55E",
+                  fontFamily: "Inter, sans-serif",
                   lineHeight: 1,
                 }}
               >
@@ -359,6 +365,17 @@ export default function AdminAnalyticsPage() {
               >
                 unique visitors in the last 5 minutes
               </div>
+              {visitorError && (
+                <p
+                  style={{
+                    color: "#ef4444",
+                    fontSize: "12px",
+                    marginTop: "4px",
+                  }}
+                >
+                  {visitorError}
+                </p>
+              )}
             </div>
           </div>
           <div
@@ -394,6 +411,18 @@ export default function AdminAnalyticsPage() {
           >
             Visitor Totals
           </div>
+          {statsError && (
+            <p
+              style={{
+                color: "#ef4444",
+                fontSize: "12px",
+                marginTop: "4px",
+                marginBottom: "8px",
+              }}
+            >
+              {statsError}
+            </p>
+          )}
           <div
             data-ocid="analytics.stats.grid"
             style={{
@@ -408,7 +437,7 @@ export default function AdminAnalyticsPage() {
                   label: "Today",
                   unique: stats?.todayUnique,
                   sessions: stats?.todaySessions,
-                  color: "#5EF08A",
+                  color: "#22C55E",
                   ocid: "analytics.stats.today.card",
                 },
                 {
@@ -464,7 +493,8 @@ export default function AdminAnalyticsPage() {
                       style={{
                         fontSize: 30,
                         fontWeight: 800,
-                        color: c.color,
+                        color: "#22C55E",
+                        fontFamily: "Inter, sans-serif",
                         lineHeight: 1,
                       }}
                     >
@@ -503,6 +533,18 @@ export default function AdminAnalyticsPage() {
           >
             Visitor Trend — Last 30 Days
           </div>
+          {chartError && (
+            <p
+              style={{
+                color: "#ef4444",
+                fontSize: "12px",
+                marginTop: "-8px",
+                marginBottom: "8px",
+              }}
+            >
+              {chartError}
+            </p>
+          )}
           <div
             data-ocid="analytics.chart.section"
             style={{
@@ -572,7 +614,7 @@ export default function AdminAnalyticsPage() {
                     />
                     <Bar
                       dataKey="visitors"
-                      fill="#5EF08A"
+                      fill="#22C55E"
                       radius={[3, 3, 0, 0]}
                     />
                   </BarChart>
@@ -594,6 +636,18 @@ export default function AdminAnalyticsPage() {
           >
             Top Pages
           </div>
+          {pagesError && (
+            <p
+              style={{
+                color: "#ef4444",
+                fontSize: "12px",
+                marginTop: "-8px",
+                marginBottom: "8px",
+              }}
+            >
+              {pagesError}
+            </p>
+          )}
           <div
             data-ocid="analytics.top_pages.section"
             style={{
@@ -719,7 +773,7 @@ export default function AdminAnalyticsPage() {
                                 display: "block",
                                 height: "100%",
                                 width: `${Math.min(pct * 100, 100)}%`,
-                                background: "#5EF08A",
+                                background: "#22C55E",
                                 borderRadius: 3,
                               }}
                             />
@@ -757,6 +811,18 @@ export default function AdminAnalyticsPage() {
           >
             Visitor Geography
           </div>
+          {countryError && (
+            <p
+              style={{
+                color: "#ef4444",
+                fontSize: "12px",
+                marginTop: "-8px",
+                marginBottom: "8px",
+              }}
+            >
+              {countryError}
+            </p>
+          )}
           <div
             data-ocid="analytics.countries.section"
             style={{

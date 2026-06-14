@@ -1,15 +1,11 @@
 import { useEffect, useState } from "react";
-import type { backendInterface } from "../../backend";
+import type { CSSProperties, ChangeEvent, FormEvent } from "react";
+import type { backendInterface } from "../../backend.d";
 import LeadCalendar from "../../components/LeadCalendar";
+import TypewriterText from "../../components/TypewriterText";
 import { useActor } from "../../hooks/useActor";
-import { getSession } from "../../hooks/useSession";
 import AdminLayout from "./AdminLayout";
 import FilterChipsRow from "./FilterChipsRow";
-
-function getAdminEmail(): string {
-  const s = getSession();
-  return s?.email ?? localStorage.getItem("imperidome_admin_email") ?? "";
-}
 
 // Matches the actual backend Lead type (V5 schema)
 interface Lead {
@@ -27,7 +23,7 @@ interface Lead {
   // Draft / reschedule fields
   isDraft?: boolean;
   rescheduleToken?: string;
-  rescheduleLinkSentAt?: number | null;
+  rescheduleLinkSentAt?: bigint | null;
   // V5: conversion timestamp (nanoseconds). [] = not converted, [bigint] = converted at
   convertedAt?: [] | [bigint];
 }
@@ -44,13 +40,19 @@ function parseLeadMessage(message: string): Record<string, string> {
   }
 }
 
+const INTENT_TAGS = [
+  "[PAID AUDIT]",
+  "[FREE CONSULT]",
+  "[PRODUCT LAB]",
+] as const;
+
 // Extract [PAID AUDIT], [FREE CONSULT], or [PRODUCT LAB] tag from the message field
 function extractIntentTag(
   message: string,
 ): "paid_audit" | "free_consult" | "product_lab" | null {
-  if (message.includes("[PAID AUDIT]")) return "paid_audit";
-  if (message.includes("[FREE CONSULT]")) return "free_consult";
-  if (message.includes("[PRODUCT LAB]") || message.includes("💰 PRODUCT LAB"))
+  if (message.includes(INTENT_TAGS[0])) return "paid_audit";
+  if (message.includes(INTENT_TAGS[1])) return "free_consult";
+  if (message.includes(INTENT_TAGS[2]) || message.includes("💰 PRODUCT LAB"))
     return "product_lab";
   // Also check the prefix field in the JSON payload
   try {
@@ -182,6 +184,7 @@ const COLUMNS: {
   { key: "Closed", label: "Closed", colorScheme: "red" },
   { key: "Cancelled", label: "Cancelled", colorScheme: "red" },
 ];
+const _LEAD_STATUSES = COLUMNS.map((c) => c.key);
 
 const STATUS_LABELS: Record<string, string> = {
   Draft: "Draft",
@@ -193,6 +196,8 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 function formatDate(ts: bigint): string {
+  if (ts === 0n) return "—";
+  if (Number.isNaN(Number(ts))) return "—";
   const ms = Number(ts) / 1_000_000;
   const d = new Date(ms);
   if (Number.isNaN(d.getTime())) return "—";
@@ -411,7 +416,7 @@ function ConvertToClientModal({
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
     setErrorMsg(null);
@@ -427,7 +432,7 @@ function ConvertToClientModal({
     }
   }
 
-  const inputStyle: React.CSSProperties = {
+  const inputStyle: CSSProperties = {
     width: "100%",
     background: "rgba(14,16,32,0.9)",
     border: "1px solid #1C1F33",
@@ -439,7 +444,7 @@ function ConvertToClientModal({
     boxSizing: "border-box",
   };
 
-  const labelStyle: React.CSSProperties = {
+  const labelStyle: CSSProperties = {
     display: "block",
     fontSize: "11px",
     fontWeight: 700,
@@ -729,6 +734,8 @@ function ConvertToClientModal({
 // ── LeadCard ─────────────────────────────────────────────────────────────────
 
 function formatRescheduleTimestamp(ns: bigint | number): string {
+  if (typeof ns === "bigint" && ns === 0n) return "—";
+  if (typeof ns === "bigint" && Number.isNaN(Number(ns))) return "—";
   const ms = typeof ns === "bigint" ? Number(ns) / 1_000_000 : ns;
   const d = new Date(ms);
   if (Number.isNaN(d.getTime())) return "Unknown time";
@@ -753,6 +760,7 @@ function LeadCard({
   onAssignMeeting,
   onSendRescheduleLink,
   onFetchRescheduleHistory,
+  serviceLabels,
 }: {
   lead: Lead;
   index: number;
@@ -763,6 +771,7 @@ function LeadCard({
   onAssignMeeting: (lead: Lead) => void;
   onSendRescheduleLink: (lead: Lead) => Promise<void>;
   onFetchRescheduleHistory: (leadId: string) => Promise<(bigint | number)[]>;
+  serviceLabels?: Record<string, string>;
 }) {
   const [saved, setSaved] = useState(false);
   const [updating, setUpdating] = useState(false);
@@ -807,7 +816,7 @@ function LeadCard({
   const details = parseLeadMessage(lead.message);
   const intentTag = extractIntentTag(lead.message);
 
-  async function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+  async function handleChange(e: ChangeEvent<HTMLSelectElement>) {
     const newStatus = e.target.value;
     setUpdating(true);
     setUpdateError(null);
@@ -856,7 +865,8 @@ function LeadCard({
   const displayPreferredTime =
     details.requested_time || details.preferred_time || "";
   // Service label map (matches HomepageCalendarBooking service IDs)
-  const SERVICE_LABELS: Record<string, string> = {
+  // serviceLabels prop (from live catalog) takes precedence over the static fallback
+  const SERVICE_LABELS: Record<string, string> = serviceLabels ?? {
     custom_sites: "🌐 Custom Sites",
     speedy_sites: "⚡ Speedy Sites",
     ai_receptionists: "🤖 AI Receptionists",
@@ -876,12 +886,12 @@ function LeadCard({
       data-ocid={`leads.card.${index}`}
       data-lead-card-id={lead.id}
       style={{
-        background: "rgba(17,19,34,0.9)",
+        background: "rgba(10,11,20,0.95)",
         borderRadius: "8px",
         padding: "16px",
         border: isCalendarHighlighted
-          ? "1px solid #39FF14"
-          : "1px solid #1C1F33",
+          ? "1px solid #5EF08A"
+          : "1px solid rgba(94,240,138,0.15)",
         marginBottom: "12px",
         opacity: deleting ? 0.4 : 1,
         transition: "opacity 0.2s, border 0.3s, box-shadow 0.3s",
@@ -1385,23 +1395,10 @@ function LeadCard({
                   }}
                 >
                   Last sent:{" "}
-                  {new Date(lead.rescheduleLinkSentAt).toLocaleDateString(
-                    "en-US",
-                    {
-                      month: "long",
-                      day: "numeric",
-                      year: "numeric",
-                    },
-                  )}{" "}
-                  at{" "}
-                  {new Date(lead.rescheduleLinkSentAt).toLocaleTimeString(
-                    "en-US",
-                    {
-                      hour: "numeric",
-                      minute: "2-digit",
-                      hour12: true,
-                    },
-                  )}
+                  {!lead.rescheduleLinkSentAt ||
+                  lead.rescheduleLinkSentAt === 0n
+                    ? "Never"
+                    : `${new Date(Number(lead.rescheduleLinkSentAt / 1_000_000n)).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })} at ${new Date(Number(lead.rescheduleLinkSentAt / 1_000_000n)).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}`}
                 </p>
               )}
               {rescheduleToast && (
@@ -1631,16 +1628,6 @@ function LeadCard({
 
 // ── Inline Availability Picker (shared by Manual Book modal + Assign Meeting drawer) ──
 
-const SERVICE_OPTIONS = [
-  "Custom Site",
-  "Speedy Site",
-  "AI Receptionist",
-  "Product Ads",
-  "Cinematic Ads",
-  "Brand Audit",
-  "Free Consultation",
-];
-
 interface SlotPickerProps {
   availability: AvailabilitySettings | null;
   onSelect: (
@@ -1733,19 +1720,6 @@ function SlotPicker({
   }
 
   const canConfirm = selectedDate && selectedTime;
-
-  const _avInputSt: React.CSSProperties = {
-    background: "rgba(14,16,32,0.9)",
-    border: "1px solid #1C1F33",
-    borderRadius: "6px",
-    padding: "8px 12px",
-    fontSize: "13px",
-    color: "#EEF0F8",
-    outline: "none",
-    width: "100%",
-    boxSizing: "border-box" as const,
-    colorScheme: "dark",
-  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
@@ -2022,6 +1996,16 @@ export default function AdminLeadsPage() {
   const [calendarHighlightedId, setCalendarHighlightedId] = useState<
     string | null
   >(null);
+  const [products, setProducts] = useState<Array<{ id: bigint; name: string }>>(
+    [],
+  );
+  useEffect(() => {
+    if (isFetching || !actor) return;
+    actor
+      .getAllProductsAdmin()
+      .then(setProducts)
+      .catch(() => {});
+  }, [isFetching, actor]);
 
   // ── Status filter chips state (all active by default) ──
   // Possible status values: "New", "Contacted", "Qualified", "Closed", "Draft", "Cancelled"
@@ -2149,7 +2133,7 @@ export default function AdminLeadsPage() {
     setLoading(true);
     setError(null);
     (actor as backendInterface)
-      .getLeads(getAdminEmail())
+      .getLeads()
       .then((result: unknown) => {
         setLeads(result as Lead[]);
         setLoading(false);
@@ -2172,8 +2156,11 @@ export default function AdminLeadsPage() {
           setAvailability(result as AvailabilitySettings);
         }
       })
-      .catch(() => {
+      .catch((err) => {
         // Use defaults if backend not ready yet
+        if (import.meta.env.DEV) {
+          console.warn("getAvailability failed, using defaults:", err);
+        }
       });
   }, [actor, isFetching, initialAvailFetched]);
 
@@ -2206,23 +2193,35 @@ export default function AdminLeadsPage() {
       ),
     );
     try {
-      await (actor as backendInterface).updateLeadStatus(
-        getAdminEmail(),
+      const statusResult = await (actor as backendInterface).updateLeadStatus(
         id,
         newStatus,
       );
+      if ("err" in statusResult) {
+        showToast("Failed to update lead status. Please try again.", "error");
+      }
       return true;
     } catch (err) {
-      console.error("Failed to update lead status:", err);
+      if (import.meta.env.DEV) {
+        console.error("Failed to update lead status:", err);
+      }
       setLeads(prevLeads);
+      showToast("Failed to update lead status. Please try again.", "error");
       return false;
     }
   }
 
   async function handleDelete(id: string): Promise<void> {
     if (!actor) throw new Error("Actor not ready");
-    await (actor as backendInterface).deleteLead(getAdminEmail(), id);
-    setLeads((prev) => prev.filter((lead) => lead.id !== id));
+    try {
+      await (actor as backendInterface).deleteLead(id);
+      setLeads((prev) => prev.filter((lead) => lead.id !== id));
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.error("Failed to delete lead:", err);
+      }
+      showToast("Failed to delete lead. Please try again.", "error");
+    }
   }
 
   function updateDay(day: keyof WeeklySchedule, patch: Partial<DaySchedule>) {
@@ -2252,12 +2251,9 @@ export default function AdminLeadsPage() {
               endHour: BigInt(sched.endHour),
             },
           ]),
-        ) as unknown as import("../../backend").WeeklySchedule,
+        ) as unknown as import("../../backend.d").WeeklySchedule,
       };
-      await (actor as backendInterface).setAvailability(
-        getAdminEmail(),
-        backendAvailability,
-      );
+      await (actor as backendInterface).setAvailability(backendAvailability);
       setAvailSaveMsg("✓ Availability saved");
       setTimeout(() => setAvailSaveMsg(null), 3500);
     } catch (err) {
@@ -2286,12 +2282,12 @@ export default function AdminLeadsPage() {
     setBlockDateInput("");
     if (actor) {
       try {
-        await (actor as backendInterface).blockDate(
-          getAdminEmail(),
-          blockDateInput,
-        );
-      } catch {
-        // silently keep optimistic state — will sync on next open
+        await (actor as backendInterface).blockDate(blockDateInput);
+      } catch (err) {
+        showToast("Failed to update availability. Please try again.", "error");
+        if (import.meta.env.DEV) {
+          console.error(err);
+        }
       }
     }
   }
@@ -2304,9 +2300,12 @@ export default function AdminLeadsPage() {
     }));
     if (actor) {
       try {
-        await (actor as backendInterface).unblockDate(getAdminEmail(), date);
-      } catch {
-        // silently keep optimistic state — will sync on next open
+        await (actor as backendInterface).unblockDate(date);
+      } catch (err) {
+        showToast("Failed to update availability. Please try again.", "error");
+        if (import.meta.env.DEV) {
+          console.error(err);
+        }
       }
     }
   }
@@ -2331,7 +2330,6 @@ export default function AdminLeadsPage() {
       if (convertLead?.id) {
         try {
           await (actor as backendInterface).convertLeadToClient(
-            getAdminEmail(),
             convertLead.id,
             "",
             "",
@@ -2341,21 +2339,25 @@ export default function AdminLeadsPage() {
             null,
           );
         } catch (e) {
-          console.warn("convertLeadToClient stamp failed:", e);
+          if (import.meta.env.DEV) {
+            console.warn("convertLeadToClient stamp failed:", e);
+          }
         }
         // Refresh leads list so convertedAt badge shows immediately
         try {
-          const updated = await (actor as backendInterface).getLeads(
-            getAdminEmail(),
-          );
+          const updated = await (actor as backendInterface).getLeads();
           setLeads(updated as Lead[]);
         } catch (e) {
-          console.warn("Leads refresh after conversion failed:", e);
+          if (import.meta.env.DEV) {
+            console.warn("Leads refresh after conversion failed:", e);
+          }
         }
       }
       return typeof clientId === "string" ? clientId : String(clientId);
     } catch (err) {
-      console.error("Failed to create client:", err);
+      if (import.meta.env.DEV) {
+        console.error("Failed to create client:", err);
+      }
       return null;
     }
   }
@@ -2367,7 +2369,6 @@ export default function AdminLeadsPage() {
     if (!actor) return [];
     try {
       const result = await (actor as backendInterface).getRescheduleHistory(
-        getAdminEmail(),
         leadId,
       );
       return Array.isArray(result) ? result : [];
@@ -2452,7 +2453,7 @@ export default function AdminLeadsPage() {
     : "";
 
   // ── Shared style tokens for the availability panel ──
-  const avInputStyle: React.CSSProperties = {
+  const avInputStyle: CSSProperties = {
     background: "rgba(14,16,32,0.9)",
     border: "1px solid #1C1F33",
     borderRadius: "6px",
@@ -2477,19 +2478,18 @@ export default function AdminLeadsPage() {
         data.email,
         data.phone,
         data.service,
-        getAdminEmail(),
       );
       if (result?.ok) {
         // Refresh leads list
-        const updated = await (actor as backendInterface).getLeads(
-          getAdminEmail(),
-        );
+        const updated = await (actor as backendInterface).getLeads();
         setLeads(updated as Lead[]);
         return result.leadId as string;
       }
       return null;
     } catch (err) {
-      console.error("createDraftLead failed:", err);
+      if (import.meta.env.DEV) {
+        console.error("createDraftLead failed:", err);
+      }
       return null;
     }
   }
@@ -2507,7 +2507,6 @@ export default function AdminLeadsPage() {
         date,
         time,
         method,
-        getAdminEmail(),
       );
       if (result?.ok) {
         setLeads((prev) =>
@@ -2527,7 +2526,9 @@ export default function AdminLeadsPage() {
       }
       return false;
     } catch (err) {
-      console.error("assignMeetingToLead failed:", err);
+      if (import.meta.env.DEV) {
+        console.error("assignMeetingToLead failed:", err);
+      }
       return false;
     }
   }
@@ -3468,18 +3469,22 @@ export default function AdminLeadsPage() {
                             onFetchRescheduleHistory={
                               handleFetchRescheduleHistory
                             }
+                            serviceLabels={Object.fromEntries(
+                              products.map((p) => [String(p.id), p.name]),
+                            )}
                             onSendRescheduleLink={async (l) => {
                               if (!actor) return;
                               const result = await (
                                 actor as backendInterface
-                              ).sendRescheduleLink(getAdminEmail(), l.id);
+                              ).sendRescheduleLink(l.id);
                               if (result?.success === true) {
                                 setLeads((prev) =>
                                   prev.map((x) =>
                                     x.id === l.id
                                       ? {
                                           ...x,
-                                          rescheduleLinkSentAt: Date.now(),
+                                          rescheduleLinkSentAt:
+                                            BigInt(Date.now()) * 1_000_000n,
                                         }
                                       : x,
                                   ),
@@ -3542,6 +3547,7 @@ export default function AdminLeadsPage() {
       {manualBookOpen && (
         <ManualBookModal
           availability={availability}
+          serviceOptions={products.map((p) => p.name)}
           onClose={() => setManualBookOpen(false)}
           onDraftSave={async (data) => {
             const id = await handleManualBookDraft(data);
@@ -3611,6 +3617,7 @@ export default function AdminLeadsPage() {
 // ── Manual Book Modal ────────────────────────────────────────────────────────
 
 interface ManualBookModalProps {
+  serviceOptions: string[];
   availability: AvailabilitySettings;
   onClose: () => void;
   onDraftSave: (data: {
@@ -3635,6 +3642,7 @@ interface ManualBookModalProps {
 }
 
 function ManualBookModal({
+  serviceOptions,
   availability,
   onClose,
   onDraftSave,
@@ -3670,7 +3678,7 @@ function ManualBookModal({
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const inputStyle: React.CSSProperties = {
+  const inputStyle: CSSProperties = {
     width: "100%",
     background: "rgba(14,16,32,0.9)",
     border: "1px solid #1C1F33",
@@ -3682,7 +3690,7 @@ function ManualBookModal({
     boxSizing: "border-box",
   };
 
-  const labelStyle: React.CSSProperties = {
+  const labelStyle: CSSProperties = {
     display: "block",
     fontSize: "11px",
     fontWeight: 700,
@@ -3879,7 +3887,7 @@ function ManualBookModal({
                   onChange={(e) => setService(e.target.value)}
                   style={{ ...inputStyle, cursor: "pointer" }}
                 >
-                  {SERVICE_OPTIONS.map((s) => (
+                  {serviceOptions.map((s) => (
                     <option key={s} value={s}>
                       {s}
                     </option>

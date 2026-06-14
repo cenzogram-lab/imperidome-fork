@@ -524,7 +524,7 @@ function HeroSection() {
           >
             <EditableText
               textKey="hero.cta-secondary"
-              defaultText="View the Matrix"
+              defaultText="View Services"
             />
           </a>
           <a
@@ -1105,10 +1105,7 @@ function SocialProof() {
             marginBottom: "48px",
           }}
         >
-          <EditableText
-            textKey="social-proof.heading"
-            defaultText="Sovereign Reviews"
-          />
+          <EditableText textKey="social-proof.heading" defaultText="Reviews" />
         </h2>
         <div
           style={{
@@ -1648,106 +1645,6 @@ function FAQSection() {
   );
 }
 
-// ─── Enter The Dome CTA ───────────────────────────────────────────────────────
-function EnterTheDomeCTA() {
-  return (
-    <section
-      style={{
-        background: BG,
-        padding: "80px 24px",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-      }}
-    >
-      <style>{`
-        @keyframes domeGlow {
-          0%, 100% {
-            box-shadow: 0 0 8px #39FF14, 0 0 20px rgba(57,255,20,0.3), 0 0 40px rgba(57,255,20,0.1);
-          }
-          50% {
-            box-shadow: 0 0 16px #39FF14, 0 0 40px rgba(57,255,20,0.5), 0 0 80px rgba(57,255,20,0.25);
-          }
-        }
-        .dome-btn:hover {
-          transform: scale(1.02);
-          box-shadow: 0 0 20px #39FF14, 0 0 50px rgba(57,255,20,0.6), 0 0 100px rgba(57,255,20,0.3) !important;
-        }
-        .dome-btn {
-          transition: transform 0.25s ease, box-shadow 0.25s ease;
-        }
-      `}</style>
-
-      {/* Separator line above */}
-      <div
-        style={{
-          width: "100%",
-          maxWidth: "900px",
-          height: "1px",
-          background: "rgba(57,255,20,0.3)",
-          marginBottom: "80px",
-        }}
-      />
-
-      <a
-        href="/the-dome"
-        className="dome-btn"
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          width: "100%",
-          maxWidth: "768px",
-          padding: "48px 32px",
-          background: "rgba(10,10,10,0.85)",
-          backdropFilter: "blur(20px)",
-          WebkitBackdropFilter: "blur(20px)",
-          border: "1px solid #39FF14",
-          borderRadius: "16px",
-          textDecoration: "none",
-          cursor: "pointer",
-          animation: "domeGlow 2.5s ease-in-out infinite",
-          gap: "12px",
-        }}
-        data-ocid="enter-the-dome-btn"
-      >
-        <span
-          style={{
-            color: "#39FF14",
-            fontSize: "clamp(2rem, 6vw, 3.75rem)",
-            fontWeight: 900,
-            letterSpacing: "0.15em",
-            textTransform: "uppercase",
-            fontFamily: "'Plus Jakarta Sans', Arial, sans-serif",
-            lineHeight: 1.1,
-            textAlign: "center",
-          }}
-        >
-          <EditableText
-            textKey="enter-dome.heading"
-            defaultText="ENTER THE DOME"
-          />
-        </span>
-        <span
-          style={{
-            color: "rgba(255,255,255,0.7)",
-            fontSize: "clamp(0.875rem, 2vw, 1rem)",
-            letterSpacing: "0.1em",
-            textAlign: "center",
-            fontFamily: "'Plus Jakarta Sans', Arial, sans-serif",
-          }}
-        >
-          <EditableText
-            textKey="enter-dome.subtext"
-            defaultText="View Our Sovereign Hosting Infrastructure"
-          />
-        </span>
-      </a>
-    </section>
-  );
-}
-
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function ImperidomeHero() {
   return (
@@ -1761,7 +1658,6 @@ export default function ImperidomeHero() {
       <HeroNavbar />
       <HeroSection />
       <ReferralCTA />
-      <EnterTheDomeCTA />
       <WhatWeBuild />
       <HeroPipeline />
       <SocialProof />

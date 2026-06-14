@@ -33,7 +33,6 @@ import {
   useSiteTextStore,
 } from "../store/useSiteTextStore";
 
-const SUPER_ADMIN_EMAIL = "vincenzo@imperidome.com";
 const NEON = "#39FF14";
 const DARK = "#0a0a0a";
 const NEON_DIM = "#39FF1444";
@@ -275,7 +274,7 @@ function GodEditorOverlay({
       return;
     }
     const session = getSession();
-    if (!session || session.email !== SUPER_ADMIN_EMAIL) {
+    if (!session || session.role !== "admin") {
       setError("Unauthorized.");
       return;
     }
@@ -527,7 +526,7 @@ export function GodModeOverlay() {
   const updateText = useSiteTextStore((s) => s.updateText);
 
   const session = getSession();
-  const isSuperAdmin = editMode && session?.email === SUPER_ADMIN_EMAIL;
+  const isSuperAdmin = editMode && session?.role === "admin";
 
   // ── Mark/unmark all leaf elements when editMode changes ──
   useEffect(() => {

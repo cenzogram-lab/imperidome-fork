@@ -37,11 +37,43 @@ export default defineConfig({
       },
     },
   },
-  define: {
-    'process.env.VITE_CANISTER_ID_BACKEND': JSON.stringify(
-      process.env.CANISTER_ID_BACKEND || process.env.VITE_CANISTER_ID_BACKEND || ''
-    ),
-  },
+  define: (() => {
+    let envJsonCanisterId = '';
+    // Try project root first (../../env.json relative to src/frontend/vite.config.js)
+    // then fall back to ./env.json for local dev setups
+    const envJsonPaths = ['../../env.json', './env.json'];
+    for (const p of envJsonPaths) {
+      try {
+        const envJson = require(p);
+        const raw =
+          envJson.backend_canister_id ||
+          envJson.CANISTER_ID_BACKEND ||
+          '';
+        if (raw && raw !== 'undefined') {
+          envJsonCanisterId = raw;
+          break;
+        }
+      } catch (_) {}
+    }
+    const canisterId =
+      process.env.CANISTER_ID_BACKEND ||
+      process.env.VITE_CANISTER_ID_BACKEND ||
+      envJsonCanisterId ||
+      '';
+    if (!canisterId) {
+      console.warn(
+        '[vite.config.js] WARNING: VITE_CANISTER_ID_BACKEND is not set. ' +
+        'window.backend will not initialize in production. ' +
+        'Ensure env.json exists at the project root with a backend_canister_id field.'
+      );
+    }
+    return {
+      // Inject as import.meta.env so Vite replaces it correctly in the browser bundle
+      'import.meta.env.VITE_CANISTER_ID_BACKEND': JSON.stringify(canisterId),
+      // Also keep process.env replacement for SSR/Node contexts
+      'process.env.VITE_CANISTER_ID_BACKEND': JSON.stringify(canisterId),
+    };
+  })(),
   envPrefix: ['CANISTER_', 'DFX_', 'VITE_'],
   plugins: [
     environment("all", { prefix: "CANISTER_" }),

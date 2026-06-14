@@ -1,3 +1,5 @@
+import { Footer } from "@/components/Footer";
+
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   Bell,
@@ -16,8 +18,8 @@ import {
   Star,
   User,
 } from "lucide-react";
-import type { ReactNode } from "react";
 import { useCallback, useEffect } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { EditableText } from "../../components/EditableText";
 import { SessionTimeoutModal } from "../../components/SessionTimeoutModal";
 import { useIdleTimer } from "../../hooks/useIdleTimer";
@@ -84,6 +86,26 @@ const navItems: NavItem[] = [
     tabOcid: "portal.tab.invoices.link",
     tabLabel: "Invoices",
     tabLabelKey: "portal.tab.invoices.label",
+  },
+  {
+    label: "Billing",
+    labelKey: "portal.nav.billing.label",
+    icon: <CreditCard size={16} />,
+    path: "/portal/billing",
+    ocid: "portal.nav.billing.link",
+    tabOcid: "portal.tab.billing.link",
+    tabLabel: "Billing",
+    tabLabelKey: "portal.tab.billing.label",
+  },
+  {
+    label: "Annual Statement",
+    labelKey: "portal.nav.annual_statement.label",
+    icon: <FileText size={16} />,
+    path: "/portal/annual-statement",
+    ocid: "portal.nav.annual_statement.link",
+    tabOcid: "portal.tab.annual_statement.link",
+    tabLabel: "Statement",
+    tabLabelKey: "portal.tab.annual_statement.label",
   },
   {
     label: "Messages",
@@ -186,7 +208,7 @@ export default function PortalLayout({
   // ─── Session timeout ────────────────────────────────────────────────────────
   const handleLogout = useCallback(() => {
     clearSession();
-    navigate({ to: "/login" as any });
+    navigate({ to: "/login" });
   }, [clearSession, navigate]);
 
   const { isWarning, timeRemaining, resetTimer } = useIdleTimer({
@@ -200,19 +222,20 @@ export default function PortalLayout({
   // Exception: admins may visit /portal/profile to change their password
   useEffect(() => {
     if (!session) {
-      navigate({ to: "/login" as any });
+      navigate({ to: "/login" });
     } else if (session.role === "admin" && currentPath !== "/portal/profile") {
-      navigate({ to: "/admin/dashboard" as any });
+      navigate({ to: "/admin/dashboard" });
     }
   }, [session, navigate, currentPath]);
 
   // Mid-session expiry check — poll every 60 seconds
   useEffect(() => {
     const interval = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
       const current = getSession();
       if (!current) {
         clearSession();
-        navigate({ to: "/login" as any });
+        navigate({ to: "/login" });
       }
     }, 60_000);
     return () => clearInterval(interval);
@@ -220,7 +243,7 @@ export default function PortalLayout({
 
   function handleManualLogout() {
     clearSession();
-    navigate({ to: "/login" as any });
+    navigate({ to: "/login" });
   }
 
   // Don't render portal content while redirecting
@@ -232,7 +255,7 @@ export default function PortalLayout({
     return null;
 
   return (
-    <div className="min-h-screen" style={{ background: "#0A0B14" }}>
+    <div className="min-h-screen" style={{ background: "#0F172A" }}>
       {/* Session timeout warning modal */}
       <SessionTimeoutModal
         isOpen={isWarning}
@@ -246,21 +269,43 @@ export default function PortalLayout({
         className="hidden md:flex flex-col fixed top-0 left-0 h-screen z-40"
         style={{
           width: "240px",
-          background: "rgba(14,16,32,1)",
-          borderRight: "1px solid #1C1F33",
+          background: "#0F172A",
+          borderRight: "1px solid rgba(34,197,94,0.1)",
         }}
       >
         {/* Wordmark */}
         <div style={{ padding: "24px" }}>
           <span
-            className="text-white font-bold"
-            style={{ fontSize: "20px", letterSpacing: "0.15em" }}
+            style={{
+              fontSize: "20px",
+              letterSpacing: "0.15em",
+              fontWeight: 700,
+              color: "#22C55E",
+              display: "block",
+              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+              textShadow:
+                "0 0 6px rgba(94,240,138,0.5), 0 0 20px rgba(71,85,105,0.3)",
+              marginBottom: "4px",
+            }}
           >
-            <EditableText
-              textKey="portal.sidebar.wordmark"
-              defaultText="Imperidome"
-              as="span"
-            />
+            <span className="font-medium text-white">IMPERIDOME</span>
+          </span>
+          <span
+            style={{
+              display: "inline-block",
+              background: "rgba(34,197,94,0.08)",
+              color: "#22C55E",
+              fontSize: "11px",
+              fontWeight: 700,
+              letterSpacing: "0.1em",
+              padding: "2px 8px",
+              borderRadius: "4px",
+              textTransform: "uppercase" as const,
+              border: "1px solid rgba(94,240,138,0.25)",
+              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+            }}
+          >
+            <span className="font-medium text-white">Client Portal</span>
           </span>
         </div>
 
@@ -288,21 +333,23 @@ export default function PortalLayout({
                   padding: "10px 16px",
                   borderRadius: "8px",
                   background: isActive ? "rgba(94,240,138,0.1)" : "transparent",
-                  color: isActive ? "#5EF08A" : "#7A7D90",
+                  color: isActive ? "#22C55E" : "#7A7D90",
                   fontSize: "14px",
                   fontWeight: isActive ? 500 : 400,
                   textDecoration: "none",
                   transition: "background 0.15s, color 0.15s",
+                  fontFamily: isActive
+                    ? "'JetBrains Mono', 'Fira Code', monospace"
+                    : undefined,
+                  borderLeft: isActive
+                    ? "3px solid #22C55E"
+                    : "3px solid transparent",
                 }}
               >
                 <span style={{ flexShrink: 0, opacity: isActive ? 1 : 0.7 }}>
                   {item.icon}
                 </span>
-                <EditableText
-                  textKey={item.labelKey}
-                  defaultText={item.label}
-                  as="span"
-                />
+                <span className="font-medium text-white">{item.label}</span>
               </Link>
             );
           })}
@@ -312,7 +359,7 @@ export default function PortalLayout({
         <div
           style={{
             padding: "24px",
-            borderTop: "1px solid #1C1F33",
+            borderTop: "1px solid rgba(34,197,94,0.08)",
           }}
         >
           <p
@@ -323,6 +370,7 @@ export default function PortalLayout({
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
+              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
             }}
           >
             {session.email}
@@ -362,8 +410,9 @@ export default function PortalLayout({
           className="sticky top-0 z-30"
           style={{
             height: "64px",
-            background: "#0A0B14",
-            borderBottom: "1px solid #1C1F33",
+            background: "#0F172A",
+            borderBottom: "1px solid rgba(71,85,105,0.3)",
+            boxShadow: "0 2px 20px rgba(94,240,138,0.05)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -372,19 +421,33 @@ export default function PortalLayout({
         >
           <h1
             className="font-bold"
-            style={{ color: "#EEF0F8", fontSize: "18px", margin: 0 }}
+            style={{
+              color: "#22C55E",
+              fontSize: "18px",
+              margin: 0,
+              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+              letterSpacing: "0.06em",
+              textShadow: "0 0 8px rgba(94,240,138,0.4)",
+            }}
           >
-            {pageTitle}
+            <span className="font-medium text-white">{pageTitle}</span>
           </h1>
           <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-            <span style={{ color: "#7A7D90", fontSize: "14px" }}>
+            <span
+              style={{
+                color: "#22C55E",
+                fontSize: "14px",
+                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                opacity: 0.8,
+              }}
+            >
               {session.firstName}
             </span>
             <button
               type="button"
               data-ocid="portal.notifications.button"
               aria-label="Notifications"
-              onClick={() => navigate({ to: "/portal/dashboard" as any })}
+              onClick={() => navigate({ to: "/portal/messages" })}
               style={{
                 background: "none",
                 border: "none",
@@ -408,6 +471,14 @@ export default function PortalLayout({
         >
           {children}
         </main>
+        {/* Footer — hidden on mobile (bottom tab bar takes priority), visible md+ */}
+        <div className="hidden md:block">
+          <Footer />
+        </div>
+        {/* Footer — mobile: shown above tab bar padding, compact */}
+        <div className="md:hidden" style={{ paddingBottom: "60px" }}>
+          <Footer />
+        </div>
       </div>
 
       {/* ===== BOTTOM TAB BAR (mobile only) ===== */}
@@ -416,8 +487,8 @@ export default function PortalLayout({
         className="md:hidden fixed bottom-0 left-0 right-0 z-50"
         style={
           {
-            background: "rgba(14,16,32,1)",
-            borderTop: "1px solid #1C1F33",
+            background: "#0F172A",
+            borderTop: "1px solid rgba(71,85,105,0.3)",
             display: "flex",
             alignItems: "stretch",
             overflowX: "auto",
@@ -425,7 +496,7 @@ export default function PortalLayout({
             WebkitOverflowScrolling: "touch" as const,
             msOverflowStyle: "none" as const,
             minHeight: "60px",
-          } as React.CSSProperties
+          } as CSSProperties
         }
       >
         <style>{`
@@ -448,29 +519,31 @@ export default function PortalLayout({
                 justifyContent: "center",
                 gap: "3px",
                 padding: "0 10px",
-                color: isActive ? "#5EF08A" : "#7A7D90",
+                color: isActive ? "#22C55E" : "#7A7D90",
                 textDecoration: "none",
                 transition: "color 0.15s",
+                borderBottom: isActive
+                  ? "2px solid #22C55E"
+                  : "2px solid transparent",
+                boxShadow: isActive ? "0 2px 8px rgba(34,197,94,0.1)" : "none",
               }}
             >
               {item.icon}
               <span
                 style={{
-                  fontSize: "14px",
-                  fontWeight: isActive ? 500 : 400,
+                  fontSize: "10px",
+                  fontWeight: isActive ? 600 : 400,
                   lineHeight: 1,
                   whiteSpace: "nowrap",
+                  fontFamily: isActive
+                    ? "'JetBrains Mono', 'Fira Code', monospace"
+                    : undefined,
+                  letterSpacing: isActive ? "0.05em" : undefined,
                 }}
               >
-                {item.tabLabelKey ? (
-                  <EditableText
-                    textKey={item.tabLabelKey}
-                    defaultText={item.tabLabel ?? item.label}
-                    as="span"
-                  />
-                ) : (
-                  item.tabLabel
-                )}
+                <span className="font-medium text-white">
+                  {item.tabLabel ?? item.label}
+                </span>
               </span>
             </Link>
           );

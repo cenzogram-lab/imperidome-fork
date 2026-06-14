@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import type {
   PurchaseRequest as BackendPurchaseRequest,
   backendInterface,
-} from "../../backend";
+} from "../../backend.d";
+import TypewriterText from "../../components/TypewriterText";
 import { useActor } from "../../hooks/useActor";
 import { useSession } from "../../hooks/useSession";
 import PortalLayout from "./PortalLayout";
@@ -18,7 +19,7 @@ interface PurchaseRequest {
   productName: string;
   amount: number;
   frequency: string;
-  status: "pending" | "approved" | "declined";
+  status: string;
   requestedAt: bigint;
   declineReason?: string;
   checkoutUrl?: string;
@@ -27,8 +28,8 @@ interface PurchaseRequest {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function formatPrice(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
+function formatPrice(amount: number): string {
+  return `${amount.toFixed(2)}`;
 }
 
 function formatFreq(f: string): string {
@@ -39,6 +40,8 @@ function formatFreq(f: string): string {
 }
 
 function formatDate(ts: bigint): string {
+  if (ts === 0n) return "—";
+  if (Number.isNaN(Number(ts))) return "—";
   const ms = Number(ts) / 1_000_000;
   return new Date(ms).toLocaleDateString("en-US", {
     month: "long",
@@ -47,47 +50,80 @@ function formatDate(ts: bigint): string {
   });
 }
 
-function StatusBadge({ status }: { status: PurchaseRequest["status"] }) {
-  const styles: Record<
-    PurchaseRequest["status"],
-    { bg: string; border: string; color: string; label: string }
-  > = {
-    pending: {
-      bg: "rgba(251,146,60,0.1)",
-      border: "rgba(251,146,60,0.35)",
-      color: "#FB923C",
-      label: "Pending",
-    },
-    approved: {
-      bg: "rgba(94,240,138,0.1)",
-      border: "rgba(94,240,138,0.35)",
-      color: "#5EF08A",
-      label: "Approved",
-    },
-    declined: {
-      bg: "rgba(239,68,68,0.1)",
-      border: "rgba(239,68,68,0.35)",
-      color: "#EF4444",
-      label: "Declined",
-    },
-  };
-  const s = styles[status];
+function StatusBadge({ status }: { status: string }) {
+  const s = status.toLowerCase();
+  if (s === "approved") {
+    return (
+      <span
+        className="matrix-badge"
+        style={{
+          display: "inline-block",
+          padding: "3px 10px",
+          borderRadius: "20px",
+          fontSize: "12px",
+          fontWeight: 700,
+          letterSpacing: "0.04em",
+          textTransform: "uppercase",
+        }}
+      >
+        Approved
+      </span>
+    );
+  }
+  if (s === "declined") {
+    return (
+      <span
+        className="matrix-badge-red"
+        style={{
+          display: "inline-block",
+          padding: "3px 10px",
+          borderRadius: "20px",
+          fontSize: "12px",
+          fontWeight: 700,
+          letterSpacing: "0.04em",
+          textTransform: "uppercase",
+        }}
+      >
+        Declined
+      </span>
+    );
+  }
+  if (s === "pending") {
+    return (
+      <span
+        style={{
+          display: "inline-block",
+          padding: "3px 10px",
+          borderRadius: "20px",
+          background: "rgba(251,146,60,0.1)",
+          border: "1px solid rgba(251,146,60,0.35)",
+          color: "#FB923C",
+          fontSize: "12px",
+          fontWeight: 700,
+          letterSpacing: "0.04em",
+          textTransform: "uppercase",
+        }}
+      >
+        Pending
+      </span>
+    );
+  }
   return (
     <span
       style={{
         display: "inline-block",
         padding: "3px 10px",
         borderRadius: "20px",
-        background: s.bg,
-        border: `1px solid ${s.border}`,
-        color: s.color,
+        background: "rgba(120,120,140,0.1)",
+        border: "1px solid rgba(120,120,140,0.3)",
+        color: "#9A9CB0",
         fontSize: "12px",
         fontWeight: 700,
         letterSpacing: "0.04em",
         textTransform: "uppercase",
       }}
     >
-      {s.label}
+      Unknown
     </span>
   );
 }
@@ -105,10 +141,8 @@ function RequestCard({
   return (
     <div
       data-ocid={`requests.item.${index + 1}`}
+      className="matrix-card"
       style={{
-        background: "rgba(17,19,34,0.8)",
-        border: "1px solid #1C1F33",
-        borderRadius: "14px",
         padding: "22px 24px",
         display: "flex",
         flexDirection: "column",
@@ -127,15 +161,15 @@ function RequestCard({
       >
         <div style={{ minWidth: 0 }}>
           <h3
+            className="matrix-heading"
             style={{
               margin: "0 0 4px",
               fontSize: "16px",
               fontWeight: 700,
-              color: "#EEF0F8",
               lineHeight: "1.3",
             }}
           >
-            {request.productName}
+            <TypewriterText text={request.productName} speed={40} />
           </h3>
           <p style={{ margin: 0, fontSize: "13px", color: "#7A7D90" }}>
             Submitted {formatDate(request.requestedAt)}
@@ -161,7 +195,7 @@ function RequestCard({
       </div>
 
       {/* Status-specific content */}
-      {request.status === "pending" && (
+      {request.status?.toLowerCase() === "pending" && (
         <div
           data-ocid={`requests.loading_state.${index + 1}`}
           style={{
@@ -186,7 +220,7 @@ function RequestCard({
         </div>
       )}
 
-      {request.status === "approved" && request.checkoutUrl && (
+      {request.status?.toLowerCase() === "approved" && request.checkoutUrl && (
         <a
           href={request.checkoutUrl}
           target="_blank"
@@ -198,7 +232,7 @@ function RequestCard({
             gap: "6px",
             padding: "10px 18px",
             minHeight: "44px",
-            color: "#061209",
+            color: "#00e87d",
             border: "none",
             borderRadius: "8px",
             fontWeight: 700,
@@ -213,7 +247,7 @@ function RequestCard({
         </a>
       )}
 
-      {request.status === "approved" && !request.checkoutUrl && (
+      {request.status?.toLowerCase() === "approved" && !request.checkoutUrl && (
         <p
           style={{
             margin: 0,
@@ -226,20 +260,21 @@ function RequestCard({
         </p>
       )}
 
-      {request.status === "declined" && request.declineReason && (
-        <p
-          data-ocid={`requests.decline_reason.${index + 1}`}
-          style={{
-            margin: 0,
-            fontSize: "13px",
-            color: "#7A7D90",
-            lineHeight: "1.6",
-            fontStyle: "italic",
-          }}
-        >
-          Reason: {request.declineReason}
-        </p>
-      )}
+      {request.status?.toLowerCase() === "declined" &&
+        request.declineReason && (
+          <p
+            data-ocid={`requests.decline_reason.${index + 1}`}
+            style={{
+              margin: 0,
+              fontSize: "13px",
+              color: "#7A7D90",
+              lineHeight: "1.6",
+              fontStyle: "italic",
+            }}
+          >
+            Reason: {request.declineReason}
+          </p>
+        )}
     </div>
   );
 }
@@ -275,10 +310,14 @@ export default function PortalPurchaseRequestsPage() {
 
   const [requests, setRequests] = useState<PurchaseRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: retryKey is an intentional retry trigger
   useEffect(() => {
     if (!actor || isFetching || !userEmail) return;
     let cancelled = false;
+    setLoadError(null);
 
     async function load() {
       try {
@@ -295,20 +334,26 @@ export default function PortalPurchaseRequestsPage() {
             productName: r.productName,
             amount: r.amount,
             frequency: r.frequency,
-            status: r.status as "pending" | "approved" | "declined",
+            status: r.status as string,
             requestedAt: r.requestedAt,
             declineReason: r.declineReason ?? undefined,
             checkoutUrl: r.checkoutUrl ?? undefined,
           }));
           // Sort newest first by requestedAt
-          raw.sort(
-            (a: PurchaseRequest, b: PurchaseRequest) =>
-              Number(b.requestedAt) - Number(a.requestedAt),
+          raw.sort((a: PurchaseRequest, b: PurchaseRequest) =>
+            b.requestedAt > a.requestedAt
+              ? 1
+              : b.requestedAt < a.requestedAt
+                ? -1
+                : 0,
           );
           setRequests(raw);
         }
       } catch {
-        if (!cancelled) setRequests([]);
+        if (!cancelled) {
+          setRequests([]);
+          setLoadError("Failed to load requests. Please try again.");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -318,7 +363,7 @@ export default function PortalPurchaseRequestsPage() {
     return () => {
       cancelled = true;
     };
-  }, [actor, isFetching, userEmail]);
+  }, [actor, isFetching, userEmail, retryKey]);
 
   return (
     <PortalLayout pageTitle="Purchase Requests">
@@ -349,14 +394,14 @@ export default function PortalPurchaseRequestsPage() {
         {/* Header */}
         <div data-ocid="requests.section">
           <h1
+            className="matrix-heading"
             style={{
               margin: "0 0 4px",
               fontSize: "22px",
               fontWeight: 700,
-              color: "#EEF0F8",
             }}
           >
-            Purchase Requests
+            <TypewriterText text="Purchase Requests" speed={55} />
           </h1>
           <p style={{ margin: 0, fontSize: "14px", color: "#7A7D90" }}>
             Track the status of your purchase requests. Approved requests
@@ -392,8 +437,50 @@ export default function PortalPurchaseRequestsPage() {
           </div>
         )}
 
+        {/* Load error */}
+        {!loading && loadError && (
+          <div
+            data-ocid="requests.error_state"
+            style={{
+              background: "rgba(239,68,68,0.1)",
+              border: "1px solid rgba(239,68,68,0.3)",
+              borderRadius: "12px",
+              padding: "20px 24px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "16px",
+              flexWrap: "wrap",
+            }}
+          >
+            <span
+              style={{ color: "#EF4444", fontSize: "14px", fontWeight: 600 }}
+            >
+              {loadError}
+            </span>
+            <button
+              type="button"
+              data-ocid="requests.error.retry_button"
+              onClick={() => setRetryKey((prev) => prev + 1)}
+              style={{
+                background: "rgba(239,68,68,0.15)",
+                border: "1px solid rgba(239,68,68,0.4)",
+                borderRadius: "8px",
+                color: "#EF4444",
+                fontSize: "13px",
+                fontWeight: 600,
+                padding: "8px 16px",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Empty */}
-        {!loading && requests.length === 0 && (
+        {!loading && !loadError && requests.length === 0 && (
           <div
             data-ocid="requests.empty_state"
             style={{
@@ -449,7 +536,7 @@ export default function PortalPurchaseRequestsPage() {
         )}
 
         {/* Request list */}
-        {!loading && requests.length > 0 && (
+        {!loading && !loadError && requests.length > 0 && (
           <div
             data-ocid="requests.list"
             style={{ display: "flex", flexDirection: "column", gap: "12px" }}

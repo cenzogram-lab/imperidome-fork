@@ -32,6 +32,13 @@ type WeeklySchedule =
    tuesday: DaySchedule;
    wednesday: DaySchedule;
  };
+type WebhookAuditEntry = 
+ record {
+   event_id: text;
+   event_type: text;
+   processing_result: text;
+   received_at: int;
+ };
 type UserRole = 
  variant {
    admin;
@@ -72,15 +79,26 @@ type SubscriptionId = nat;
 type Subscription = 
  record {
    billing_cycle: text;
+   clientEmail: text;
    client_id: ClientId;
    created_at: Timestamp;
    id: SubscriptionId;
+   nextBillingDate: int;
    next_payment_date: Timestamp;
+   paymentFailed: bool;
    plan_code: text;
    plan_name: text;
+   reminderSentAt: opt int;
    status: text;
+   stripeCustomerId: opt text;
    stripe_subscription_id: text;
    updated_at: Timestamp;
+ };
+type SubAdmin = 
+ record {
+   allowedTabs: vec text;
+   createdAt: int;
+   email: text;
  };
 type StripeSessionStatus = 
  variant {
@@ -108,6 +126,14 @@ type Status =
    questionnaireComplete;
    questionnairePending;
    revisionsInProgress;
+ };
+type SocialMediaConfig = 
+ record {
+   facebookUrl: text;
+   instagramUrl: text;
+   linkedinUrl: text;
+   tiktokUrl: text;
+   youtubeUrl: text;
  };
 type SiteLinkEntry = 
  record {
@@ -194,15 +220,37 @@ type ProductId = nat;
 type Product = 
  record {
    active: bool;
+   bestFor: opt text;
+   bodySections: opt text;
+   closingCTA: opt text;
    created_at: Timestamp;
    description: text;
+   detailDescription: opt text;
+   faqItems: opt text;
+   featureBullets: vec text;
+   heroHeadline: opt text;
+   heroSubheadline: opt text;
    id: ProductId;
+   imageUrl: opt text;
    name: text;
+   payment_type: text;
+   plan_section: opt text;
    price_annual: opt float64;
    price_monthly: opt float64;
    price_onetime: opt float64;
    product_type: text;
+   proofPoints: opt text;
+   recommendedPlan: opt text;
+   seoMetaDescription: opt text;
+   seoMetaTitle: opt text;
+   show_questionnaire: bool;
+   speedy_filter: opt text;
+   tagline: opt text;
+   tags: vec text;
    tier_code: opt text;
+   upgradePath: opt text;
+   video_url_1: text;
+   video_url_2: text;
  };
 type PortfolioItem = 
  record {
@@ -230,6 +278,7 @@ type PendingNotification =
 type OrderId = nat;
 type Order = 
  record {
+   amount: float64;
    client_id: ClientId;
    created_at: Timestamp;
    delivery_window: text;
@@ -334,6 +383,18 @@ type EmailLog =
    templateName: text;
    timestamp: int;
  };
+type EmailCampaignId = nat;
+type EmailCampaign = 
+ record {
+   body: text;
+   createdAt: int;
+   id: EmailCampaignId;
+   recipients: vec text;
+   scheduledDate: opt int;
+   sentAt: opt int;
+   status: text;
+   subject: text;
+ };
 type EditRequestId = nat;
 type EditRequest = 
  record {
@@ -357,10 +418,16 @@ type DaySchedule =
  };
 type DashboardMetrics = 
  record {
+   ordersByStatus: vec record {
+                         text;
+                         nat;
+                       };
    outstandingInvoices: nat;
    recentActivity: vec text;
    totalActiveSubscriptions: nat;
    totalClients: nat;
+   totalOrderValue: nat;
+   totalOrders: nat;
    totalProducts: nat;
    totalWebsites: nat;
    unreviewedQuestionnaires: nat;
@@ -371,19 +438,27 @@ type CrmClient =
    briefStatus: opt text;
    briefSubmittedAt: opt int;
    completionPaymentCharged: bool;
+   connectedAt: opt int;
    created_at: int;
    currentMilestone: nat;
+   deletionRequested: bool;
+   deletionRequestedAt: int;
    email: text;
    hasAccount: bool;
    id: text;
+   lastActivityAt: opt int;
    milestoneUpdatedAt: opt int;
    name: text;
    notes: text;
    onboardingBriefId: opt text;
    phone: text;
+   platformFeePercentage: float64;
    projectStatus: text;
    siteLinkLog: vec SiteLinkEntry;
    source: text;
+   stripeConnectAccountId: opt text;
+   stripeConnectStatus: text;
+   webhookSecret: opt text;
  };
 type ClientMessage = 
  record {
@@ -405,6 +480,12 @@ type ClientFileMetadata =
    objectKey: text;
    uploadedAt: int;
    uploaderEmail: text;
+ };
+type BusinessMetrics = 
+ record {
+   activeBookings: nat;
+   monthlyRevenueCents: nat;
+   saasPlanStatus: text;
  };
 type Build = 
  record {
@@ -505,46 +586,62 @@ service : {
    (_ImmutableObjectStorageRefillResult);
   _immutableObjectStorageUpdateGatewayPrincipals: () -> ();
   _initializeAccessControl: () -> ();
-  addBuild: (adminEmail: text, clientName: text, siteUrl: text, description:
-   opt text, category: opt text, thumbnailUrl: opt text) ->
+  activateSubscription: (subscriptionId: text) ->
+   (variant {
+      err: text;
+      ok: text;
+    });
+  addBuild: (clientName: text, siteUrl: text, description: opt text,
+   category: opt text, thumbnailUrl: opt text) ->
    (variant {
       err: text;
       ok: Build;
     });
   addClient: (name: text, email: text, phone: text, source: text,
    activeServices: vec text, onboardingBriefId: opt text) -> (text);
-  addFleetCanister: (adminEmail: text, name: text, canisterId: text) -> ();
-  addFleetSite: (adminEmail: text, name: text, canisterId: text) -> ();
-  addFleetSoftware: (adminEmail: text, name: text, canisterId: text) -> ();
-  addMarqueeLogo: (logoUrl: text, logoLabel: text, adminEmail: text) ->
+  addFleetCanister: (name: text, canisterId: text) -> ();
+  addFleetSite: (name: text, canisterId: text) -> ();
+  addFleetSoftware: (name: text, canisterId: text) -> ();
+  addMarqueeLogo: (logoUrl: text, logoLabel: text) ->
    (variant {
       err: text;
       ok: MarqueeLogo;
     });
-  adminUpdateClientProfile: (adminEmail: text, clientId: text, firstName:
-   text, lastName: text, phone: text, businessName: text, businessType:
+  addSubAdmin: (email: text, tabs: vec text) -> (variant {
+                                                   err: text;
+                                                   ok;
+                                                 });
+  adminUpdateClientProfile: (clientId: text, firstName: text, lastName: 
+   text, phone: text, businessName: text, businessType: text) ->
+   (variant {
+      err: text;
+      ok: text;
+    });
+  approvePurchaseRequest: (requestId: nat, successUrl: text, cancelUrl:
    text) -> (variant {
                err: text;
                ok: text;
              });
-  approvePurchaseRequest: (adminEmail: text, requestId: nat, successUrl:
-   text, cancelUrl: text) -> (variant {
-                                err: text;
-                                ok: text;
-                              });
-  approveReview: (adminEmail: text, reviewId: ReviewId) ->
-   (variant {
-      err: text;
-      ok;
-    });
+  approveReview: (reviewId: ReviewId) -> (variant {
+                                            err: text;
+                                            ok;
+                                          });
   assignCallerUserRole: (user: principal, role: UserRole) -> ();
   assignMeetingToLead: (leadId: text, newDate: text, newTime: text,
-   meetingMethod: text, adminEmail: text) ->
-   (record {
-      meetLink: text;
-      ok: bool;
+   meetingMethod: text) -> (record {
+                              meetLink: text;
+                              ok: bool;
+                            });
+  blockDate: (date: text) -> ();
+  cancelEmailCampaign: (campaignId: nat) -> (variant {
+                                               err: text;
+                                               ok;
+                                             });
+  cancelSubscription: (subscriptionId: text) ->
+   (variant {
+      err: text;
+      ok: text;
     });
-  blockDate: (adminEmail: text, date: text) -> ();
   changePassword: (args:
    record {
      currentPasswordHash: blob;
@@ -557,56 +654,73 @@ service : {
       notPaid;
       paid;
     });
-  clearGoogleCalendarConfig: (adminEmail: text) -> (variant {
-                                                      err: text;
-                                                      ok;
-                                                    });
-  clearGoogleSheetsConfig: (adminEmail: text) -> (variant {
-                                                    err: text;
-                                                    ok;
-                                                  });
-  clearNotificationLog: (adminEmail: text) -> (variant {
-                                                 err: text;
-                                                 ok;
-                                               });
-  clearPendingPushNotifications: (adminEmail: text) ->
-   (variant {
-      err: text;
-      ok: text;
-    });
-  convertLeadToClient: (adminEmail: text, leadId: text, name: text, email:
-   text, phone: text, source: text, activeServices: vec text,
-   onboardingBriefId: opt text) -> (text);
-  createAdHocInvoiceSession: (clientId: text, adminEmail: text, description:
-   text, amountCents: nat, successUrl: text, cancelUrl: text) ->
-   (variant {
-      err: text;
-      ok: text;
-    });
-  createBlogPost: (adminEmail: text, title: text, slug: text, category: 
-   text, excerpt: text, body: text, author: text, featured_image_url:
-   opt text, featuredImageCaption: text, status: text, seoMetaDescription:
-   opt text, seoMetaKeywords: opt text) -> (UpsertResult);
-  createCheckoutSession: (items: vec ShoppingItem, successUrl: text,
-   cancelUrl: text) -> (text);
-  createCompletionPaymentSession: (clientId: text, adminEmail: text,
-   successUrl: text, cancelUrl: text) -> (text);
-  createDraftLead: (name: text, email: text, phone: text, "service": 
-   text, adminEmail: text) -> (record {
-                                 leadId: text;
-                                 ok: bool;
+  clearGoogleCalendarConfig: () -> (variant {
+                                      err: text;
+                                      ok;
+                                    });
+  clearGoogleSheetsConfig: () -> (variant {
+                                    err: text;
+                                    ok;
+                                  });
+  clearNotificationLog: () -> (variant {
+                                 err: text;
+                                 ok;
                                });
+  clearPendingPushNotifications: () -> (variant {
+                                          err: text;
+                                          ok: text;
+                                        });
+  convertLeadToClient: (leadId: text, name: text, email: text, phone: 
+   text, source: text, activeServices: vec text, onboardingBriefId:
+   opt text) -> (text);
+  createAdHocInvoiceSession: (clientId: text, description: text, amountCents:
+   nat, successUrl: text, cancelUrl: text) -> (variant {
+                                                 err: text;
+                                                 ok: text;
+                                               });
+  createBlogPost: (title: text, slug: text, category: text, excerpt: 
+   text, body: text, author: text, featured_image_url: opt text,
+   featuredImageCaption: text, status: text, seoMetaDescription: opt text,
+   seoMetaKeywords: opt text) -> (UpsertResult);
+  createCheckoutSession: (items: vec ShoppingItem, clientEmail: text,
+   successUrl: text, cancelUrl: text, clientName: text) ->
+   (variant {
+      err: text;
+      ok: text;
+    });
+  createCompletionPaymentSession: (clientId: text, successUrl: text,
+   cancelUrl: text) -> (text);
+  createDraftLead: (name: text, email: text, phone: text, "service": 
+   text) -> (record {
+               leadId: text;
+               ok: bool;
+             });
   createEditRequest: (requestType: text, pageSection: text, description:
    text, attachmentUrl: text) -> (UpsertResult);
+  createEmailCampaign: (subject: text, body: text, recipients: vec text,
+   scheduledDate: opt int) -> (variant {
+                                 err: text;
+                                 ok: nat;
+                               });
   createLead: (path: text, name: text, email: text, business: text, message:
    text) -> (text);
-  createPortfolioItem: (adminEmail: text, client_name: text, site_url: 
-   text, thumbnail_url: text, imageCaption: text, tier_code: text,
-   description: text, is_featured: bool, seoMetaDescription: opt text,
-   seoMetaKeywords: opt text) -> (variant {
-                                    err: text;
-                                    ok: text;
-                                  });
+  createPortfolioItem: (client_name: text, site_url: text, thumbnail_url:
+   text, imageCaption: text, tier_code: text, description: text, is_featured:
+   bool, seoMetaDescription: opt text, seoMetaKeywords: opt text) ->
+   (variant {
+      err: text;
+      ok: text;
+    });
+  createProduct: (name: text, description: text, productType: text,
+   priceMonthly: opt float64, priceAnnual: opt float64, priceOnetime:
+   opt float64, tagline: opt text, featureBullets: vec text, bestFor:
+   opt text, upgradePath: opt text, recommendedPlan: opt text, paymentType:
+   text, videoUrl1: text, videoUrl2: text, showQuestionnaire: bool,
+   planSection: opt text, speedyFilter: opt text) ->
+   (variant {
+      err: text;
+      ok: ProductId;
+    });
   createPurchaseRequest: (clientEmail: text, productId: nat, frequency:
    text) -> (variant {
                err: text;
@@ -617,54 +731,76 @@ service : {
                                 err: text;
                                 ok: text;
                               });
-  declinePurchaseRequest: (adminEmail: text, requestId: nat, reason:
-   opt text) -> (variant {
-                   err: text;
-                   ok: text;
-                 });
-  deleteBlogPost: (adminEmail: text, id: BlogPostId) -> ();
-  deleteBuild: (adminEmail: text, buildId: text) ->
+  createStripePortalSession: (callerEmail: text) ->
    (variant {
       err: text;
-      ok: bool;
+      ok: text;
     });
-  deleteClient: (adminEmail: text, clientId: text) ->
+  declinePurchaseRequest: (requestId: nat, reason: opt text) ->
    (variant {
       err: text;
-      ok;
+      ok: text;
     });
-  deleteClientFile: (adminEmail: text, fileId: text) ->
+  deleteBlogPost: (id: BlogPostId) -> ();
+  deleteBuild: (buildId: text) -> (variant {
+                                     err: text;
+                                     ok: bool;
+                                   });
+  deleteClient: (clientId: text) -> (variant {
+                                       err: text;
+                                       ok;
+                                     });
+  deleteClientFile: (fileId: text) -> (variant {
+                                         err: text;
+                                         ok: bool;
+                                       });
+  deleteLead: (leadId: text) -> ();
+  deleteMarqueeLogo: (id: text) -> (variant {
+                                      err: text;
+                                      ok: bool;
+                                    });
+  deletePortfolioItem: (id: text) -> (UpsertResult);
+  deleteProduct: (productId: nat) -> (variant {
+                                        err: text;
+                                        ok;
+                                      });
+  deleteQuestionnaire: (questionnaireId: QuestionnaireId) -> ();
+  deleteReferral: (referralCode: text) -> (variant {
+                                             err: text;
+                                             ok;
+                                           });
+  deleteReview: (reviewId: ReviewId) -> (variant {
+                                           err: text;
+                                           ok;
+                                         });
+  editBuild: (id: text, clientName: text, siteUrl: text, description:
+   opt text, category: opt text, thumbnailUrl: opt text) ->
    (variant {
       err: text;
-      ok: bool;
+      ok: Build;
     });
-  deleteLead: (adminEmail: text, leadId: text) -> ();
-  deleteMarqueeLogo: (id: text, adminEmail: text) ->
-   (variant {
-      err: text;
-      ok: bool;
-    });
-  deletePortfolioItem: (adminEmail: text, id: text) -> (UpsertResult);
-  deleteQuestionnaire: (adminEmail: text, questionnaireId:
-   QuestionnaireId) -> ();
-  editBuild: (adminEmail: text, id: text, clientName: text, siteUrl: 
-   text, description: opt text, category: opt text, thumbnailUrl:
-   opt text) -> (variant {
-                   err: text;
-                   ok: Build;
-                 });
-  generateAdminOTP: (adminEmail: text) -> (text);
-  generatePartnerLink: (adminEmail: text, partnerName: text, partnerEmail:
-   text) -> (text);
-  getAdHocClientInvoices: (adminEmail: text, clientId: text) ->
-   (vec AdHocInvoice);
+  generateAdminOTP: (adminEmail: text) -> (variant {
+                                             err: text;
+                                             ok: text;
+                                           });
+  generatePartnerLink: (partnerName: text, partnerEmail: text) -> (text);
+  getAdHocClientInvoices: (clientId: text) -> (vec AdHocInvoice);
   getAdminAllActivity: () -> (vec ActivityLog) query;
-  getAdminAllClients: (adminEmail: text) -> (vec UserProfile);
-  getAdminAllOrders: (adminEmail: text) -> (vec Order) query;
-  getAdminAllQuestionnaires: (adminEmail: text) -> (vec Questionnaire) query;
-  getAdminNotifications: (adminEmail: text) -> (vec AdminNotification);
+  getAdminAllClients: () -> (vec UserProfile);
+  getAdminAllOrders: () -> (vec Order) query;
+  getAdminAllQuestionnaires: () -> (vec Questionnaire) query;
+  getAdminBillingHistory: () -> (variant {
+                                   err: text;
+                                   ok: vec BillingHistory;
+                                 });
+  getAdminContactEmail: () -> (text) query;
+  getAdminNotifications: () -> (vec AdminNotification);
   getAdminStats: () -> (AdminStats) query;
   getAllBlogPostsAdmin: () -> (vec BlogPost);
+  getAllEmailCampaigns: () -> (variant {
+                                 err: text;
+                                 ok: vec EmailCampaign;
+                               });
   getAllPortfolioAdmin: () -> (vec PortfolioItem);
   getAllProductsAdmin: () -> (vec Product);
   getAllSiteText: () -> (vec record {
@@ -674,7 +810,8 @@ service : {
   getApprovedReviews: () -> (vec Review) query;
   getAvailability: () -> (AvailabilitySettings) query;
   getBlogPostBySlug: (slug: text) -> (opt BlogPost) query;
-  getBuilds: (adminEmail: text) -> (vec Build);
+  getBuilds: () -> (vec Build);
+  getBusinessMetrics: () -> (BusinessMetrics) query;
   getCallerUserRole: () -> (UserRole) query;
   getCanisterCycles: (canisterId: text) -> (variant {
                                               err: text;
@@ -685,62 +822,83 @@ service : {
                                       bool;
                                     }) query;
   getClientBriefStatus: (email: text) -> (opt text);
+  getClientBusinessMetrics: (canisterId: text) ->
+   (variant {
+      err: text;
+      ok: BusinessMetrics;
+    });
   getClientByEmail: (email: text) -> (opt CrmClient);
+  getClientByPrincipal: ("principal": principal) -> (opt UserProfile) query;
   getClientFileUrl: (callerEmail: text, fileId: text) ->
    (variant {
       err: text;
       ok: text;
-    }) query;
+    });
   getClientInvoices: (clientPrincipal: principal) -> (vec Invoice) query;
   getClientMilestone: (clientId: text) -> (variant {
                                              err: text;
                                              ok: opt nat;
                                            });
+  getClientOrderVolumes: () -> (vec record {
+                                      text;
+                                      float64;
+                                    }) query;
   getClientOrders: (client: principal) -> (vec Order) query;
   getClientPurchaseRequests: (clientEmail: text) ->
    (vec PurchaseRequest) query;
-  getClients: (adminEmail: text) -> (vec CrmClient);
-  getConversionStats: (adminEmail: text, fromTs: opt int, toTs: opt int) ->
+  getClients: () -> (vec CrmClient);
+  getConnectedClients: () -> (vec CrmClient) query;
+  getConversionStats: (fromTs: opt int, toTs: opt int) ->
    (record {
       conversionRate: float64;
       convertedLeads: nat;
       totalLeads: nat;
     }) query;
-  getCountryBreakdown: (email: text) ->
-   (vec record {
-          text;
-          nat;
-          float64;
-        }) query;
+  getCountryBreakdown: () -> (vec record {
+                                    text;
+                                    nat;
+                                    float64;
+                                  }) query;
   getCycles: () -> (nat) query;
-  getDailyVisitorChart: (email: text) -> (vec record {
-                                                text;
-                                                nat;
-                                              }) query;
+  getDailyVisitorChart: () -> (vec record {
+                                     text;
+                                     nat;
+                                   }) query;
   getDashboardMetrics: () -> (DashboardMetrics) query;
-  getEmailLogs: (adminEmail: text) -> (vec EmailLog) query;
+  getEmailHealth: () ->
+   (record {
+      last24hFailures: nat;
+      lastFailureTimestamp: int;
+      totalFailures: nat;
+    });
+  getEmailLogs: () -> (vec EmailLog) query;
   getEmailTemplates: () -> (vec EmailTemplate) query;
   getFilesForClient: (callerEmail: text, clientEmail: text) ->
-   (vec ClientFileMetadata) query;
-  getFleetSites: () -> (vec FleetCanister) query;
-  getFleetSoftware: () -> (vec FleetCanister) query;
-  getGoogleCalendarConfig: (adminEmail: text) ->
+   (vec ClientFileMetadata);
+  getFleetSites: () -> (vec FleetCanister);
+  getFleetSoftware: () -> (vec FleetCanister);
+  getGlobalTaxRate: () -> (float64) query;
+  getGoogleCalendarConfig: () ->
    (variant {
       err: text;
       ok: GoogleCalendarConfig;
     });
-  getGoogleSheetsConfig: (adminEmail: text) ->
-   (variant {
-      err: text;
-      ok: GoogleSheetsConfig;
-    });
-  getLeads: (adminEmail: text) -> (vec Lead) query;
-  getLiveVisitorCount: (email: text) -> (nat) query;
+  getGoogleSheetsConfig: () -> (variant {
+                                  err: text;
+                                  ok: GoogleSheetsConfig;
+                                });
+  getLeads: () -> (vec Lead) query;
+  getLiveVisitorCount: () -> (nat) query;
+  getLogoUrl: () -> (text) query;
   getMarqueeLogos: () -> (vec MarqueeLogo) query;
   getMessages: (callerEmail: text, targetClientEmail: text) ->
-   (vec ClientMessage) query;
+   (vec ClientMessage);
   getMyActivity: () -> (vec ActivityLog) query;
   getMyAdHocInvoices: () -> (vec AdHocInvoice) query;
+  getMyAdminPermissions: () -> (variant {
+                                  err: text;
+                                  ok: vec text;
+                                });
   getMyBillingHistory: () -> (vec BillingHistory) query;
   getMyEditRequests: () -> (vec EditRequest) query;
   getMyInvoices: () -> (vec Invoice) query;
@@ -757,91 +915,103 @@ service : {
                                  date: text;
                                  time: text;
                                }) query;
-  getNotificationLog: (adminEmail: text) ->
+  getNotificationLog: () ->
    (variant {
       err: text;
       ok: vec NotificationLogEntry;
     });
   getOrCreateMyReferralCode: () -> (text);
-  getPendingPushNotifications: (adminEmail: text) ->
+  getPendingPushNotifications: () ->
    (variant {
       err: text;
       ok: vec PendingNotification;
     });
-  getPendingReviews: (adminEmail: text) -> (vec Review) query;
+  getPendingReviews: () -> (vec Review) query;
+  getPendingSubscriptions: () -> (vec Subscription);
   getPortalShopProductIds: () -> (vec nat) query;
   getPortalShopProducts: () -> (vec Product) query;
+  getProductImageUrl: (productId: nat) -> (opt text) query;
   getProducts: () -> (vec Product) query;
   getProductsByType: (productType: text) -> (vec Product) query;
   getPublicAvailability: () -> (AvailabilitySettings) query;
   getPublicBuilds: () -> (vec Build) query;
   getPublicBuildsCount: () -> (nat) query;
+  getPublicSocialMediaConfig: () -> (SocialMediaConfig) query;
   getPublishedBlogPosts: () -> (vec BlogPost) query;
   getPublishedPortfolio: () -> (vec PortfolioItem) query;
-  getPurchaseRequests: (adminEmail: text) ->
-   (variant {
-      err: text;
-      ok: vec PurchaseRequest;
-    });
-  getPushSubscription: (adminEmail: text) ->
-   (variant {
-      err: text;
-      ok: opt PushSubscription;
-    });
+  getPurchaseRequests: () -> (variant {
+                                err: text;
+                                ok: vec PurchaseRequest;
+                              });
+  getPushSubscription: () -> (variant {
+                                err: text;
+                                ok: opt PushSubscription;
+                              });
   getQuestionDefinitions: (tierCode: text) -> (vec QuestionDefinition) query;
   getQuestionnaireByClientId: (clientId: ClientId) ->
    (opt Questionnaire) query;
-  getReferralStats: (adminEmail: text) -> (vec ReferralStat);
-  getRejectedReviews: (adminEmail: text) -> (vec Review) query;
-  getRescheduleHistory: (adminEmail: text, leadId: text) -> (vec int) query;
+  getReferralStats: () -> (vec ReferralStat);
+  getRejectedReviews: () -> (vec Review) query;
+  getReminderLeadDays: () -> (nat);
+  getRescheduleHistory: (leadId: text) -> (vec int) query;
   getRescheduleLeadByToken: (token: text) ->
    (opt record {
           isExpired: bool;
           lead: Lead;
         }) query;
-  getSiteLinkLog: (adminEmail: text, clientId: text) ->
+  getSiteBaseUrl: () -> (text) query;
+  getSiteLinkLog: (clientId: text) ->
    (variant {
       err: text;
       ok: vec SiteLinkEntry;
     }) query;
   getSiteText: (key: text) -> (opt text) query;
-  getStripeCharges: (adminEmail: text) -> (variant {
-                                             err: text;
-                                             ok: text;
-                                           });
-  getStripeCustomers: (adminEmail: text) -> (variant {
-                                               err: text;
-                                               ok: text;
-                                             });
-  getStripeDashboardData: (adminEmail: text) ->
-   (variant {
-      err: text;
-      ok: text;
-    });
-  getStripePayouts: (adminEmail: text) -> (variant {
-                                             err: text;
-                                             ok: text;
-                                           });
+  getSocialMediaConfig: () -> (variant {
+                                 err: text;
+                                 ok: SocialMediaConfig;
+                               });
+  getStripeCharges: () -> (variant {
+                             err: text;
+                             ok: text;
+                           });
+  getStripeConfiguration: () -> (opt StripeConfiguration) query;
+  getStripeCustomers: () -> (variant {
+                               err: text;
+                               ok: text;
+                             });
+  getStripeDashboardData: () -> (variant {
+                                   err: text;
+                                   ok: text;
+                                 });
+  getStripePayouts: () -> (variant {
+                             err: text;
+                             ok: text;
+                           });
   getStripePublishableKey: () -> (text) query;
   getStripeSessionStatus: (sessionId: text) -> (StripeSessionStatus);
-  getStripeSubscriptions: (adminEmail: text) ->
-   (variant {
-      err: text;
-      ok: text;
-    });
+  getStripeSubscriptions: () -> (variant {
+                                   err: text;
+                                   ok: text;
+                                 });
   getStripeTestMode: () -> (bool) query;
-  getTopPages: (email: text) -> (vec record {
+  getSubAdmins: () -> (variant {
+                         err: text;
+                         ok: vec record {
+                                   text;
+                                   SubAdmin;
+                                 };
+                       });
+  getTopPages: () -> (vec record {
+                            text;
+                            nat;
+                            float64;
+                          }) query;
+  getUnreadMessageCounts: () -> (vec record {
                                        text;
                                        nat;
-                                       float64;
                                      }) query;
-  getUnreadMessageCounts: (adminEmail: text) ->
-   (vec record {
-          text;
-          nat;
-        }) query;
   getVapidPublicKey: () -> (text) query;
-  getVisitorStats: (email: text) ->
+  getVisitorStats: () ->
    (record {
       allTimeSessions: nat;
       allTimeUnique: nat;
@@ -852,7 +1022,8 @@ service : {
       weekSessions: nat;
       weekUnique: nat;
     }) query;
-  handleStripeWebhook: (payload: text, _signature: text) ->
+  getWebhookAuditLog: () -> (vec WebhookAuditEntry);
+  handleStripeWebhook: (payload: text, _signature: text, secret: text) ->
    (variant {
       err: text;
       ok: text;
@@ -870,25 +1041,27 @@ service : {
                   email: text;
                   passwordHash: blob;
                 }) -> (LoginResult);
-  markAllNotificationsRead: (adminEmail: text) -> ();
-  markCompletionPaymentCharged: (clientId: text, adminEmail: text) ->
-   (variant {
-      err: text;
-      ok;
-    });
+  markAllNotificationsRead: () -> ();
+  markCompletionPaymentCharged: (clientId: text) -> (variant {
+                                                       err: text;
+                                                       ok;
+                                                     });
   markInvoicePaid: (invoiceId: text, paymentIntentId: text) -> (UpsertResult);
   markMessagesRead: (callerEmail: text, targetClientEmail: text) ->
    (variant {
       err: text;
       ok: bool;
     });
-  markNotificationRead: (adminEmail: text, id: text) -> ();
-  markQuestionnaireReviewed: (adminEmail: text, questionnaireId:
-   QuestionnaireId) -> ();
-  publishBlogPost: (adminEmail: text, id: BlogPostId) -> ();
-  publishPortfolioItem: (adminEmail: text, id: text) -> (UpsertResult);
+  markNotificationRead: (id: text) -> ();
+  markQuestionnaireReviewed: (questionnaireId: QuestionnaireId) -> ();
+  publishBlogPost: (id: BlogPostId) -> ();
+  publishPortfolioItem: (id: text) -> (UpsertResult);
   recordVisit: (pagePath: text, timestamp: int, sessionId: text, countryCode:
    opt text) -> (bool);
+  registerAdminPrincipal: () -> (variant {
+                                   err: text;
+                                   ok;
+                                 });
   registerUser: (args:
    record {
      email: text;
@@ -896,46 +1069,65 @@ service : {
      lastName: text;
      passwordHash: blob;
    }) -> (UpsertResult);
-  rejectReview: (adminEmail: text, reviewId: ReviewId) ->
-   (variant {
-      err: text;
-      ok;
-    });
-  removeFleetCanister: (adminEmail: text, canisterId: text) -> ();
-  removeFleetSite: (adminEmail: text, canisterId: text) -> ();
-  removeFleetSoftware: (adminEmail: text, canisterId: text) -> ();
-  removePushSubscription: (adminEmail: text) ->
-   (variant {
-      err: text;
-      ok: text;
-    });
-  reorderMarqueeLogos: (orderedIds: vec text, adminEmail: text) ->
+  rejectReview: (reviewId: ReviewId) -> (variant {
+                                           err: text;
+                                           ok;
+                                         });
+  removeAdminPrincipal: (p: principal) -> (variant {
+                                             err: text;
+                                             ok;
+                                           });
+  removeFleetCanister: (canisterId: text) -> ();
+  removeFleetSite: (canisterId: text) -> ();
+  removeFleetSoftware: (canisterId: text) -> ();
+  removeProductImage: (productId: nat) -> (variant {
+                                             err: text;
+                                             ok;
+                                           });
+  removePushSubscription: () -> (variant {
+                                   err: text;
+                                   ok: text;
+                                 });
+  removeSubAdmin: (email: text) -> (variant {
+                                      err: text;
+                                      ok;
+                                    });
+  reorderMarqueeLogos: (orderedIds: vec text) ->
    (variant {
       err: text;
       ok: bool;
     });
+  requestAccountDeletion: () -> (variant {
+                                   err: text;
+                                   ok;
+                                 });
   requestPasswordReset: (email: text) -> (text);
+  rescheduleEmailCampaign: (campaignId: nat, newScheduledDate: int) ->
+   (variant {
+      err: text;
+      ok;
+    });
   rescheduleLead: (token: text, newDate: text, newTime: text, meetingMethod:
    text) -> (record {
                message: text;
                ok: bool;
              });
-  resendEmail: (adminEmail: text, clientId: text, templateKey: text) ->
-   (bool);
-  resendSiteLink: (adminEmail: text, clientId: text, url: text) ->
+  reseedCatalog: () -> (variant {
+                          err: text;
+                          ok: text;
+                        });
+  resendEmail: (clientId: text, templateKey: text) -> (bool);
+  resendSiteLink: (clientId: text, url: text) -> (variant {
+                                                    err: text;
+                                                    ok;
+                                                  });
+  resetPasswordWithToken: (token: text, newPasswordHash: blob) -> (text);
+  saveEmailTemplate: (trigger_key: text, subject: text, body: text) -> ();
+  savePushSubscription: (endpoint: text, p256dh: text, auth: text) ->
    (variant {
       err: text;
-      ok;
+      ok: text;
     });
-  resetPasswordWithToken: (token: text, newPasswordHash: blob) -> (text);
-  saveEmailTemplate: (adminEmail: text, trigger_key: text, subject: text,
-   body: text) -> ();
-  savePushSubscription: (adminEmail: text, endpoint: text, p256dh: text,
-   auth: text) -> (variant {
-                     err: text;
-                     ok: text;
-                   });
-  sendAccountDeletionRequest: () -> ();
   sendDepositInvoice: (clientPrincipal: principal, clientEmail: text,
    amountCents: nat, description: text, dueDate: Timestamp) -> (text);
   sendMessage: (callerEmail: text, targetClientEmail: text, body: text) ->
@@ -943,40 +1135,85 @@ service : {
       err: text;
       ok: ClientMessage;
     });
+  sendNowEmailCampaign: (campaignId: nat) -> (variant {
+                                                err: text;
+                                                ok;
+                                              });
   sendOrderStatusEmail: (clientPrincipal: principal, status: Status,
    clientEmail: text) -> ();
-  sendRescheduleLink: (adminEmail: text, leadId: text) ->
+  sendRescheduleLink: (leadId: text) ->
    (record {
       message: text;
       success: bool;
     });
-  sendSiteLink: (adminEmail: text, clientId: text, siteUrl: text) ->
+  sendSiteLink: (clientId: text, siteUrl: text) ->
    (variant {
       err: text;
       ok: text;
     });
-  setAvailability: (adminEmail: text, settings: AvailabilitySettings) -> ();
-  setGoogleCalendarConfig: (config: GoogleCalendarConfig, adminEmail:
-   text) -> (variant {
-               err: text;
-               ok;
-             });
-  setGoogleSheetsConfig: (config: GoogleSheetsConfig, adminEmail: text) ->
+  sendUpcomingBillingReminders: () -> (variant {
+                                         err: text;
+                                         ok: nat;
+                                       });
+  setAdminEmail: (email: text) -> (variant {
+                                     err: text;
+                                     ok;
+                                   });
+  setAvailability: (settings: AvailabilitySettings) -> ();
+  setClientWebhookSecret: (clientId: text, secret: text) ->
    (variant {
       err: text;
       ok;
     });
-  setStripeConfiguration: (config: StripeConfiguration, adminEmail: text) ->
-   ();
-  setStripePublishableKey: (key: text, adminEmail: text) -> ();
-  setStripeSecretKey: (key: text, adminEmail: text) -> ();
-  setStripeTestMode: (testMode: bool, adminEmail: text) -> ();
-  setStripeWebhookSecret: (secret: text, adminEmail: text) -> ();
-  setVapidKeys: (adminEmail: text, privateKey: text, publicKey: text) ->
+  setGlobalTaxRate: (rate: float64) -> (variant {
+                                          err: text;
+                                          ok;
+                                        });
+  setGoogleCalendarConfig: (config: GoogleCalendarConfig) ->
+   (variant {
+      err: text;
+      ok;
+    });
+  setGoogleSheetsConfig: (config: GoogleSheetsConfig) ->
+   (variant {
+      err: text;
+      ok;
+    });
+  setLogoUrl: (url: text) -> (variant {
+                                err: text;
+                                ok;
+                              });
+  setReminderLeadDays: (days: nat) -> (variant {
+                                         err: text;
+                                         ok;
+                                       });
+  setSiteAuditFallbackPrice: (price: int) -> (variant {
+                                                err: text;
+                                                ok;
+                                              });
+  setSiteBaseUrl: (url: text) -> (variant {
+                                    err: text;
+                                    ok;
+                                  });
+  setSocialMediaConfig: (config: SocialMediaConfig) ->
+   (variant {
+      err: text;
+      ok;
+    });
+  setStripeConfiguration: (config: StripeConfiguration) -> ();
+  setStripePublishableKey: (key: text) -> ();
+  setStripeSecretKey: (key: text) -> ();
+  setStripeTestMode: (testMode: bool) -> ();
+  setStripeWebhookSecret: (secret: text) -> ();
+  setVapidKeys: (privateKey: text, publicKey: text) ->
    (variant {
       err: text;
       ok: text;
     });
+  setWebhookSharedSecret: (secret: text) -> (variant {
+                                               err: text;
+                                               ok;
+                                             });
   submitCancellationRequest: (subscriptionId: text) -> (UpsertResult);
   submitQuestionnaire: (questionnaireType: text, answers: text) -> (nat);
   submitReview: (clientEmail: text, rating: nat, reviewText: text, jobTitle:
@@ -984,53 +1221,88 @@ service : {
                err: text;
                ok: ReviewId;
              });
-  togglePortalShopProduct: (adminEmail: text, productId: nat) ->
+  togglePortalShopProduct: (productId: nat) ->
    (variant {
       err: text;
       ok: text;
     });
-  toggleProductStatus: (adminEmail: text, productId: text) -> (UpsertResult);
+  toggleProductStatus: (productId: text) -> (UpsertResult);
   trackReferralClick: (code: text) -> ();
   trackReferralConversion: (referralCode: text, buyerEmail: text, buyerName:
    text) -> ();
   transform: (input: TransformationInput) -> (TransformationOutput) query;
-  unblockDate: (adminEmail: text, date: text) -> ();
-  unpublishBlogPost: (adminEmail: text, id: BlogPostId) -> ();
-  unpublishPortfolioItem: (adminEmail: text, id: text) -> (UpsertResult);
-  updateBlogPost: (adminEmail: text, id: BlogPostId, title: text, slug: 
-   text, category: text, excerpt: text, body: text, author: text,
-   featured_image_url: opt text, featuredImageCaption: text, status: 
-   text, seoMetaDescription: opt text, seoMetaKeywords: opt text) -> ();
-  updateCategoryVisibility: (adminEmail: text, category: text, active:
-   bool) -> (UpsertResult);
+  unblockDate: (date: text) -> (variant {
+                                  err: text;
+                                  ok;
+                                });
+  unpublishBlogPost: (id: BlogPostId) -> ();
+  unpublishPortfolioItem: (id: text) -> (UpsertResult);
+  updateBlogPost: (id: BlogPostId, title: text, slug: text, category: 
+   text, excerpt: text, body: text, author: text, featured_image_url:
+   opt text, featuredImageCaption: text, status: text, seoMetaDescription:
+   opt text, seoMetaKeywords: opt text) -> ();
+  updateCategoryVisibility: (category: text, active: bool) -> (UpsertResult);
   updateClientBriefStatus: (newStatus: text) -> (UpsertResult);
-  updateClientHasAccount: (clientId: text, hasAccount: bool, adminEmail:
-   text) -> (UpsertResult);
-  updateClientMilestone: (adminEmail: text, clientId: text, newMilestone:
-   nat) -> (variant {
-              err: text;
-              ok;
-            });
-  updateClientNotes: (clientId: text, notes: text, adminEmail: text) ->
+  updateClientHasAccount: (clientId: text, hasAccount: bool) ->
    (UpsertResult);
-  updateClientStatus: (adminEmail: text, clientId: text, newStatus: text) ->
+  updateClientMilestone: (clientId: text, newMilestone: nat) ->
+   (variant {
+      err: text;
+      ok;
+    });
+  updateClientNotes: (clientId: text, notes: text) -> (UpsertResult);
+  updateClientPlatformFee: (clientId: text, newFeePercentage: float64) ->
+   (variant {
+      err: text;
+      ok;
+    });
+  updateClientStatus: (clientId: text, newStatus: text) -> (UpsertResult);
+  updateClientStripeAccountId: (clientId: text, stripeAccountId: text,
+   connectionStatus: text) -> (variant {
+                                 err: text;
+                                 ok;
+                               });
+  updateEmailCampaign: (campaignId: nat, subject: text, body: text,
+   recipients: vec text, scheduledDate: opt int) -> (variant {
+                                                       err: text;
+                                                       ok;
+                                                     });
+  updateLeadStatus: (leadId: text, newStatus: text) -> (UpsertResult);
+  updateMarqueeLogo: (id: text, logoUrl: text, logoLabel: text) ->
+   (variant {
+      err: text;
+      ok: MarqueeLogo;
+    });
+  updateOrderStatus: (orderId: text, newStatus: text) -> (UpsertResult);
+  updatePortfolioItem: (id: text, client_name: text, site_url: text,
+   thumbnail_url: text, imageCaption: text, tier_code: text, description:
+   text, is_featured: bool, seoMetaDescription: opt text, seoMetaKeywords:
+   opt text) -> (UpsertResult);
+  updateProductDescription: (productId: text, newDescription: text) ->
    (UpsertResult);
-  updateLeadStatus: (adminEmail: text, leadId: text, newStatus: text) ->
+  updateProductDetailContent: (productId: text, detailDescription: opt text,
+   seoMetaTitle: opt text, seoMetaDescription: opt text, heroHeadline:
+   opt text, heroSubheadline: opt text, bodySections: opt text, proofPoints:
+   opt text, faqItems: opt text, closingCTA: opt text) -> (UpsertResult);
+  updateProductImage: (productId: text, imageUrl: text) -> (UpsertResult);
+  updateProductPaymentType: (productId: text, paymentType: text) -> (bool);
+  updateProductPlanSection: (productId: ProductId, planSection: opt text) ->
+   (variant {
+      err: text;
+      ok;
+    });
+  updateProductPrice: (productId: text, newPriceMonthly: opt float64,
+   newPriceAnnual: opt float64, newPriceOnetime: opt float64) ->
    (UpsertResult);
-  updateMarqueeLogo: (id: text, logoUrl: text, logoLabel: text, adminEmail:
-   text) -> (variant {
-               err: text;
-               ok: MarqueeLogo;
-             });
-  updateOrderStatus: (adminEmail: text, orderId: text, newStatus: text) ->
-   (UpsertResult);
-  updatePortfolioItem: (adminEmail: text, id: text, client_name: text,
-   site_url: text, thumbnail_url: text, imageCaption: text, tier_code: 
-   text, description: text, is_featured: bool, seoMetaDescription: opt text,
-   seoMetaKeywords: opt text) -> (UpsertResult);
-  updateProductPrice: (adminEmail: text, productId: text, newPriceMonthly:
-   opt float64, newPriceAnnual: opt float64, newPriceOnetime: opt float64) ->
-   (UpsertResult);
+  updateProductRichFields: (productId: text, tagline: opt text,
+   featureBullets: vec text, bestFor: opt text, upgradePath: opt text,
+   recommendedPlan: opt text, videoUrl1: text, videoUrl2: text,
+   showQuestionnaire: bool) -> (UpsertResult);
+  updateProductSpeedyFilter: (productId: ProductId, speedyFilter:
+   opt text) -> (variant {
+                   err: text;
+                   ok;
+                 });
   updateProfile: (args:
    record {
      businessName: text;
@@ -1040,19 +1312,27 @@ service : {
      lastName: text;
      phone: text;
    }) -> (UpsertResult);
-  updateQuestionDefinitions: (adminEmail: text, tierCode: text, questions:
+  updateQuestionDefinitions: (tierCode: text, questions:
    vec QuestionDefinition) -> (variant {
                                  err: text;
                                  ok;
                                });
-  updateSiteText: (key: text, value: text, adminEmail: text) -> (bool);
-  uploadFileToClient: (adminEmail: text, clientEmail: text, fileData: 
-   blob, fileName: text, fileLabel: text) ->
+  updateSiteText: (key: text, value: text) -> (bool);
+  updateSubAdminTabs: (email: text, tabs: vec text) ->
    (variant {
       err: text;
-      ok: ClientFileMetadata;
+      ok;
     });
-  verifyAdminOTP: (adminEmail: text, otp: text) -> (text);
+  uploadFileToClient: (clientEmail: text, fileData: blob, fileName: text,
+   fileLabel: text) -> (variant {
+                          err: text;
+                          ok: ClientFileMetadata;
+                        });
+  verifyAdminOTP: (adminEmail: text, otp: text) ->
+   (variant {
+      err: text;
+      ok: text;
+    });
   verifyAndRecordPurchase: (sessionId: text, email: text, name: text,
    services: vec text) -> (variant {
                              err: text;

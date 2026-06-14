@@ -1,457 +1,73 @@
-import { useNavigate } from "@tanstack/react-router";
-import {
-  Database,
-  FilePlus,
-  FileText,
-  Home,
-  RefreshCw,
-  Search,
-  Share2,
-  Smartphone,
-  Star,
-  Target,
-  TrendingUp,
-  UserPlus,
-  UtensilsCrossed,
-} from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createActor } from "../backend";
 import type { Product, backendInterface } from "../backend.d.ts";
 import { EditableText } from "../components/EditableText";
 import { Footer } from "../components/Footer";
 import { Navbar } from "../components/Navbar";
 import PerformanceSnapshot from "../components/PerformanceSnapshot";
+import TypewriterText from "../components/TypewriterText";
 import { createActorWithConfig } from "../config";
 import { useActor } from "../hooks/useActor";
 import { useSeoMeta } from "../hooks/useSeoMeta";
 import { useCartStore } from "../store/useCartStore";
 
-const TABS = [
-  "Custom Sites",
-  "Speedy Sites",
-  "SaaS Plans",
-  "Cinematic Ads",
-  "Product Ads",
-  "AI Receptionist",
-  "Growth Hub",
-] as const;
-
-type Tab = (typeof TABS)[number];
-
-// Backend names match exactly what's seeded in main.mo (UPPERCASE for Custom Sites)
-const CUSTOM_SITES_TIERS = [
-  {
-    backendName: "DIGITAL PRESENCE",
-    displayName: "Digital Presence",
-    features: [
-      "Up to 5 pages",
-      "Mobile responsive design",
-      "Contact form + SSL",
-    ],
-  },
-  {
-    backendName: "AUTHORITY SITE",
-    displayName: "Authority Site",
-    features: [
-      "Up to 10 pages",
-      "Blog + content system",
-      "SEO foundation built-in",
-    ],
-  },
-  {
-    backendName: "BOOKING PRO",
-    displayName: "Booking Pro",
-    features: [
-      "Online booking portal",
-      "Confirmation + reminder emails",
-      "Calendar sync integration",
-    ],
-  },
-  {
-    backendName: "RESTAURANT PRO",
-    displayName: "Restaurant Pro",
-    features: [
-      "Digital menu system",
-      "Online ordering + reservations",
-      "Zero-commission ordering",
-    ],
-  },
-  {
-    backendName: "DIGITAL STOREFRONT",
-    displayName: "Digital Storefront",
-    features: [
-      "Full e-commerce build",
-      "Stripe checkout + inventory",
-      "Up to 500 products",
-    ],
-  },
-  {
-    backendName: "RESTAURANT EMPIRE",
-    displayName: "Restaurant Empire",
-    features: [
-      "Multi-location support",
-      "Loyalty + rewards system",
-      "Full POS integration",
-    ],
-  },
-  {
-    backendName: "MEMBERSHIP ENGINE",
-    displayName: "Membership Engine",
-    features: [
-      "Gated content system",
-      "Subscription billing tiers",
-      "Member dashboard + portal",
-    ],
-  },
-  {
-    backendName: "ENTERPRISE SCALE",
-    displayName: "Enterprise Scale",
-    features: [
-      "Custom architecture",
-      "Advanced integrations + API",
-      "Dedicated build team",
-    ],
-  },
-];
-
-const RUSH_STEPS = [
-  {
-    label: "Standard",
-    days: "5 Business Days",
-    fee: "+$0",
-    feeNote: "Included",
-    isEmergency: false,
-  },
-  {
-    label: "Priority",
-    days: "4 Business Days",
-    fee: "+$149",
-    feeNote: "",
-    isEmergency: false,
-  },
-  {
-    label: "Express",
-    days: "3 Business Days",
-    fee: "+$299",
-    feeNote: "",
-    isEmergency: false,
-  },
-  {
-    label: "Rush",
-    days: "2 Business Days",
-    fee: "+$599",
-    feeNote: "",
-    isEmergency: false,
-  },
-  {
-    label: "Emergency ⚡",
-    days: "1 Business Day",
-    fee: "+$1,199",
-    feeNote: "",
-    isEmergency: true,
-  },
-];
-
-// Backend names for Speedy Sites — UPPERCASE as seeded in main.mo
-const SPEEDY_SITES = [
-  {
-    backendName: "SPEEDY BASIC",
-    displayName: "Speedy Basic",
-    features: [
-      "1 page, 48hr delivery",
-      "Contact form + SSL",
-      "Fully Managed Infrastructure",
-    ],
-  },
-  {
-    backendName: "SPEEDY BOOKING",
-    displayName: "Speedy Booking",
-    features: [
-      "2 pages + booking portal",
-      "Confirmation emails",
-      "Fully Managed Infrastructure",
-    ],
-  },
-  {
-    backendName: "SPEEDY PRODUCT STOREFRONT",
-    displayName: "Speedy Product Storefront",
-    features: [
-      "3 pages + Stripe checkout",
-      "Up to 30 products",
-      "Fully Managed Infrastructure",
-    ],
-  },
-  {
-    backendName: "SPEEDY MENU STOREFRONT",
-    displayName: "Speedy Menu Storefront",
-    features: [
-      "3 pages + digital menu",
-      "Zero-commission ordering",
-      "Fully Managed Infrastructure",
-    ],
-  },
-  {
-    backendName: "SPEEDY RECURRING STOREFRONT",
-    displayName: "Speedy Recurring Storefront",
-    features: [
-      "3 pages + subscription billing",
-      "Up to 7 billing tiers",
-      "Fully Managed Infrastructure",
-    ],
-  },
-];
-
-// Speedy hosting plans — backend names as seeded (title case)
-const SPEEDY_PLANS = [
-  {
-    backendName: "Basic Plan",
-    displayName: "Speedy Basic Plan",
-    powers: "Speedy Basic site",
-    features: [
-      "Hosting & SSL",
-      "Contact form routing",
-      "Basic traffic analytics",
-      "Self-managed dashboard",
-    ],
-  },
-  {
-    backendName: "Booking Plan",
-    displayName: "Speedy Booking Plan",
-    powers: "Speedy Booking site",
-    features: [
-      "Everything in Basic",
-      "Booking engine",
-      "Calendar syncing",
-      "Confirmation emails",
-      "Appointment analytics",
-    ],
-  },
-  {
-    backendName: "Storefront Plan",
-    displayName: "Speedy Storefront Plan",
-    powers: "Speedy Product, Menu, or Recurring sites",
-    features: [
-      "Everything in Basic",
-      "Stripe checkout routing",
-      "Inventory/menu dashboard",
-      "Order notifications",
-      "Sales analytics",
-    ],
-  },
-];
-
-// SaaS/Maintenance plans — backend names as seeded (title case)
-const MAINTENANCE_PLANS = [
-  { backendName: "Keep It Live" },
-  { backendName: "Stay Sharp" },
-  { backendName: "Stay Ahead" },
-  { backendName: "Full Partner" },
-  { backendName: "Enterprise Partner" },
-];
-
-// Cinematic per-second pricing (static — these are build-tool prices not in product catalog)
-const AD_PRICES: Record<number, number> = {
-  15: 299,
-  20: 349,
-  25: 394,
-  30: 434,
-  35: 469,
-  40: 499,
-  45: 524,
-  50: 544,
-  55: 559,
-  60: 569,
+/** Maps product_type values to intake form service IDs */
+const PRODUCT_TYPE_TO_SERVICE_ID: Record<string, string> = {
+  "Custom Sites": "custom",
+  "Speedy Sites": "speedy",
+  "AI Receptionist": "ai-receptionist",
+  "Cinematic Ads": "cinematic",
+  "Product Ads": "product-ads",
+  "SaaS Plans": "consultation",
+  "Growth Hub": "audit",
 };
 
-// Cinematic Ads retainers — backend names as seeded (UPPERCASE)
-const AD_RETAINERS = [
-  { backendName: "THE PILOT", displayName: "Pilot", qty: "3 ads/quarter" },
-  { backendName: "THE PRO", displayName: "Pro", qty: "6 ads/quarter" },
-  { backendName: "THE ELITE", displayName: "Elite", qty: "9 ads/quarter" },
-];
+/** Maps product_type values to showcase page routes */
+const CATEGORY_SHOWCASE_ROUTES: Record<string, string> = {
+  "Custom Sites": "/showcase/custom-sites",
+  "Speedy Sites": "/showcase/speedy-sites",
+  "SaaS Plans": "/showcase/saas-plans",
+  "Cinematic Ads": "/showcase/cinematic-ads",
+  "Product Ads": "/showcase/product-ads",
+  "AI Receptionist": "/showcase/ai-receptionist",
+  "Growth Hub": "/showcase/growth-hub",
+};
 
-// AI Receptionist tiers — backend names as seeded (UPPERCASE)
-const AI_TIERS = [
-  {
-    backendName: "THE SAFETY NET",
-    displayName: "Safety Net",
-    setup: null as string | null,
-    features: [
-      "Missed-call text-back",
-      "Web chat widget",
-      "Basic lead capture",
-    ],
-  },
-  {
-    backendName: "THE RECEPTIONIST",
-    displayName: "AI Receptionist",
-    setup: "+ $249 setup" as string | null,
-    features: [
-      "AI voice answers calls",
-      "Handles FAQs automatically",
-      "Sends booking links",
-    ],
-  },
-  {
-    backendName: "THE CLOSER",
-    displayName: "The Closer",
-    setup: "+ $499 setup" as string | null,
-    features: [
-      "Books appointments live on call",
-      "CRM integration",
-      "Full calendar access",
-    ],
-  },
-];
-
-// Growth Hub items with backend names for live price lookup
-const GROWTH_HUB_CATEGORIES = [
-  {
-    label: "📈 TRAFFIC",
-    categoryKey: "traffic",
-    items: [
-      {
-        name: "Local SEO Booster",
-        backendName: "Local SEO Booster",
-        fallbackPrice: "$199/mo",
-        icon: TrendingUp,
-        desc: "Rank in local Google searches for your city and niche",
-      },
-      {
-        name: "Blog / Content SEO",
-        backendName: "Blog / Content SEO",
-        fallbackPrice: "$299/mo",
-        icon: FileText,
-        desc: "Monthly optimized blog content that builds domain authority",
-      },
-      {
-        name: "Google Ads Management",
-        backendName: "Google Ads Management",
-        fallbackPrice: "$399+/mo",
-        icon: Target,
-        desc: "Managed ad campaigns with monthly reporting",
-      },
-      {
-        name: "Social Media Sync",
-        backendName: "Social Media Sync",
-        fallbackPrice: "$99/mo",
-        icon: Share2,
-        desc: "Auto-publish content to your social channels",
-      },
-    ],
-  },
-  {
-    label: "🎯 CONVERSION",
-    categoryKey: "conversion",
-    items: [
-      {
-        name: "Lead Capture Upgrade",
-        backendName: "Lead Capture Upgrade",
-        fallbackPrice: "$99/mo",
-        icon: UserPlus,
-        desc: "Pop-up forms, exit intent, and A/B tested CTAs",
-      },
-      {
-        name: "Review Generation",
-        backendName: "Review Generation",
-        fallbackPrice: "$99/mo",
-        icon: Star,
-        desc: "Automated review requests via SMS and email",
-      },
-      {
-        name: "Site Audit",
-        backendName: "Site Audit",
-        fallbackPrice: "$99 one-time",
-        icon: Search,
-        desc: "Full technical and UX audit with actionable report. 48hr turnaround.",
-      },
-    ],
-  },
-  {
-    label: "⚙️ OPERATIONS",
-    categoryKey: "operations",
-    items: [
-      {
-        name: "Restaurant Menu Refresh",
-        backendName: "Restaurant Menu Refresh",
-        fallbackPrice: "$149/mo",
-        icon: UtensilsCrossed,
-        desc: "Monthly menu updates, seasonal specials, and PDF exports",
-      },
-      {
-        name: "IDX/MLS Integration",
-        backendName: "IDX/MLS Integration",
-        fallbackPrice: "$299+",
-        icon: Home,
-        desc: "Live property listings embedded directly in your site",
-      },
-      {
-        name: "Bulk Data Extraction",
-        backendName: "Bulk Data Extraction",
-        fallbackPrice: "$499",
-        icon: Database,
-        desc: "One-time bulk import of products, listings, or records",
-      },
-      {
-        name: "Custom Page Expansion",
-        backendName: "Custom Page Expansion",
-        fallbackPrice: "$149/pg",
-        icon: FilePlus,
-        desc: "Add new pages to your existing site — designed and launched",
-      },
-    ],
-  },
-  {
-    label: "💰 MONETIZATION",
-    categoryKey: "monetization",
-    items: [
-      {
-        name: "PWA Upgrade",
-        backendName: "PWA Upgrade",
-        fallbackPrice: "$299",
-        icon: Smartphone,
-        desc: "Turn your site into an installable Progressive Web App",
-      },
-      {
-        name: "Annual Site Refresh",
-        backendName: "Annual Site Refresh",
-        fallbackPrice: "$499/yr",
-        icon: RefreshCw,
-        desc: "Full redesign of your homepage and top 3 pages once a year",
-      },
-    ],
-  },
-];
+function getServiceId(productType: string): string {
+  return PRODUCT_TYPE_TO_SERVICE_ID[productType] ?? "consultation";
+}
 
 const cardStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.03)",
+  background: "rgba(7,8,16,0.95)",
   backdropFilter: "blur(20px)",
   WebkitBackdropFilter: "blur(20px)",
-  border: "1px solid rgba(255,255,255,0.08)",
+  border: "1px solid rgba(94,240,138,0.25)",
   borderRadius: "16px",
-  padding: "24px",
+  padding: "28px",
   display: "flex",
   flexDirection: "column",
-  gap: "16px",
-  boxShadow: "0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05)",
+  gap: "0",
+  boxShadow: "0 4px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(94,240,138,0.08)",
   transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+  fontFamily: "'JetBrains Mono', 'Courier New', monospace",
 };
 
 const cardHoverEnter = (el: HTMLElement) => {
-  el.style.transform = "translateY(-6px)";
-  el.style.background = "rgba(57,255,20,0.04)";
+  el.style.transform = "translateY(-8px)";
+  el.style.background = "rgba(7,8,16,0.98)";
   el.style.boxShadow =
-    "0 8px 32px rgba(57,255,20,0.15), inset 0 1px 0 rgba(255,255,255,0.07)";
-  el.style.borderColor = "rgba(57,255,20,0.3)";
+    "0 16px 48px rgba(0,0,0,0.7), 0 0 0 1px rgba(94,240,138,0.4), 0 0 32px rgba(94,240,138,0.08)";
+  el.style.borderColor = "rgba(94,240,138,0.6)";
 };
 
 const cardHoverLeave = (el: HTMLElement) => {
   el.style.transform = "translateY(0)";
-  el.style.background = "rgba(255,255,255,0.03)";
+  el.style.background = "rgba(7,8,16,0.95)";
   el.style.boxShadow =
-    "0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05)";
-  el.style.borderColor = "rgba(255,255,255,0.08)";
+    "0 4px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(94,240,138,0.08)";
+  el.style.borderColor = "rgba(94,240,138,0.25)";
 };
 
 function GetStartedButton({
@@ -459,13 +75,16 @@ function GetStartedButton({
   displayPrice = "",
   textKey,
   featured = false,
+  navigateTo,
 }: {
   productName: string;
   displayPrice?: string;
   textKey?: string;
   featured?: boolean;
+  navigateTo?: string;
 }) {
   const { addItem, openDrawer } = useCartStore();
+  const navigate = useNavigate();
   const btnBg = featured ? "#39FF14" : "transparent";
   const btnColor = featured ? "#000" : "#39FF14";
   const btnBorder = featured ? "none" : "1px solid #39FF14";
@@ -476,8 +95,12 @@ function GetStartedButton({
     <motion.button
       type="button"
       onClick={() => {
-        addItem({ name: productName, price: displayPrice });
-        openDrawer();
+        if (navigateTo) {
+          navigate({ to: navigateTo });
+        } else {
+          addItem({ name: productName, price: displayPrice });
+          openDrawer();
+        }
       }}
       whileHover={{ boxShadow: btnGlow }}
       style={{
@@ -504,199 +127,22 @@ function GetStartedButton({
   );
 }
 
-function ActivateButton({
-  productName = "Growth Hub Add-On",
-  displayPrice = "$99",
-  textKey,
-}: { productName?: string; displayPrice?: string; textKey?: string }) {
-  const { addItem, openDrawer } = useCartStore();
-  return (
-    <motion.button
-      type="button"
-      onClick={() => {
-        addItem({ name: productName, price: displayPrice });
-        openDrawer();
-      }}
-      whileHover={{ boxShadow: "0 0 12px rgba(94,240,138,0.2)" }}
-      style={{
-        display: "block",
-        width: "100%",
-        background: "transparent",
-        color: "#39FF14",
-        fontWeight: "700",
-        fontSize: "0.95rem",
-        textAlign: "center",
-        padding: "12px 24px",
-        borderRadius: "8px",
-        border: "1px solid #39FF14",
-        cursor: "pointer",
-        marginTop: "auto",
-        transition: "opacity 0.2s",
-      }}
-    >
-      <EditableText
-        textKey={textKey ?? "products.btn_activate"}
-        defaultText="Activate"
-      />
-    </motion.button>
-  );
-}
-
-const TAB_ROUTES: Record<Tab, string> = {
-  "Custom Sites": "/services/custom-sites",
-  "Speedy Sites": "/services/speedy-sites",
-  "SaaS Plans": "/services/saas-plans",
-  "Cinematic Ads": "/services/cinematic-ads",
-  "Product Ads": "/services/product-ads",
-  "AI Receptionist": "/services/ai-receptionist",
-  "Growth Hub": "/services/growth-hub",
-};
-
-const TAB_SHOWCASE_ROUTES: Record<Tab, string> = {
-  "Custom Sites": "/showcase/custom-sites",
-  "Speedy Sites": "/showcase/speedy-sites",
-  "SaaS Plans": "/showcase/saas-plans",
-  "Cinematic Ads": "/showcase/cinematic-ads",
-  "Product Ads": "/showcase/product-ads",
-  "AI Receptionist": "/showcase/ai-receptionist",
-  "Growth Hub": "/showcase/growth-hub",
-};
-
-// Map tab names to stable CMS keys
-const TAB_TEXT_KEYS: Record<Tab, string> = {
-  "Custom Sites": "products.tab_custom_sites",
-  "Speedy Sites": "products.tab_speedy_sites",
-  "SaaS Plans": "products.tab_saas_plans",
-  "Cinematic Ads": "products.tab_cinematic_ads",
-  "Product Ads": "products.tab_product_ads",
-  "AI Receptionist": "products.tab_ai_receptionist",
-  "Growth Hub": "products.tab_growth_hub",
-};
-
-// Product Lab tiers — backend names as seeded (title case)
-const PRODUCT_LAB_TIERS = [
-  {
-    id: "flash",
-    backendName: "Flash",
-    badge: "One-Time",
-    priceNote: "one-time",
-    delivery: "1x 15s Ultra-HD Video",
-    turnaround: "48hr Turnaround",
-    vault: false,
-    featured: false,
-    buttonLabel: "Get Started",
-    buttonLabelKey: "products.product_ads_cta_flash",
-  },
-  {
-    id: "starter",
-    backendName: "Starter",
-    badge: "Monthly",
-    priceNote: "/mo",
-    delivery: "3x 15s Hooks",
-    turnaround: "24hr Turnaround",
-    vault: false,
-    featured: false,
-    buttonLabel: "Get Started",
-    buttonLabelKey: "products.product_ads_cta_starter",
-  },
-  {
-    id: "scale",
-    backendName: "Scale",
-    badge: "Most Popular",
-    priceNote: "/mo",
-    delivery: "5x 15s Hooks",
-    turnaround: "12-24hr Turnaround",
-    vault: true,
-    featured: true,
-    buttonLabel: "Get Started",
-    buttonLabelKey: "products.product_ads_cta_scale",
-  },
-];
-
-function LearnMoreButton({ tab }: { tab: Tab }) {
-  const navigate = useNavigate();
-  return (
-    <div style={{ marginBottom: "24px" }}>
-      <motion.button
-        type="button"
-        onClick={() => navigate({ to: TAB_ROUTES[tab] })}
-        whileHover={{ boxShadow: "0 0 16px rgba(94,240,138,0.35)" }}
-        style={{
-          background: "transparent",
-          border: "1px solid #5EF08A",
-          color: "#5EF08A",
-          padding: "10px 24px",
-          borderRadius: "10px",
-          fontSize: "0.9rem",
-          fontWeight: "600",
-          cursor: "pointer",
-          transition: "opacity 0.15s",
-        }}
-        data-ocid="products.learn_more_button"
-      >
-        <EditableText
-          textKey={`products.learn_more_${TAB_TEXT_KEYS[tab].split(".")[1]}`}
-          defaultText={`Learn More about ${tab}`}
-        />
-      </motion.button>
-    </div>
-  );
-}
-
-function ShowcaseButton({ tab }: { tab: Tab }) {
-  const navigate = useNavigate();
-  return (
-    <div
-      style={{
-        marginBottom: "32px",
-        paddingBottom: "32px",
-        borderBottom: "1px solid #1C1F33",
-        display: "flex",
-        justifyContent: "center",
-      }}
-    >
-      <motion.button
-        type="button"
-        onClick={() => navigate({ to: TAB_SHOWCASE_ROUTES[tab] })}
-        whileHover={{ boxShadow: "0 0 20px rgba(94,240,138,0.4)" }}
-        style={{
-          background: "transparent",
-          border: "1px solid #5EF08A",
-          color: "#5EF08A",
-          padding: "12px 32px",
-          borderRadius: "10px",
-          fontSize: "0.95rem",
-          fontWeight: "600",
-          cursor: "pointer",
-          transition: "opacity 0.15s",
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "8px",
-        }}
-        data-ocid={`products.showcase_button.${TAB_TEXT_KEYS[tab].split(".")[1]}`}
-      >
-        <EditableText
-          textKey={`products.showcase_btn_${TAB_TEXT_KEYS[tab].split(".")[1]}`}
-          defaultText="View Imperidome in action"
-        />
-      </motion.button>
-    </div>
-  );
-}
-
 export default function ProductsPage() {
   useSeoMeta("products", "Services — Imperidome");
-  const [activeTab, setActiveTab] = useState<Tab>("Custom Sites");
-  const [hoveredTab, setHoveredTab] = useState<Tab | null>(null);
+  const [activeTab, setActiveTab] = useState<string>("");
+  const [hoveredTab, setHoveredTab] = useState<string | null>(null);
   const [tabMenuOpen, setTabMenuOpen] = useState(false);
-  const [adSeconds, setAdSeconds] = useState(15);
-  const [speedyBilling, setSpeedyBilling] = useState<"monthly" | "annual">(
-    "monthly",
-  );
-  const [rushStep, setRushStep] = useState(0);
-  const navigate = useNavigate();
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const sectionRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  const { addItem, openDrawer } = useCartStore();
+  // Cinematic Ads seconds slider (Feature 4)
+  const [adSeconds, setAdSeconds] = useState<number>(30);
+
+  // Missed Leads Calculator state (Feature 6)
+  const [missedCallsPerDay, setMissedCallsPerDay] = useState<number>(10);
+  const [avgRevenuePerCall, setAvgRevenuePerCall] = useState<number>(150);
+  const navigate = useNavigate();
 
   // Fetch ALL active products from the backend once on mount.
   // Used for (1) active/inactive visibility, (2) live price display.
@@ -710,19 +156,7 @@ export default function ProductsPage() {
           sid = crypto.randomUUID();
           sessionStorage.setItem("_vis_sid", sid);
         }
-        let countryCode: string | null = null;
-        try {
-          const ctrl = new AbortController();
-          const timer = setTimeout(() => ctrl.abort(), 2000);
-          const res = await fetch("https://ipapi.co/country/", {
-            signal: ctrl.signal,
-          });
-          clearTimeout(timer);
-          const text = (await res.text()).trim();
-          if (/^[A-Z]{2}$/.test(text)) countryCode = text;
-        } catch {
-          // geolocation failed — use null
-        }
+        const countryCode: string | null = null;
         const publicActor = await createActorWithConfig(createActor);
         await (publicActor as backendInterface).recordVisit(
           window.location.pathname,
@@ -738,28 +172,39 @@ export default function ProductsPage() {
   }, []);
 
   const [backendProducts, setBackendProducts] = useState<Product[]>([]);
-  const [activeCategoryNames, setActiveCategoryNames] = useState<Set<string>>(
-    new Set(),
+  const cinematicProduct = backendProducts.find(
+    (p) => p.product_type === "Cinematic Ads",
   );
+  const cinematicPrice = cinematicProduct?.price_onetime;
   const [catalogLoaded, setCatalogLoaded] = useState(false);
   // Map from category name (tab label) → visible boolean. Absent = visible (fail open).
   const [categoryVisibility, setCategoryVisibility] = useState<
     Map<string, boolean>
   >(new Map());
+  const groupedProducts = useMemo(() => {
+    const map = new Map<string, Product[]>();
+    for (const p of backendProducts) {
+      const existing = map.get(p.product_type) ?? [];
+      map.set(p.product_type, [...existing, p]);
+    }
+    return map;
+  }, [backendProducts]);
+  const dynamicTabs = useMemo(
+    () =>
+      Array.from(groupedProducts.keys()).filter(
+        (t) => categoryVisibility.get(t) !== false,
+      ),
+    [groupedProducts, categoryVisibility],
+  );
 
   useEffect(() => {
     if (!actor || isFetching) return;
     Promise.all([
-      (actor as unknown as { getProducts: () => Promise<Product[]> })
-        .getProducts()
-        .catch(() => [] as Product[]),
+      (actor as backendInterface).getProducts().catch(() => [] as Product[]),
       actor.getCategoryVisibility().catch(() => [] as [string, boolean][]),
     ])
       .then(([result, visibility]) => {
         setBackendProducts(result);
-        setActiveCategoryNames(
-          new Set(result.map((p: Product) => p.product_type)),
-        );
         setCategoryVisibility(new Map(visibility));
         setCatalogLoaded(true);
       })
@@ -768,77 +213,44 @@ export default function ProductsPage() {
       });
   }, [actor, isFetching]);
 
-  /** Find a product by exact backend name (case-insensitive) */
-  const findProduct = (name: string): Product | undefined =>
-    backendProducts.find((p) => p.name.toLowerCase() === name.toLowerCase());
-
-  /** Extract numeric price from a Product record */
-  const getProductNumericPrice = (p: Product): number => {
-    if (p.price_monthly != null) return p.price_monthly;
-    if (p.price_onetime != null) return p.price_onetime;
-    if (p.price_annual != null) return p.price_annual;
-    return 0;
-  };
-
-  /**
-   * Returns formatted price for display.
-   * Custom Sites & Speedy Sites → "From $<n>"
-   * SaaS/AI Receptionist → "$<n>/mo"
-   * Everything else → "$<n>"
-   * While loading → "..."
-   */
-  const getDisplayPrice = (
-    backendName: string,
-    type: "from" | "monthly" | "onetime" | "auto" = "auto",
-  ): string => {
-    if (!catalogLoaded) return "...";
-    const p = findProduct(backendName);
-    if (!p) return "—";
-    const val = getProductNumericPrice(p);
-    if (type === "from") return `From $${val.toLocaleString()}`;
-    if (type === "monthly") return `$${val.toLocaleString()}/mo`;
-    if (type === "onetime") return `$${val.toLocaleString()} one-time`;
-    // auto: use the product's own price field type
-    if (p.price_monthly != null) return `$${val.toLocaleString()}/mo`;
-    return `$${val.toLocaleString()}`;
-  };
-
-  // Returns true if a product name is active (or catalog hasn't loaded — fail open)
-  const isProductActive = (name: string) =>
-    !catalogLoaded ||
-    backendProducts.length === 0 ||
-    backendProducts.some((p) => p.name.toLowerCase() === name.toLowerCase());
-
-  // Returns true if a tab/category should be shown (fail open until catalog loads)
-  // Also checks admin-controlled visibility flag: if explicitly set to false, hide.
-  const isTabVisible = (tab: Tab) => {
-    // Check admin visibility flag first — if explicitly false, hide regardless
-    if (categoryVisibility.has(tab) && categoryVisibility.get(tab) === false) {
-      return false;
-    }
-    return (
-      !catalogLoaded ||
-      activeCategoryNames.size === 0 ||
-      activeCategoryNames.has(tab)
-    );
-  };
-
-  // Derive visible tabs; ensure activeTab is always set to a visible one
-  const visibleTabs = TABS.filter(isTabVisible);
+  // Derive visible tabs from dynamic backend data
+  const visibleTabs = dynamicTabs;
 
   useEffect(() => {
-    if (
-      catalogLoaded &&
-      visibleTabs.length > 0 &&
-      !visibleTabs.includes(activeTab)
-    ) {
-      setActiveTab(visibleTabs[0]);
+    if (!activeTab && dynamicTabs.length > 0) {
+      setActiveTab(dynamicTabs[0]);
     }
-  }, [catalogLoaded, visibleTabs, activeTab]);
+  }, [dynamicTabs, activeTab]);
 
-  const selectedRush = RUSH_STEPS[rushStep];
-  // Active fill % for the slider track
-  const rushFillPct = (rushStep / (RUSH_STEPS.length - 1)) * 100;
+  // Scroll-to-top visibility tracker
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 350);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Auto-highlight sticky filter bar on scroll via IntersectionObserver
+  // Each rendered section has a ref stored in sectionRefs; when a section
+  // becomes >= 40% visible the active tab updates to match it.
+  useEffect(() => {
+    const sections = sectionRefs.current;
+    if (sections.size === 0) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const tab = entry.target.getAttribute("data-section-tab");
+            if (tab) setActiveTab(tab);
+          }
+        }
+      },
+      { threshold: 0.4, rootMargin: "-20% 0px -20% 0px" },
+    );
+    for (const el of sections.values()) observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <div style={{ background: "#0A0B14", minHeight: "100vh" }}>
@@ -926,13 +338,13 @@ export default function ProductsPage() {
                     padding: "10px 20px",
                     minHeight: "44px",
                     borderRadius: "9999px",
-                    border: isActive ? "none" : "1px solid #1C1F33",
-                    background: isActive ? "#5EF08A" : "transparent",
+                    border: isActive ? "none" : "1px solid #E2E8F0",
+                    background: isActive ? "#1E293B" : "transparent",
                     color: isActive
-                      ? "#0A0B14"
+                      ? "#F8FAFC"
                       : isHovered
-                        ? "#EEF0F8"
-                        : "rgba(156,163,175,0.4)",
+                        ? "#1E293B"
+                        : "rgba(30,41,59,0.5)",
                     fontWeight: isActive ? "700" : "500",
                     fontSize: "0.9rem",
                     cursor: "pointer",
@@ -942,7 +354,7 @@ export default function ProductsPage() {
                   }}
                 >
                   <EditableText
-                    textKey={TAB_TEXT_KEYS[tab]}
+                    textKey={`products.tab_${tab.toLowerCase().replace(/\s+/g, "_")}`}
                     defaultText={tab}
                   />
                 </button>
@@ -1092,7 +504,7 @@ export default function ProductsPage() {
                       setActiveTab(tab);
                       setTabMenuOpen(false);
                     }}
-                    data-ocid={`products.tab_overlay_item.${TABS.indexOf(tab) + 1}`}
+                    data-ocid={`products.tab_overlay_item.${dynamicTabs.indexOf(tab) + 1}`}
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -1116,7 +528,7 @@ export default function ProductsPage() {
                     }}
                   >
                     <EditableText
-                      textKey={TAB_TEXT_KEYS[tab]}
+                      textKey={`products.tab_${tab.toLowerCase().replace(/\s+/g, "_")}`}
                       defaultText={tab}
                     />
                     {isActive && (
@@ -1138,1863 +550,1625 @@ export default function ProductsPage() {
           </div>
         )}
 
-        {/* Tab content with crossfade */}
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+        {/* Sticky category filter bar */}
+        {visibleTabs.length > 0 && (
+          <div
+            className="sticky top-0 z-50 overflow-x-auto"
+            style={{
+              background: "rgba(10,11,20,0.92)",
+              backdropFilter: "blur(12px)",
+              WebkitBackdropFilter: "blur(12px)",
+              borderBottom: "1px solid rgba(94,240,138,0.1)",
+              marginBottom: "32px",
+              marginLeft: "-24px",
+              marginRight: "-24px",
+              paddingLeft: "24px",
+              paddingRight: "24px",
+            }}
+            data-ocid="products.sticky_filter_bar"
           >
-            {/* ── CUSTOM SITES ── */}
-            {activeTab === "Custom Sites" && (
-              <div>
-                {/* Thumb styles injected once per render */}
-                <style>{`
-                  input[type=range].rush-slider {
-                    -webkit-appearance: none;
-                    appearance: none;
-                    width: 100%;
-                    height: 6px;
-                    border-radius: 9999px;
-                    outline: none;
-                    cursor: pointer;
-                  }
-                  input[type=range].rush-slider::-webkit-slider-thumb {
-                    -webkit-appearance: none;
-                    appearance: none;
-                    width: 22px;
-                    height: 22px;
-                    border-radius: 50%;
-                    background: #5EF08A;
-                    cursor: pointer;
-                    box-shadow: 0 0 10px rgba(94,240,138,0.7), 0 0 0 3px rgba(94,240,138,0.15);
-                    transition: box-shadow 0.15s;
-                  }
-                  input[type=range].rush-slider::-webkit-slider-thumb:hover {
-                    box-shadow: 0 0 18px rgba(94,240,138,0.9), 0 0 0 5px rgba(94,240,138,0.2);
-                  }
-                  input[type=range].rush-slider::-moz-range-thumb {
-                    width: 22px;
-                    height: 22px;
-                    border-radius: 50%;
-                    background: #5EF08A;
-                    cursor: pointer;
-                    border: none;
-                    box-shadow: 0 0 10px rgba(94,240,138,0.7);
-                  }
-                `}</style>
-
-                <ShowcaseButton tab={activeTab} />
-                <LearnMoreButton tab={activeTab} />
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      "repeat(auto-fill, minmax(260px, 1fr))",
-                    gap: "24px",
-                  }}
-                >
-                  {CUSTOM_SITES_TIERS.filter((tier) =>
-                    isProductActive(tier.backendName),
-                  ).map((tier) => {
-                    const tierSlug = tier.backendName
-                      .toLowerCase()
-                      .replace(/\s+/g, "_");
-                    return (
-                      <div
-                        key={tier.backendName}
-                        style={cardStyle}
-                        onMouseEnter={(e) => cardHoverEnter(e.currentTarget)}
-                        onMouseLeave={(e) => cardHoverLeave(e.currentTarget)}
-                      >
-                        {" "}
-                        <div>
-                          <h3
-                            style={{
-                              color: "#EEF0F8",
-                              fontSize: "1.2rem",
-                              fontWeight: "700",
-                              marginBottom: "8px",
-                            }}
-                          >
-                            <EditableText
-                              textKey={`products.custom_sites_name_${tierSlug}`}
-                              defaultText={tier.displayName}
-                            />
-                          </h3>
-                          <p
-                            style={{
-                              color: "#5EF08A",
-                              fontSize: "1.35rem",
-                              fontWeight: "700",
-                              marginBottom: "16px",
-                            }}
-                          >
-                            <EditableText
-                              textKey={`products.custom_sites_price_${tierSlug}`}
-                              defaultText={getDisplayPrice(
-                                tier.backendName,
-                                "from",
-                              )}
-                            />
-                          </p>
-                          <ul
-                            style={{
-                              listStyle: "none",
-                              padding: 0,
-                              margin: 0,
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: "8px",
-                            }}
-                          >
-                            {tier.features.map((f, fi) => (
-                              <li
-                                key={f}
-                                style={{
-                                  display: "flex",
-                                  alignItems: "flex-start",
-                                  gap: "8px",
-                                  color: "#7A7D90",
-                                  fontSize: "0.875rem",
-                                }}
-                              >
-                                <span
-                                  style={{
-                                    color: "#5EF08A",
-                                    marginTop: "1px",
-                                    flexShrink: 0,
-                                  }}
-                                >
-                                  ✓
-                                </span>
-                                <EditableText
-                                  textKey={`products.custom_sites_feature_${tierSlug}_${fi}`}
-                                  defaultText={f}
-                                />
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div style={{ flex: 1 }} />
-                        <GetStartedButton
-                          productName={tier.backendName}
-                          displayPrice={getDisplayPrice(
-                            tier.backendName,
-                            "from",
-                          )}
-                          textKey={`products.custom_sites_cta_${tier.backendName.toLowerCase().replace(/\s+/g, "_")}`}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* ── RUSH DELIVERY SECTION ── */}
-                <div style={{ marginTop: "64px" }}>
-                  {/* Divider */}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "20px",
-                      marginBottom: "40px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        flex: 1,
-                        height: "1px",
-                        background:
-                          "linear-gradient(to right, transparent, #1C1F33)",
-                      }}
-                    />
-                    <div
-                      style={{
-                        width: "8px",
-                        height: "8px",
-                        borderRadius: "50%",
-                        background: "#5EF08A",
-                        flexShrink: 0,
-                        boxShadow: "0 0 12px rgba(94,240,138,0.6)",
-                      }}
-                    />
-                    <div
-                      style={{
-                        flex: 1,
-                        height: "1px",
-                        background:
-                          "linear-gradient(to left, transparent, #1C1F33)",
-                      }}
-                    />
-                  </div>
-
-                  {/* Heading */}
-                  <div style={{ textAlign: "center", marginBottom: "48px" }}>
-                    <h2
-                      style={{
-                        color: "#EEF0F8",
-                        fontSize: "clamp(1.5rem, 3vw, 1.9rem)",
-                        fontWeight: "800",
-                        letterSpacing: "-0.01em",
-                        marginBottom: "12px",
-                      }}
-                    >
-                      <EditableText
-                        textKey="products.rush_heading"
-                        defaultText="Need It Faster?"
-                      />
-                    </h2>
-                    <p
-                      style={{
-                        color: "#7A7D90",
-                        fontSize: "1rem",
-                        maxWidth: "480px",
-                        margin: "0 auto",
-                        lineHeight: "1.6",
-                      }}
-                    >
-                      <EditableText
-                        textKey="products.rush_subheading"
-                        defaultText="Accelerate your Custom Tier build. Rush fee added to your build fee at checkout."
-                      />
-                    </p>
-                  </div>
-
-                  {/* Slider */}
-                  <div
-                    style={{
-                      maxWidth: "600px",
-                      margin: "0 auto 40px",
-                    }}
-                    data-ocid="rush_delivery.panel"
-                  >
-                    <input
-                      type="range"
-                      className="rush-slider"
-                      min={0}
-                      max={4}
-                      step={1}
-                      value={rushStep}
-                      onChange={(e) => setRushStep(Number(e.target.value))}
-                      data-ocid="rush_delivery.input"
-                      style={{
-                        background: `linear-gradient(to right, #5EF08A ${rushFillPct}%, #1C1F33 ${rushFillPct}%)`,
-                      }}
-                    />
-                    {/* Step labels */}
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        marginTop: "12px",
-                      }}
-                    >
-                      {RUSH_STEPS.map((s, i) => (
-                        <button
-                          key={s.label}
-                          type="button"
-                          onClick={() => setRushStep(i)}
-                          style={{
-                            color: rushStep === i ? "#5EF08A" : "#7A7D90",
-                            fontSize: "0.72rem",
-                            fontWeight: rushStep === i ? "700" : "400",
-                            textAlign: "center",
-                            flex: 1,
-                            transition: "color 0.15s",
-                            cursor: "pointer",
-                            background: "none",
-                            border: "none",
-                            padding: 0,
-                          }}
-                        >
-                          <EditableText
-                            textKey={`products.rush_step_${i}_label`}
-                            defaultText={s.label}
-                          />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Dynamic display card */}
-                  <div
-                    style={{
-                      maxWidth: "480px",
-                      margin: "0 auto 16px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        ...cardStyle,
-                        textAlign: "center",
-                        gap: "10px",
-                        border: selectedRush.isEmergency
-                          ? "1px solid rgba(251,191,36,0.35)"
-                          : "1px solid rgba(255,255,255,0.08)",
-                        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                      }}
-                      data-ocid="rush_delivery.card"
-                    >
-                      <p
-                        style={{
-                          color: "#EEF0F8",
-                          fontSize: "1.3rem",
-                          fontWeight: "700",
-                          marginBottom: "2px",
-                        }}
-                      >
-                        <EditableText
-                          textKey={`products.rush_step_${rushStep}_label`}
-                          defaultText={selectedRush.label}
-                        />
-                      </p>
-                      <p
-                        style={{
-                          color: "#7A7D90",
-                          fontSize: "0.95rem",
-                        }}
-                      >
-                        <EditableText
-                          textKey={`products.rush_step_${rushStep}_days`}
-                          defaultText={selectedRush.days}
-                        />
-                      </p>
-                      <p
-                        style={{
-                          color: "#5EF08A",
-                          fontSize: "2rem",
-                          fontWeight: "800",
-                          lineHeight: "1.1",
-                          marginTop: "4px",
-                        }}
-                      >
-                        <EditableText
-                          textKey={`products.rush_step_${rushStep}_fee`}
-                          defaultText={selectedRush.fee}
-                        />
-                        {selectedRush.feeNote && (
-                          <span
-                            style={{
-                              fontSize: "0.9rem",
-                              fontWeight: "500",
-                              color: "#7A7D90",
-                              marginLeft: "8px",
-                            }}
-                          >
-                            ({selectedRush.feeNote})
-                          </span>
-                        )}
-                      </p>
-
-                      {/* Emergency warning */}
-                      {selectedRush.isEmergency && (
-                        <div
-                          style={{
-                            background: "rgba(251,191,36,0.1)",
-                            border: "1px solid rgba(251,191,36,0.3)",
-                            borderRadius: "10px",
-                            padding: "12px 16px",
-                            marginTop: "8px",
-                            color: "#FBB224",
-                            fontSize: "0.875rem",
-                            fontWeight: "600",
-                          }}
-                          data-ocid="rush_delivery.error_state"
-                        >
-                          <EditableText
-                            textKey="products.rush_emergency_note"
-                            defaultText="⚡ Requires signed work order by 9:00 AM EST"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Footer note */}
-                  <p
-                    style={{
-                      color: "#7A7D90",
-                      fontSize: "0.8rem",
-                      textAlign: "center",
-                      maxWidth: "480px",
-                      margin: "0 auto",
-                      lineHeight: "1.5",
-                    }}
-                  >
-                    <EditableText
-                      textKey="products.rush_footer_note"
-                      defaultText="Rush fees are in addition to your Build Fee. Standard Terms &amp; Conditions apply."
-                    />
-                  </p>
-                </div>
-                {/* ── END RUSH DELIVERY ── */}
-              </div>
-            )}
-
-            {/* ── SPEEDY SITES ── */}
-            {activeTab === "Speedy Sites" && (
-              <div>
-                <ShowcaseButton tab={activeTab} />
-                <LearnMoreButton tab={activeTab} />
-                {/* Speedy Sites Cards */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      "repeat(auto-fill, minmax(240px, 1fr))",
-                    gap: "24px",
-                  }}
-                >
-                  {SPEEDY_SITES.filter((item) =>
-                    isProductActive(item.backendName),
-                  ).map((item) => {
-                    const itemSlug = item.backendName
-                      .toLowerCase()
-                      .replace(/\s+/g, "_");
-                    return (
-                      <div
-                        key={item.backendName}
-                        style={cardStyle}
-                        onMouseEnter={(e) => cardHoverEnter(e.currentTarget)}
-                        onMouseLeave={(e) => cardHoverLeave(e.currentTarget)}
-                      >
-                        <div>
-                          <h3
-                            style={{
-                              color: "#EEF0F8",
-                              fontSize: "1.2rem",
-                              fontWeight: "700",
-                              marginBottom: "8px",
-                            }}
-                          >
-                            <EditableText
-                              textKey={`products.speedy_sites_name_${itemSlug}`}
-                              defaultText={item.displayName}
-                            />
-                          </h3>
-                          <p
-                            style={{
-                              color: "#5EF08A",
-                              fontSize: "1.35rem",
-                              fontWeight: "700",
-                              marginBottom: "16px",
-                            }}
-                          >
-                            <EditableText
-                              textKey={`products.speedy_sites_price_${itemSlug}`}
-                              defaultText={getDisplayPrice(
-                                item.backendName,
-                                "from",
-                              )}
-                            />
-                          </p>
-                          <ul
-                            style={{
-                              listStyle: "none",
-                              padding: 0,
-                              margin: 0,
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: "8px",
-                            }}
-                          >
-                            {item.features.map((f, fi) => (
-                              <li
-                                key={f}
-                                style={{
-                                  display: "flex",
-                                  alignItems: "flex-start",
-                                  gap: "8px",
-                                  color:
-                                    f === "Fully Managed Infrastructure"
-                                      ? "#5EF08A"
-                                      : "#7A7D90",
-                                  fontSize: "0.875rem",
-                                  fontWeight:
-                                    f === "Fully Managed Infrastructure"
-                                      ? "600"
-                                      : "400",
-                                }}
-                              >
-                                <span
-                                  style={{
-                                    color: "#5EF08A",
-                                    marginTop: "1px",
-                                    flexShrink: 0,
-                                  }}
-                                >
-                                  ✓
-                                </span>
-                                <EditableText
-                                  textKey={`products.speedy_sites_feature_${itemSlug}_${fi}`}
-                                  defaultText={f}
-                                />
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div style={{ flex: 1 }} />
-                        <GetStartedButton
-                          productName={item.backendName}
-                          displayPrice={getDisplayPrice(
-                            item.backendName,
-                            "from",
-                          )}
-                          textKey={`products.speedy_sites_cta_${item.backendName.toLowerCase().replace(/\s+/g, "_")}`}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* ── SPEEDY HOSTING PLANS DIVIDER ── */}
-                <div style={{ marginTop: "64px", marginBottom: "48px" }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "20px",
-                      marginBottom: "16px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        flex: 1,
-                        height: "1px",
-                        background:
-                          "linear-gradient(to right, transparent, #1C1F33)",
-                      }}
-                    />
-                    <div
-                      style={{
-                        width: "8px",
-                        height: "8px",
-                        borderRadius: "50%",
-                        background: "#5EF08A",
-                        flexShrink: 0,
-                        boxShadow: "0 0 12px rgba(94,240,138,0.6)",
-                      }}
-                    />
-                    <div
-                      style={{
-                        flex: 1,
-                        height: "1px",
-                        background:
-                          "linear-gradient(to left, transparent, #1C1F33)",
-                      }}
-                    />
-                  </div>
-                  <h2
-                    style={{
-                      color: "#EEF0F8",
-                      fontSize: "clamp(1.4rem, 3vw, 1.9rem)",
-                      fontWeight: "800",
-                      letterSpacing: "-0.01em",
-                      textAlign: "center",
-                      marginBottom: "10px",
-                    }}
-                  >
-                    <EditableText
-                      textKey="products.speedy_plans_heading"
-                      defaultText="Speedy Hosting Plans — Keep Your Site Live"
-                    />
-                  </h2>
-                  <p
-                    style={{
-                      color: "#7A7D90",
-                      fontSize: "1rem",
-                      textAlign: "center",
-                      maxWidth: "480px",
-                      margin: "0 auto",
-                    }}
-                  >
-                    <EditableText
-                      textKey="products.speedy_plans_subheading"
-                      defaultText="Every Speedy Site requires a monthly hosting plan. Cancel anytime."
-                    />
-                  </p>
-                </div>
-
-                {/* Billing Toggle */}
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "center",
-                    marginBottom: "36px",
-                  }}
-                  data-ocid="speedy_plans.toggle"
-                >
-                  <div
-                    style={{
-                      display: "inline-flex",
-                      background: "rgba(17,19,34,0.7)",
-                      border: "1px solid #1C1F33",
-                      borderRadius: "9999px",
-                      padding: "4px",
-                      gap: "4px",
-                      backdropFilter: "blur(12px)",
-                      WebkitBackdropFilter: "blur(12px)",
-                    }}
-                  >
-                    {(["monthly", "annual"] as const).map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        onClick={() => setSpeedyBilling(option)}
-                        style={{
-                          padding: "8px 24px",
-                          borderRadius: "9999px",
-                          border: "none",
-                          background:
-                            speedyBilling === option
-                              ? "#5EF08A"
-                              : "transparent",
-                          color:
-                            speedyBilling === option ? "#0A0B14" : "#7A7D90",
-                          fontWeight: speedyBilling === option ? "700" : "500",
-                          fontSize: "0.9rem",
-                          cursor: "pointer",
-                          transition: "all 0.2s",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                        }}
-                      >
-                        <EditableText
-                          textKey={
-                            option === "monthly"
-                              ? "products.speedy_billing_monthly"
-                              : "products.speedy_billing_annual"
-                          }
-                          defaultText={
-                            option === "monthly" ? "Monthly" : "Annual"
-                          }
-                        />
-                        {option === "annual" && (
-                          <span
-                            style={{
-                              background:
-                                speedyBilling === "annual"
-                                  ? "rgba(10,11,20,0.2)"
-                                  : "rgba(94,240,138,0.12)",
-                              color:
-                                speedyBilling === "annual"
-                                  ? "#0A0B14"
-                                  : "#5EF08A",
-                              fontSize: "0.7rem",
-                              fontWeight: "700",
-                              padding: "2px 7px",
-                              borderRadius: "9999px",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            <EditableText
-                              textKey="products.speedy_billing_annual_badge"
-                              defaultText="2 Months Free"
-                            />
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Plan Cards */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      "repeat(auto-fill, minmax(240px, 1fr))",
-                    gap: "24px",
-                  }}
-                >
-                  {SPEEDY_PLANS.filter((plan) =>
-                    isProductActive(plan.backendName),
-                  ).map((plan) => {
-                    // Use live backend price; annual gets an approximate discount display
-                    const monthlyPrice = getDisplayPrice(
-                      plan.backendName,
-                      "monthly",
-                    );
-                    const numVal = (() => {
-                      const p = findProduct(plan.backendName);
-                      return p ? getProductNumericPrice(p) : 0;
-                    })();
-                    const annualVal = Math.round(numVal * 10);
-                    const price =
-                      speedyBilling === "monthly"
-                        ? monthlyPrice
-                        : `$${annualVal.toLocaleString()}/yr`;
-                    const planSlug = plan.backendName
-                      .toLowerCase()
-                      .replace(/\s+/g, "_");
-                    return (
-                      <div
-                        key={plan.backendName}
-                        style={cardStyle}
-                        onMouseEnter={(e) => cardHoverEnter(e.currentTarget)}
-                        onMouseLeave={(e) => cardHoverLeave(e.currentTarget)}
-                        data-ocid={`speedy_plans.${plan.backendName.toLowerCase().replace(/\s+/g, "_")}.card`}
-                      >
-                        <div>
-                          <h3
-                            style={{
-                              color: "#EEF0F8",
-                              fontSize: "1.2rem",
-                              fontWeight: "700",
-                              marginBottom: "4px",
-                            }}
-                          >
-                            <EditableText
-                              textKey={`products.speedy_plan_name_${planSlug}`}
-                              defaultText={plan.displayName}
-                            />
-                          </h3>
-                          <p
-                            style={{
-                              color: "#5EF08A",
-                              fontSize: "1.5rem",
-                              fontWeight: "800",
-                              marginBottom: "4px",
-                              lineHeight: "1.2",
-                            }}
-                          >
-                            <EditableText
-                              textKey={`products.speedy_plan_price_${planSlug}`}
-                              defaultText={price}
-                            />
-                          </p>
-                          <p
-                            style={{
-                              color: "#7A7D90",
-                              fontSize: "0.78rem",
-                              marginBottom: "16px",
-                            }}
-                          >
-                            <EditableText
-                              textKey={`products.speedy_plan_powers_${plan.backendName.toLowerCase().replace(/\s+/g, "_")}`}
-                              defaultText={`Powers: ${plan.powers}`}
-                            />
-                          </p>
-                          <ul
-                            style={{
-                              listStyle: "none",
-                              padding: 0,
-                              margin: 0,
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: "8px",
-                            }}
-                          >
-                            {plan.features.map((f, fi) => (
-                              <li
-                                key={f}
-                                style={{
-                                  display: "flex",
-                                  alignItems: "flex-start",
-                                  gap: "8px",
-                                  color: "#7A7D90",
-                                  fontSize: "0.875rem",
-                                }}
-                              >
-                                <span
-                                  style={{
-                                    color: "#5EF08A",
-                                    marginTop: "1px",
-                                    flexShrink: 0,
-                                  }}
-                                >
-                                  ✓
-                                </span>
-                                <EditableText
-                                  textKey={`products.speedy_plan_feature_${planSlug}_${fi}`}
-                                  defaultText={f}
-                                />
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div style={{ flex: 1 }} />
-                        <motion.button
-                          type="button"
-                          onClick={() => {
-                            addItem({
-                              name: plan.backendName,
-                              price: monthlyPrice,
-                            });
-                            openDrawer();
-                          }}
-                          whileHover={{
-                            boxShadow: "0 0 12px rgba(94,240,138,0.2)",
-                          }}
-                          style={{
-                            display: "block",
-                            width: "100%",
-                            background: "transparent",
-                            color: "#39FF14",
-                            fontWeight: "700",
-                            fontSize: "0.95rem",
-                            textAlign: "center",
-                            padding: "12px 24px",
-                            borderRadius: "8px",
-                            border: "1px solid #39FF14",
-                            cursor: "pointer",
-                            marginTop: "auto",
-                            transition: "opacity 0.2s",
-                          }}
-                          data-ocid="speedy_plans.subscribe_button"
-                        >
-                          <EditableText
-                            textKey={`products.speedy_plan_subscribe_${plan.backendName.toLowerCase().replace(/\s+/g, "_")}`}
-                            defaultText="Subscribe"
-                          />
-                        </motion.button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* ── SAAS PLANS ── */}
-            {activeTab === "SaaS Plans" && (
-              <div>
-                <ShowcaseButton tab={activeTab} />
-                <LearnMoreButton tab={activeTab} />
-                <h2
-                  style={{
-                    color: "#EEF0F8",
-                    fontSize: "1.3rem",
-                    fontWeight: "700",
-                    marginBottom: "16px",
-                  }}
-                >
-                  <EditableText
-                    textKey="products.saas_section_heading"
-                    defaultText="Maintenance Plans"
-                  />
-                </h2>
-                <div
-                  style={{
-                    ...cardStyle,
-                    padding: "0",
-                    overflow: "hidden",
-                    marginBottom: "40px",
-                    overflowX: "auto",
-                    transition: "none",
-                  }}
-                >
-                  <table
-                    style={{
-                      width: "100%",
-                      borderCollapse: "collapse",
-                      minWidth: "480px",
-                    }}
-                  >
-                    <thead>
-                      <tr style={{ background: "rgba(94,240,138,0.06)" }}>
-                        {[
-                          { label: "Plan", key: "products.saas_col_plan" },
-                          { label: "Price", key: "products.saas_col_price" },
-                          {
-                            label: "Billing",
-                            key: "products.saas_col_billing",
-                          },
-                          { label: "", key: "" },
-                        ].map(({ label, key }) => (
-                          <th
-                            key={label}
-                            style={{
-                              color: "#7A7D90",
-                              textTransform: "uppercase",
-                              fontSize: "0.72rem",
-                              fontWeight: "600",
-                              letterSpacing: "0.08em",
-                              padding: "14px 20px",
-                              textAlign: "left",
-                            }}
-                          >
-                            {key ? (
-                              <EditableText textKey={key} defaultText={label} />
-                            ) : (
-                              label
-                            )}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {MAINTENANCE_PLANS.filter((plan) =>
-                        isProductActive(plan.backendName),
-                      ).map((plan) => {
-                        const livePrice = getDisplayPrice(
-                          plan.backendName,
-                          "monthly",
-                        );
-                        return (
-                          <tr
-                            key={plan.backendName}
-                            style={{ borderBottom: "1px solid #1C1F33" }}
-                          >
-                            <td
-                              style={{
-                                color: "#EEF0F8",
-                                padding: "16px 20px",
-                                fontWeight: "600",
-                              }}
-                            >
-                              {plan.backendName}
-                            </td>
-                            <td
-                              style={{
-                                color: "#5EF08A",
-                                padding: "16px 20px",
-                                fontWeight: "700",
-                                fontSize: "1.05rem",
-                              }}
-                            >
-                              {livePrice}
-                            </td>
-                            <td
-                              style={{ color: "#7A7D90", padding: "16px 20px" }}
-                            >
-                              <EditableText
-                                textKey="products.saas_billing_cycle"
-                                defaultText="Monthly"
-                              />
-                            </td>
-                            <td style={{ padding: "16px 20px" }}>
-                              <motion.button
-                                type="button"
-                                onClick={() => {
-                                  addItem({
-                                    name: plan.backendName,
-                                    price: livePrice,
-                                  });
-                                  openDrawer();
-                                }}
-                                whileHover={{
-                                  boxShadow: "0 0 12px rgba(94,240,138,0.2)",
-                                }}
-                                style={{
-                                  display: "block",
-                                  width: "100%",
-                                  background: "transparent",
-                                  color: "#39FF14",
-                                  fontWeight: "700",
-                                  fontSize: "0.95rem",
-                                  textAlign: "center",
-                                  padding: "12px 24px",
-                                  borderRadius: "8px",
-                                  border: "1px solid #39FF14",
-                                  cursor: "pointer",
-                                  whiteSpace: "nowrap",
-                                  transition: "opacity 0.2s",
-                                }}
-                              >
-                                <EditableText
-                                  textKey={`products.saas_cta_${plan.backendName.toLowerCase().replace(/\s+/g, "_")}`}
-                                  defaultText="Get Started"
-                                />
-                              </motion.button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* ── CINEMATIC ADS ── */}
-            {activeTab === "Cinematic Ads" && (
-              <div>
-                <ShowcaseButton tab={activeTab} />
-                <LearnMoreButton tab={activeTab} />
-                <div
-                  style={{
-                    ...cardStyle,
-                    marginBottom: "32px",
-                    textAlign: "center",
-                  }}
-                  onMouseEnter={(e) => cardHoverEnter(e.currentTarget)}
-                  onMouseLeave={(e) => cardHoverLeave(e.currentTarget)}
-                >
-                  <h2
-                    style={{
-                      color: "#EEF0F8",
-                      fontSize: "1.75rem",
-                      fontWeight: "700",
-                      marginBottom: "8px",
-                    }}
-                  >
-                    <EditableText
-                      textKey="products.cinematic_ads_heading"
-                      defaultText="Cinematic Ad Pricing"
-                    />
-                  </h2>
-                  <p style={{ color: "#7A7D90", marginBottom: "32px" }}>
-                    <EditableText
-                      textKey="products.cinematic_ads_subheading"
-                      defaultText="Pay only for the seconds you need."
-                    />
-                  </p>
-
-                  <div style={{ marginBottom: "24px" }}>
-                    <p
-                      style={{
-                        color: "#EEF0F8",
-                        fontSize: "2rem",
-                        fontWeight: "700",
-                        marginBottom: "4px",
-                      }}
-                    >
-                      {adSeconds}
-                      <EditableText
-                        textKey="products.cinematic_ads_unit_suffix"
-                        defaultText="s ad"
-                      />
-                    </p>
-                    <p
-                      style={{
-                        color: "#5EF08A",
-                        fontSize: "3rem",
-                        fontWeight: "800",
-                        lineHeight: "1",
-                      }}
-                    >
-                      ${AD_PRICES[adSeconds]}
-                    </p>
-                  </div>
-
-                  <div style={{ maxWidth: "480px", margin: "0 auto 16px" }}>
-                    <input
-                      type="range"
-                      min={15}
-                      max={60}
-                      step={5}
-                      value={adSeconds}
-                      onChange={(e) => setAdSeconds(Number(e.target.value))}
-                      style={{
-                        width: "100%",
-                        accentColor: "#5EF08A",
-                        cursor: "pointer",
-                        height: "6px",
-                      }}
-                    />
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        color: "#7A7D90",
-                        fontSize: "0.8rem",
-                        marginTop: "6px",
-                      }}
-                    >
-                      <span>
-                        <EditableText
-                          textKey="products.cinematic_ads_range_min"
-                          defaultText="15s"
-                        />
-                      </span>
-                      <span>
-                        <EditableText
-                          textKey="products.cinematic_ads_range_max"
-                          defaultText="60s"
-                        />
-                      </span>
-                    </div>
-                  </div>
-
-                  <motion.button
+            <div
+              className="flex flex-nowrap gap-0"
+              style={{ scrollbarWidth: "none" }}
+            >
+              {visibleTabs.map((tab) => {
+                const isActive = activeTab === tab;
+                return (
+                  <button
+                    key={`sticky-${tab}`}
                     type="button"
+                    aria-label={`Jump to ${tab} category`}
+                    data-ocid={`products.sticky_tab.${dynamicTabs.indexOf(tab) + 1}`}
                     onClick={() => {
-                      window.location.href = "/services/cinematic-ads";
+                      setActiveTab(tab);
+                      const sectionEl = sectionRefs.current.get(tab);
+                      if (sectionEl) {
+                        sectionEl.scrollIntoView({
+                          behavior: "smooth",
+                          block: "start",
+                        });
+                      } else if (gridRef.current) {
+                        gridRef.current.scrollIntoView({
+                          behavior: "smooth",
+                          block: "start",
+                        });
+                      }
                     }}
-                    whileHover={{ boxShadow: "0 0 12px rgba(94,240,138,0.2)" }}
                     style={{
-                      display: "block",
-                      width: "100%",
+                      padding: "14px 18px",
+                      minHeight: "48px",
                       background: "transparent",
-                      color: "#39FF14",
-                      fontWeight: "700",
-                      fontSize: "0.95rem",
-                      textAlign: "center",
-                      padding: "12px 24px",
-                      borderRadius: "8px",
-                      border: "1px solid #39FF14",
+                      border: "none",
+                      borderBottom: isActive
+                        ? "2px solid #5EF08A"
+                        : "2px solid transparent",
+                      color: isActive ? "#5EF08A" : "rgba(156,163,175,0.55)",
+                      fontWeight: isActive ? "700" : "500",
+                      fontSize: "0.85rem",
                       cursor: "pointer",
-                      marginTop: "auto",
-                      transition: "opacity 0.2s",
+                      whiteSpace: "nowrap",
+                      transition:
+                        "color 0.15s, border-color 0.15s, font-weight 0.15s",
+                      letterSpacing: isActive ? "0.01em" : "normal",
                     }}
                   >
-                    <EditableText
-                      textKey="products.cinematic_ads_cta"
-                      defaultText="Get Started"
-                    />
-                  </motion.button>
-                </div>
+                    {tab}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
-                <h2
-                  style={{
-                    color: "#EEF0F8",
-                    fontSize: "1.3rem",
-                    fontWeight: "700",
-                    marginBottom: "16px",
-                  }}
-                >
-                  <EditableText
-                    textKey="products.cinematic_retainers_heading"
-                    defaultText="Quarterly Retainers"
-                  />
-                </h2>
+        {/* Tab content with crossfade */}
+        {!catalogLoaded || !activeTab ? (
+          <div
+            style={{
+              color: "#7A7D90",
+              textAlign: "center",
+              padding: "40px",
+              width: "100%",
+            }}
+          >
+            Loading services…
+          </div>
+        ) : (
+          <div>
+            {visibleTabs.map((tab) => {
+              const tabProducts = groupedProducts.get(tab) ?? [];
+              return (
                 <div
+                  key={tab}
+                  ref={(el) => {
+                    if (el) sectionRefs.current.set(tab, el);
+                    else sectionRefs.current.delete(tab);
+                  }}
+                  data-section-tab={tab}
                   style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      "repeat(auto-fill, minmax(240px, 1fr))",
-                    gap: "24px",
+                    display: activeTab === tab ? "block" : "none",
+                    scrollMarginTop: "80px",
                   }}
                 >
-                  {AD_RETAINERS.filter((r) =>
-                    isProductActive(r.backendName),
-                  ).map((r) => {
-                    const rSlug = r.backendName
-                      .toLowerCase()
-                      .replace(/\s+/g, "_");
-                    return (
-                      <div
-                        key={r.backendName}
-                        style={cardStyle}
-                        onMouseEnter={(e) => cardHoverEnter(e.currentTarget)}
-                        onMouseLeave={(e) => cardHoverLeave(e.currentTarget)}
+                  <AnimatePresence mode="wait">
+                    {activeTab === tab && (
+                      <motion.div
+                        key={tab}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
                       >
-                        <div>
-                          <h3
-                            style={{
-                              color: "#EEF0F8",
-                              fontSize: "1.2rem",
-                              fontWeight: "700",
-                              marginBottom: "4px",
-                            }}
-                          >
-                            <EditableText
-                              textKey={`products.cinematic_retainer_name_${rSlug}`}
-                              defaultText={r.displayName}
-                            />
-                          </h3>
-                          <p
-                            style={{
-                              color: "#7A7D90",
-                              fontSize: "0.9rem",
-                              marginBottom: "8px",
-                            }}
-                          >
-                            <EditableText
-                              textKey={`products.cinematic_retainer_qty_${rSlug}`}
-                              defaultText={r.qty}
-                            />
-                          </p>
-                          <p
-                            style={{
-                              color: "#5EF08A",
-                              fontSize: "1.5rem",
-                              fontWeight: "800",
-                            }}
-                          >
-                            <EditableText
-                              textKey={`products.cinematic_retainer_price_${rSlug}`}
-                              defaultText={getDisplayPrice(
-                                r.backendName,
-                                "onetime",
-                              )}
-                            />
-                          </p>
-                          <p
-                            style={{
-                              color: "#7A7D90",
-                              fontSize: "0.8rem",
-                              marginTop: "2px",
-                            }}
-                          >
-                            <EditableText
-                              textKey={`products.cinematic_retainer_period_${r.backendName.toLowerCase().replace(/\s+/g, "_")}`}
-                              defaultText="per quarter"
-                            />
-                          </p>
-                        </div>
-                        <div style={{ flex: 1 }} />
-                        <motion.button
-                          type="button"
-                          onClick={() => {
-                            window.location.href = "/services/cinematic-ads";
-                          }}
-                          whileHover={{
-                            boxShadow: "0 0 12px rgba(94,240,138,0.2)",
-                          }}
-                          style={{
-                            display: "block",
-                            width: "100%",
-                            background: "transparent",
-                            color: "#39FF14",
-                            fontWeight: "700",
-                            fontSize: "0.95rem",
-                            textAlign: "center",
-                            padding: "12px 24px",
-                            borderRadius: "8px",
-                            border: "1px solid #39FF14",
-                            cursor: "pointer",
-                            marginTop: "auto",
-                            transition: "opacity 0.2s",
-                          }}
-                        >
-                          <EditableText
-                            textKey={`products.cinematic_retainer_cta_${r.backendName.toLowerCase().replace(/\s+/g, "_")}`}
-                            defaultText="Get Started"
-                          />
-                        </motion.button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* ── PRODUCT ADS (PRODUCT LAB) ── */}
-            {activeTab === "Product Ads" && (
-              <div>
-                <ShowcaseButton tab={activeTab} />
-                <LearnMoreButton tab={activeTab} />
-                {/* Hero Section */}
-                <div
-                  style={{
-                    position: "relative",
-                    overflow: "hidden",
-                    borderRadius: "20px",
-                    border: "1px solid rgba(94,240,138,0.2)",
-                    background: "rgba(17,19,34,0.85)",
-                    padding: "56px 40px 48px",
-                    marginBottom: "48px",
-                    textAlign: "center",
-                  }}
-                >
-                  {/* Neon glow background blob */}
-                  <div
-                    aria-hidden="true"
-                    style={{
-                      position: "absolute",
-                      top: "-80px",
-                      left: "50%",
-                      transform: "translateX(-50%)",
-                      width: "600px",
-                      height: "300px",
-                      background:
-                        "radial-gradient(ellipse, rgba(94,240,138,0.12) 0%, transparent 70%)",
-                      pointerEvents: "none",
-                    }}
-                  />
-
-                  {/* Tech badges */}
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "10px",
-                      justifyContent: "center",
-                      flexWrap: "wrap",
-                      marginBottom: "28px",
-                    }}
-                  >
-                    {[
-                      {
-                        text: "Seedance 2.0 Physics Engine",
-                        key: "products.product_ads_badge_1",
-                      },
-                      {
-                        text: "Proprietary Product Identity Lock",
-                        key: "products.product_ads_badge_2",
-                      },
-                    ].map(({ text, key }) => (
-                      <span
-                        key={key}
-                        style={{
-                          background: "rgba(94,240,138,0.1)",
-                          border: "1px solid rgba(94,240,138,0.3)",
-                          color: "#5EF08A",
-                          fontSize: "0.75rem",
-                          fontWeight: "700",
-                          letterSpacing: "0.06em",
-                          textTransform: "uppercase",
-                          padding: "5px 14px",
-                          borderRadius: "9999px",
-                        }}
-                      >
-                        <EditableText textKey={key} defaultText={text} />
-                      </span>
-                    ))}
-                  </div>
-
-                  <h2
-                    style={{
-                      color: "#EEF0F8",
-                      fontSize: "clamp(1.8rem, 4vw, 2.6rem)",
-                      fontWeight: "800",
-                      letterSpacing: "-0.02em",
-                      lineHeight: "1.15",
-                      marginBottom: "20px",
-                      maxWidth: "700px",
-                      margin: "0 auto 20px",
-                    }}
-                  >
-                    <EditableText
-                      textKey="products.product_ads_hero_heading"
-                      defaultText="Sensory Hooks."
-                    />{" "}
-                    <span style={{ color: "#5EF08A" }}>
-                      <EditableText
-                        textKey="products.product_ads_hero_accent"
-                        defaultText="Surreal Physics."
-                      />
-                    </span>{" "}
-                    <EditableText
-                      textKey="products.product_ads_hero_suffix"
-                      defaultText="90% Less Cost."
-                    />
-                  </h2>
-
-                  <p
-                    style={{
-                      color: "#7A7D90",
-                      fontSize: "1.05rem",
-                      lineHeight: "1.7",
-                      maxWidth: "580px",
-                      margin: "0 auto 36px",
-                    }}
-                  >
-                    <EditableText
-                      textKey="products.product_ads_hero_description"
-                      defaultText="AI-engineered product videos that stop the scroll. We lock in your product identity and simulate real-world physics — at a fraction of traditional production cost."
-                    />
-                  </p>
-
-                  <motion.button
-                    type="button"
-                    onClick={() => navigate({ to: "/product-ads" })}
-                    whileHover={{ boxShadow: "0 0 12px rgba(94,240,138,0.2)" }}
-                    style={{
-                      background: "transparent",
-                      color: "#39FF14",
-                      fontWeight: "700",
-                      fontSize: "1rem",
-                      padding: "12px 36px",
-                      borderRadius: "8px",
-                      border: "1px solid #39FF14",
-                      cursor: "pointer",
-                      transition: "opacity 0.2s",
-                    }}
-                    data-ocid="product_lab.hero_cta"
-                  >
-                    <EditableText
-                      textKey="products.product_ads_hero_cta"
-                      defaultText="Get Started"
-                    />
-                  </motion.button>
-                </div>
-
-                {/* Pricing Grid */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      "repeat(auto-fill, minmax(260px, 1fr))",
-                    gap: "24px",
-                  }}
-                >
-                  {PRODUCT_LAB_TIERS.filter((tier) =>
-                    isProductActive(tier.backendName),
-                  ).map((tier) => {
-                    const livePrice = getDisplayPrice(tier.backendName, "auto");
-                    return (
-                      <div
-                        key={tier.id}
-                        style={{
-                          ...cardStyle,
-                          position: "relative",
-                          border: tier.featured
-                            ? "1px solid rgba(57,255,20,0.4)"
-                            : "1px solid rgba(255,255,255,0.08)",
-                          boxShadow: tier.featured
-                            ? "0 4px 24px rgba(0,0,0,0.4), 0 0 30px rgba(57,255,20,0.12), inset 0 1px 0 rgba(255,255,255,0.05)"
-                            : "0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05)",
-                        }}
-                        onMouseEnter={(e) => cardHoverEnter(e.currentTarget)}
-                        onMouseLeave={(e) => cardHoverLeave(e.currentTarget)}
-                        data-ocid={`product_lab.tier_${tier.id}`}
-                      >
-                        {/* Badge */}
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            marginBottom: "4px",
-                          }}
-                        >
-                          <span
-                            style={{
-                              background: tier.featured
-                                ? "rgba(94,240,138,0.15)"
-                                : "rgba(255,255,255,0.05)",
-                              color: tier.featured ? "#5EF08A" : "#7A7D90",
-                              fontSize: "0.7rem",
-                              fontWeight: "700",
-                              letterSpacing: "0.08em",
-                              textTransform: "uppercase",
-                              padding: "3px 10px",
-                              borderRadius: "9999px",
-                              border: tier.featured
-                                ? "1px solid rgba(94,240,138,0.3)"
-                                : "1px solid #1C1F33",
-                            }}
-                          >
-                            <EditableText
-                              textKey={`products.product_ads_badge_tier_${tier.id}`}
-                              defaultText={tier.badge}
-                            />
-                          </span>
-                        </div>
-
-                        {/* Plan name + price */}
-                        <div>
-                          <h3
-                            style={{
-                              color: "#EEF0F8",
-                              fontSize: "1.35rem",
-                              fontWeight: "800",
-                              marginBottom: "6px",
-                            }}
-                          >
-                            <EditableText
-                              textKey={`products.product_ads_tier_name_${tier.id}`}
-                              defaultText={tier.backendName}
-                            />
-                          </h3>
+                        {tabProducts.length === 0 ? (
                           <div
                             style={{
-                              display: "flex",
-                              alignItems: "baseline",
-                              gap: "4px",
-                              marginBottom: "20px",
+                              color: "#7A7D90",
+                              textAlign: "center",
+                              padding: "40px",
+                              width: "100%",
                             }}
                           >
-                            <span
-                              style={{
-                                color: "#5EF08A",
-                                fontSize: "2rem",
-                                fontWeight: "800",
-                                lineHeight: "1",
-                              }}
-                            >
-                              <EditableText
-                                textKey={`products.product_ads_tier_price_${tier.id}`}
-                                defaultText={livePrice}
-                              />
-                            </span>
+                            No products available in this category.
                           </div>
-
-                          {/* Deliverables */}
-                          <ul
-                            style={{
-                              listStyle: "none",
-                              padding: 0,
-                              margin: 0,
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: "10px",
-                            }}
-                          >
-                            <li
-                              style={{
-                                display: "flex",
-                                alignItems: "flex-start",
-                                gap: "8px",
-                                color: "#EEF0F8",
-                                fontSize: "0.9rem",
-                                fontWeight: "600",
-                              }}
-                            >
-                              <span style={{ color: "#5EF08A", flexShrink: 0 }}>
-                                ✓
-                              </span>
-                              <EditableText
-                                textKey={`products.product_ads_delivery_${tier.id}`}
-                                defaultText={tier.delivery}
-                              />
-                            </li>
-                            <li
-                              style={{
-                                display: "flex",
-                                alignItems: "flex-start",
-                                gap: "8px",
-                                color: "#7A7D90",
-                                fontSize: "0.875rem",
-                              }}
-                            >
-                              <span style={{ color: "#5EF08A", flexShrink: 0 }}>
-                                ✓
-                              </span>
-                              <EditableText
-                                textKey={`products.product_ads_turnaround_${tier.id}`}
-                                defaultText={tier.turnaround}
-                              />
-                            </li>
-                            {tier.vault && (
-                              <li
-                                style={{
-                                  display: "flex",
-                                  alignItems: "flex-start",
-                                  gap: "8px",
-                                  color: "#5EF08A",
-                                  fontSize: "0.875rem",
-                                  fontWeight: "600",
-                                }}
-                              >
-                                <span style={{ flexShrink: 0 }}>🔒</span>
-                                <EditableText
-                                  textKey="products.product_ads_vault_label"
-                                  defaultText="Permanent Vault storage"
-                                />
-                              </li>
+                        ) : (
+                          <>
+                            {tab === "AI Receptionist" && (
+                              <>
+                                {/* AI Receptionist: Feature Grid + Protocol Block */}
+                                <div className="mb-10">
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+                                    <div className="rounded-2xl border border-[rgba(94,240,138,0.2)] bg-black/50 p-6 flex flex-col items-center text-center gap-3">
+                                      <div className="w-12 h-12 rounded-full bg-green-400/10 border border-green-400/30 flex items-center justify-center">
+                                        <svg
+                                          width="24"
+                                          height="24"
+                                          fill="none"
+                                          viewBox="0 0 24 24"
+                                          aria-hidden="true"
+                                        >
+                                          <path
+                                            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"
+                                            fill="#5EF08A"
+                                          />
+                                        </svg>
+                                      </div>
+                                      <div className="text-lg font-bold text-white">
+                                        Revenue Saved
+                                      </div>
+                                      <p className="text-sm text-gray-400 leading-relaxed">
+                                        Recover lost leads from every unanswered
+                                        call and convert them into paying
+                                        customers automatically.
+                                      </p>
+                                    </div>
+                                    <div className="rounded-2xl border border-[rgba(94,240,138,0.2)] bg-black/50 p-6 flex flex-col items-center text-center gap-3">
+                                      <div className="w-12 h-12 rounded-full bg-green-400/10 border border-green-400/30 flex items-center justify-center">
+                                        <svg
+                                          width="24"
+                                          height="24"
+                                          fill="none"
+                                          viewBox="0 0 24 24"
+                                          aria-hidden="true"
+                                        >
+                                          <path
+                                            d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 1.5L18.5 9H13V3.5zM6 20V4h5v7h7v9H6z"
+                                            fill="#5EF08A"
+                                          />
+                                        </svg>
+                                      </div>
+                                      <div className="text-lg font-bold text-white">
+                                        Call Transcripts
+                                      </div>
+                                      <p className="text-sm text-gray-400 leading-relaxed">
+                                        Every call is transcribed, tagged, and
+                                        searchable so you never lose context
+                                        from a customer interaction.
+                                      </p>
+                                    </div>
+                                    <div className="rounded-2xl border border-[rgba(94,240,138,0.2)] bg-black/50 p-6 flex flex-col items-center text-center gap-3">
+                                      <div className="w-12 h-12 rounded-full bg-green-400/10 border border-green-400/30 flex items-center justify-center">
+                                        <svg
+                                          width="24"
+                                          height="24"
+                                          fill="none"
+                                          viewBox="0 0 24 24"
+                                          aria-hidden="true"
+                                        >
+                                          <path
+                                            d="M12 2a9 9 0 1 0 0 18A9 9 0 0 0 12 2zm1 13h-2v-5h2v5zm0-7h-2V6h2v2z"
+                                            fill="#5EF08A"
+                                          />
+                                        </svg>
+                                      </div>
+                                      <div className="text-lg font-bold text-white">
+                                        Knowledge Base
+                                      </div>
+                                      <p className="text-sm text-gray-400 leading-relaxed">
+                                        Train the AI on your business, services,
+                                        and FAQs so it answers questions with
+                                        precision and confidence.
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="rounded-2xl border border-[rgba(94,240,138,0.3)] bg-gradient-to-br from-black/80 to-green-950/20 p-8 flex flex-col md:flex-row gap-6 items-start">
+                                    <div className="w-16 h-16 rounded-full bg-green-400/15 border border-green-400/40 flex items-center justify-center flex-shrink-0">
+                                      <svg
+                                        width="32"
+                                        height="32"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        aria-hidden="true"
+                                      >
+                                        <path
+                                          d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"
+                                          fill="#5EF08A"
+                                        />
+                                      </svg>
+                                    </div>
+                                    <div>
+                                      <h3 className="text-xl font-bold text-white mb-2">
+                                        Revenue-First Focus
+                                      </h3>
+                                      <p className="text-gray-300 leading-relaxed">
+                                        Our AI Receptionist doesn&apos;t just
+                                        answer calls — it qualifies leads, books
+                                        appointments, and collects information
+                                        so your team walks into every
+                                        conversation ready to close. Every
+                                        interaction is designed around one
+                                        outcome: converting callers into
+                                        clients.
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </>
                             )}
-                          </ul>
-                        </div>
-
-                        <div style={{ flex: 1 }} />
-
-                        {/* CTA Button */}
-                        <motion.button
-                          type="button"
-                          onClick={() => navigate({ to: "/product-ads" })}
-                          whileHover={{
-                            boxShadow: tier.featured
-                              ? "0 0 20px rgba(94,240,138,0.45)"
-                              : "0 0 12px rgba(94,240,138,0.2)",
-                          }}
-                          style={{
-                            display: "block",
-                            width: "100%",
-                            background: tier.featured
-                              ? "#39FF14"
-                              : "transparent",
-                            color: tier.featured ? "#000" : "#39FF14",
-                            fontWeight: "700",
-                            fontSize: "0.95rem",
-                            textAlign: "center",
-                            padding: "12px 24px",
-                            borderRadius: "8px",
-                            border: tier.featured
-                              ? "none"
-                              : "1px solid #39FF14",
-                            cursor: "pointer",
-                            marginTop: "auto",
-                            transition: "opacity 0.2s",
-                          }}
-                          data-ocid={`product_lab.cta_${tier.id}`}
-                        >
-                          <EditableText
-                            textKey={tier.buttonLabelKey}
-                            defaultText={tier.buttonLabel}
-                          />
-                        </motion.button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* ── AI RECEPTIONIST ── */}
-            {activeTab === "AI Receptionist" && (
-              <div>
-                <ShowcaseButton tab={activeTab} />
-                <LearnMoreButton tab={activeTab} />
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      "repeat(auto-fill, minmax(240px, 1fr))",
-                    gap: "24px",
-                  }}
-                >
-                  {AI_TIERS.filter((tier) =>
-                    isProductActive(tier.backendName),
-                  ).map((tier) => {
-                    const livePrice = getDisplayPrice(
-                      tier.backendName,
-                      "monthly",
-                    );
-                    const aiSlug = tier.backendName
-                      .toLowerCase()
-                      .replace(/\s+/g, "_");
-                    return (
-                      <div
-                        key={tier.backendName}
-                        style={cardStyle}
-                        onMouseEnter={(e) => cardHoverEnter(e.currentTarget)}
-                        onMouseLeave={(e) => cardHoverLeave(e.currentTarget)}
-                      >
-                        <div>
-                          <h3
-                            style={{
-                              color: "#EEF0F8",
-                              fontSize: "1.2rem",
-                              fontWeight: "700",
-                              marginBottom: "8px",
-                            }}
-                          >
-                            <EditableText
-                              textKey={`products.ai_receptionist_name_${aiSlug}`}
-                              defaultText={tier.displayName}
-                            />
-                          </h3>
-                          <p
-                            style={{
-                              color: "#5EF08A",
-                              fontSize: "1.5rem",
-                              fontWeight: "800",
-                              marginBottom: tier.setup ? "4px" : "12px",
-                            }}
-                          >
-                            <EditableText
-                              textKey={`products.ai_receptionist_price_${aiSlug}`}
-                              defaultText={livePrice}
-                            />
-                          </p>
-                          {tier.setup && (
-                            <p
-                              style={{
-                                color: "#7A7D90",
-                                fontSize: "0.85rem",
-                                marginBottom: "12px",
-                              }}
-                            >
-                              <EditableText
-                                textKey={`products.ai_receptionist_setup_${aiSlug}`}
-                                defaultText={tier.setup}
-                              />
-                            </p>
-                          )}
-                          <ul
-                            style={{
-                              listStyle: "none",
-                              padding: 0,
-                              margin: 0,
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: "8px",
-                            }}
-                          >
-                            {tier.features.map((f, fi) => (
-                              <li
-                                key={f}
-                                style={{
-                                  display: "flex",
-                                  alignItems: "flex-start",
-                                  gap: "8px",
-                                  color: "#7A7D90",
-                                  fontSize: "0.875rem",
-                                }}
-                              >
-                                <span
-                                  style={{
-                                    color: "#5EF08A",
-                                    marginTop: "1px",
-                                    flexShrink: 0,
-                                  }}
-                                >
-                                  ✓
-                                </span>
-                                <EditableText
-                                  textKey={`products.ai_receptionist_feature_${aiSlug}_${fi}`}
-                                  defaultText={f}
-                                />
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div style={{ flex: 1 }} />
-                        <motion.button
-                          type="button"
-                          onClick={() =>
-                            navigate({ to: "/services/ai-receptionist" })
-                          }
-                          whileHover={{
-                            boxShadow: "0 0 12px rgba(94,240,138,0.2)",
-                          }}
-                          style={{
-                            display: "block",
-                            width: "100%",
-                            background: "transparent",
-                            color: "#39FF14",
-                            fontWeight: "700",
-                            fontSize: "0.95rem",
-                            textAlign: "center",
-                            padding: "12px 24px",
-                            borderRadius: "8px",
-                            border: "1px solid #39FF14",
-                            cursor: "pointer",
-                            marginTop: "auto",
-                            transition: "opacity 0.2s",
-                          }}
-                        >
-                          <EditableText
-                            textKey={`products.ai_receptionist_cta_${tier.backendName.toLowerCase().replace(/\s+/g, "_")}`}
-                            defaultText="Get Started"
-                          />
-                        </motion.button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* ── GROWTH HUB ── */}
-            {activeTab === "Growth Hub" && (
-              <div>
-                <ShowcaseButton tab={activeTab} />
-                <LearnMoreButton tab={activeTab} />
-
-                {/* Performance Snapshot */}
-                <PerformanceSnapshot />
-
-                {/* Categories */}
-                {GROWTH_HUB_CATEGORIES.map((category) => (
-                  <div
-                    key={category.categoryKey}
-                    style={{ marginBottom: "48px" }}
-                  >
-                    <h2
-                      style={{
-                        color: "#EEF0F8",
-                        fontSize: "1.15rem",
-                        fontWeight: "700",
-                        marginBottom: "20px",
-                        letterSpacing: "0.02em",
-                      }}
-                    >
-                      <EditableText
-                        textKey={`products.growth_hub_category_${category.categoryKey}`}
-                        defaultText={category.label}
-                      />
-                    </h2>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns:
-                          "repeat(auto-fill, minmax(260px, 1fr))",
-                        gap: "20px",
-                      }}
-                    >
-                      {category.items.map((item) => {
-                        const Icon = item.icon;
-                        // Resolve live price from backend; fall back to static while loading
-                        const liveItemPrice =
-                          getDisplayPrice(item.backendName, "auto") === "—"
-                            ? item.fallbackPrice
-                            : getDisplayPrice(item.backendName, "auto");
-                        const resolvedDisplay = !catalogLoaded
-                          ? "..."
-                          : liveItemPrice;
-                        const itemSlug = item.backendName
-                          .toLowerCase()
-                          .replace(/[^a-z0-9]+/g, "_");
-                        return (
-                          <div
-                            key={item.name}
-                            style={{
-                              ...cardStyle,
-                              gap: "12px",
-                            }}
-                            onMouseEnter={(e) =>
-                              cardHoverEnter(e.currentTarget)
-                            }
-                            onMouseLeave={(e) =>
-                              cardHoverLeave(e.currentTarget)
-                            }
-                          >
+                            {tab === "AI Receptionist" && (
+                              <div className="w-full max-w-3xl mx-auto mb-12 rounded-2xl border border-[rgba(94,240,138,0.25)] bg-black/60 backdrop-blur-sm p-8">
+                                <h2 className="text-2xl font-bold text-white mb-2">
+                                  How Much Are Missed Calls Costing You?
+                                </h2>
+                                <p className="text-gray-400 mb-6">
+                                  Every unanswered call is lost revenue. See
+                                  what you&apos;re missing.
+                                </p>
+                                <div className="flex flex-col sm:flex-row gap-6 mb-6">
+                                  <div className="flex-1">
+                                    <label
+                                      htmlFor="missed-calls-input"
+                                      className="block text-sm text-gray-300 mb-1"
+                                    >
+                                      Missed calls per day:{" "}
+                                      <span className="text-[#5ef08a] font-bold">
+                                        {missedCallsPerDay}
+                                      </span>
+                                    </label>
+                                    <input
+                                      id="missed-calls-input"
+                                      type="range"
+                                      min={1}
+                                      max={50}
+                                      step={1}
+                                      value={missedCallsPerDay}
+                                      onChange={(e) =>
+                                        setMissedCallsPerDay(
+                                          Number(e.target.value),
+                                        )
+                                      }
+                                      className="w-full accent-[#5ef08a]"
+                                    />
+                                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                                      <span>1</span>
+                                      <span>50</span>
+                                    </div>
+                                  </div>
+                                  <div className="flex-1">
+                                    <label
+                                      htmlFor="avg-revenue-input"
+                                      className="block text-sm text-gray-300 mb-1"
+                                    >
+                                      Average revenue per call ($)
+                                    </label>
+                                    <input
+                                      id="avg-revenue-input"
+                                      type="number"
+                                      min={1}
+                                      max={10000}
+                                      value={avgRevenuePerCall}
+                                      onChange={(e) =>
+                                        setAvgRevenuePerCall(
+                                          Math.max(1, Number(e.target.value)),
+                                        )
+                                      }
+                                      className="w-full bg-black/40 border border-[rgba(94,240,138,0.2)] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#5ef08a]"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                  <div className="rounded-xl bg-black/40 border border-[rgba(94,240,138,0.15)] p-4 text-center">
+                                    <div className="text-3xl font-bold text-[#5ef08a]">
+                                      $
+                                      {(
+                                        missedCallsPerDay *
+                                        30 *
+                                        avgRevenuePerCall
+                                      ).toLocaleString("en-US")}
+                                      <span className="text-lg font-normal text-gray-400">
+                                        /mo
+                                      </span>
+                                    </div>
+                                    <div className="text-xs text-gray-400 mt-1">
+                                      monthly missed revenue
+                                    </div>
+                                  </div>
+                                  <div className="rounded-xl bg-black/40 border border-[rgba(94,240,138,0.15)] p-4 text-center">
+                                    <div className="text-3xl font-bold text-[#5ef08a]">
+                                      $
+                                      {(
+                                        missedCallsPerDay *
+                                        365 *
+                                        avgRevenuePerCall
+                                      ).toLocaleString("en-US")}
+                                      <span className="text-lg font-normal text-gray-400">
+                                        /yr
+                                      </span>
+                                    </div>
+                                    <div className="text-xs text-gray-400 mt-1">
+                                      annual missed revenue
+                                    </div>
+                                  </div>
+                                </div>
+                                <p className="text-sm text-center text-gray-300">
+                                  The AI Receptionist Safety Net is{" "}
+                                  <span className="text-[#5ef08a] font-semibold">
+                                    $199/mo
+                                  </span>{" "}
+                                  — a fraction of what you&apos;re losing.
+                                </p>
+                              </div>
+                            )}
+                            {tab === "Speedy Sites" && (
+                              <div className="mb-10">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                  <div className="rounded-xl p-6 bg-gradient-to-br from-green-600/20 to-green-900/20 border border-green-500/30">
+                                    <h3 className="text-lg font-bold text-white mb-4">
+                                      Who Speedy Is For
+                                    </h3>
+                                    <ul className="space-y-3">
+                                      {[
+                                        "Need to launch immediately",
+                                        "Validating a business idea",
+                                        "Need instant credibility",
+                                        "Stuck using DIY tools",
+                                      ].map((item) => (
+                                        <li
+                                          key={item}
+                                          className="flex items-center gap-3 text-slate-300"
+                                        >
+                                          <span className="text-green-400 font-bold">
+                                            ✓
+                                          </span>
+                                          {item}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                  <div className="rounded-xl p-6 bg-slate-800/60 border border-slate-700">
+                                    <h3 className="text-lg font-bold text-white mb-4">
+                                      When to Upgrade (Custom)
+                                    </h3>
+                                    <ul className="space-y-3">
+                                      {[
+                                        "Need SEO to capture organic traffic",
+                                        "Need CRM and workflow automation",
+                                        "Outgrow platform caps",
+                                        "Want full, uncompromised customization",
+                                      ].map((item) => (
+                                        <li
+                                          key={item}
+                                          className="flex items-center gap-3 text-slate-300"
+                                        >
+                                          <span className="text-orange-400">
+                                            →
+                                          </span>
+                                          {item}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                    <p className="mt-4 text-sm text-slate-400 italic">
+                                      Start with Custom if this is you.
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                  <div className="rounded-xl p-6 bg-slate-800/60 border border-slate-700">
+                                    <h3 className="text-lg font-bold text-white mb-4">
+                                      Why Not Just Build It Yourself?
+                                    </h3>
+                                    <ul className="space-y-2">
+                                      {[
+                                        "No design system = inconsistent look",
+                                        "Months lost to trial and error",
+                                        "Zero conversion optimization",
+                                        "You pay with time, not money",
+                                      ].map((item) => (
+                                        <li
+                                          key={item}
+                                          className="flex items-start gap-3 text-slate-300 text-sm"
+                                        >
+                                          <span className="text-red-400 mt-0.5">
+                                            ✕
+                                          </span>
+                                          {item}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                    <p className="mt-4 text-xs text-slate-500 italic">
+                                      &ldquo;I spent 6 months and still had a
+                                      site that looked like 2008.&rdquo;
+                                    </p>
+                                  </div>
+                                  <div className="rounded-xl p-6 bg-slate-800/60 border border-slate-700">
+                                    <h3 className="text-lg font-bold text-white mb-4">
+                                      Why Not Just Pay $29/mo?
+                                    </h3>
+                                    <ul className="space-y-2">
+                                      {[
+                                        "Template limitations kill your brand",
+                                        "Monthly fees compound forever",
+                                        "Support is a chatbot, not a team",
+                                        "Zero custom functionality",
+                                      ].map((item) => (
+                                        <li
+                                          key={item}
+                                          className="flex items-start gap-3 text-slate-300 text-sm"
+                                        >
+                                          <span className="text-red-400 mt-0.5">
+                                            ✕
+                                          </span>
+                                          {item}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                    <p className="mt-4 text-xs text-slate-500 italic">
+                                      &ldquo;Paying $29/mo became $600/yr for a
+                                      site I still hated.&rdquo;
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            {tab === "Growth Hub" &&
+                              (() => {
+                                const allGHProducts =
+                                  groupedProducts.get("Growth Hub") ?? [];
+                                const trafficProducts = allGHProducts.filter(
+                                  (p) =>
+                                    [
+                                      "seo",
+                                      "ads",
+                                      "social",
+                                      "google",
+                                      "traffic",
+                                      "search",
+                                    ].some((k) =>
+                                      p.name.toLowerCase().includes(k),
+                                    ),
+                                );
+                                const conversionProducts = allGHProducts.filter(
+                                  (p) =>
+                                    [
+                                      "lead",
+                                      "review",
+                                      "audit",
+                                      "conversion",
+                                      "capture",
+                                    ].some((k) =>
+                                      p.name.toLowerCase().includes(k),
+                                    ),
+                                );
+                                const operationsProducts = allGHProducts.filter(
+                                  (p) =>
+                                    [
+                                      "menu",
+                                      "idx",
+                                      "mls",
+                                      "bulk",
+                                      "custom page",
+                                      "restaurant",
+                                      "operations",
+                                      "pwa",
+                                      "annual site",
+                                      "upgrade",
+                                    ].some((k) =>
+                                      p.name.toLowerCase().includes(k),
+                                    ),
+                                );
+                                const usedGHIds = new Set(
+                                  [
+                                    ...trafficProducts,
+                                    ...conversionProducts,
+                                    ...operationsProducts,
+                                  ].map((p) => String(p.id)),
+                                );
+                                const ghRemainder = allGHProducts.filter(
+                                  (p) => !usedGHIds.has(String(p.id)),
+                                );
+                                const ghCategories = [
+                                  {
+                                    pill: "TRAFFIC",
+                                    headline: "Capture Attention Online",
+                                    products: trafficProducts,
+                                  },
+                                  {
+                                    pill: "CONVERSION",
+                                    headline: "Turn Visitors Into Clients",
+                                    products: conversionProducts,
+                                  },
+                                  {
+                                    pill: "OPERATIONS",
+                                    headline: "Systemize Your Business",
+                                    products: operationsProducts,
+                                  },
+                                  ...(ghRemainder.length > 0
+                                    ? [
+                                        {
+                                          pill: "MORE",
+                                          headline: "Additional Services",
+                                          products: ghRemainder,
+                                        },
+                                      ]
+                                    : []),
+                                ].filter((c) => c.products.length > 0);
+                                if (ghCategories.length === 0) return null;
+                                return (
+                                  <div className="space-y-12 mb-8">
+                                    {ghCategories.map((cat) => (
+                                      <div key={cat.pill}>
+                                        <div className="flex items-center gap-4 mb-6">
+                                          <span className="px-3 py-1 rounded-full text-xs font-bold tracking-widest bg-slate-800 text-green-400 border border-green-500/30">
+                                            {cat.pill}
+                                          </span>
+                                          <h3 className="text-xl font-bold text-white">
+                                            {cat.headline}
+                                          </h3>
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                                          {cat.products.map((product, idx) => {
+                                            const pt = product.payment_type as
+                                              | string
+                                              | null
+                                              | undefined;
+                                            const ghBasePrice =
+                                              pt === "one_time" ||
+                                              pt === "deposit_50"
+                                                ? (product.price_onetime ??
+                                                  product.price_monthly ??
+                                                  0)
+                                                : pt === "annual"
+                                                  ? (product.price_annual ??
+                                                    product.price_monthly ??
+                                                    0)
+                                                  : (product.price_monthly ??
+                                                    product.price_onetime ??
+                                                    0);
+                                            const ghPaymentType =
+                                              product.payment_type ??
+                                              "one_time";
+                                            const ghPrice =
+                                              ghBasePrice == null
+                                                ? "—"
+                                                : ghPaymentType === "monthly"
+                                                  ? `${ghBasePrice.toLocaleString()}/mo`
+                                                  : ghPaymentType ===
+                                                      "quarterly"
+                                                    ? `${ghBasePrice.toLocaleString()}/quarter`
+                                                    : ghBasePrice.toLocaleString();
+                                            const ghQuestionnaireRoute:
+                                              | string
+                                              | undefined =
+                                              product.product_type ===
+                                              "Cinematic Ads"
+                                                ? `/ads-builder?price=${String(product.price_onetime ?? "")}`
+                                                : product.product_type ===
+                                                    "Product Ads"
+                                                  ? "/product-lab-brief"
+                                                  : product.product_type ===
+                                                      "AI Receptionist"
+                                                    ? "/ai-receptionist-setup"
+                                                    : undefined;
+                                            return (
+                                              <motion.div
+                                                key={String(product.id)}
+                                                initial={{ opacity: 0, y: 20 }}
+                                                whileInView={{
+                                                  opacity: 1,
+                                                  y: 0,
+                                                }}
+                                                viewport={{ once: true }}
+                                                transition={{
+                                                  duration: 0.4,
+                                                  delay: idx * 0.08,
+                                                }}
+                                              >
+                                                <div
+                                                  style={{
+                                                    ...cardStyle,
+                                                    height: "100%",
+                                                  }}
+                                                  className="group rounded-2xl border border-white/10 overflow-hidden transition-all duration-300 ease-in-out hover:-translate-y-2 hover:shadow-2xl hover:border-white/20 hover:ring-1 hover:ring-green-400/30"
+                                                  onMouseEnter={(e) =>
+                                                    cardHoverEnter(
+                                                      e.currentTarget,
+                                                    )
+                                                  }
+                                                  onMouseLeave={(e) =>
+                                                    cardHoverLeave(
+                                                      e.currentTarget,
+                                                    )
+                                                  }
+                                                >
+                                                  {product.imageUrl && (
+                                                    <div
+                                                      className="relative overflow-hidden"
+                                                      style={{
+                                                        borderRadius: "8px",
+                                                        marginBottom: "12px",
+                                                      }}
+                                                    >
+                                                      <img
+                                                        src={product.imageUrl}
+                                                        alt={product.name}
+                                                        className="w-full rounded-xl object-cover border border-green-400/20 aspect-video"
+                                                      />
+                                                      <div
+                                                        className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none"
+                                                        aria-hidden="true"
+                                                      />
+                                                    </div>
+                                                  )}
+                                                  <div className="flex items-center gap-2 mb-1">
+                                                    <span className="w-1 h-3 bg-green-400/60 rounded-full flex-shrink-0" />
+                                                    <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-green-400/70 font-mono">
+                                                      {cat.pill}
+                                                    </span>
+                                                  </div>
+                                                  <h2 className="text-2xl md:text-3xl font-extrabold uppercase tracking-widest text-white leading-tight mb-1">
+                                                    <TypewriterText
+                                                      text={product.name}
+                                                      speed={45}
+                                                    />
+                                                  </h2>
+                                                  <div className="flex items-baseline gap-2 my-2">
+                                                    <span
+                                                      style={{
+                                                        fontSize:
+                                                          "clamp(2rem, 5vw, 2.75rem)",
+                                                        fontWeight: 900,
+                                                        color: "#5EF08A",
+                                                        fontFamily:
+                                                          "JetBrains Mono, monospace",
+                                                        lineHeight: 1,
+                                                      }}
+                                                    >
+                                                      {"$"}
+                                                      {ghBasePrice != null
+                                                        ? ghBasePrice.toLocaleString()
+                                                        : "—"}
+                                                    </span>
+                                                    <span className="text-sm text-gray-400 font-normal">
+                                                      {ghPaymentType ===
+                                                      "monthly"
+                                                        ? "/mo"
+                                                        : ghPaymentType ===
+                                                            "quarterly"
+                                                          ? "/quarter"
+                                                          : ghPaymentType ===
+                                                              "deposit_50"
+                                                            ? "50% deposit today"
+                                                            : "one-time"}
+                                                    </span>
+                                                  </div>
+                                                  {product.tagline && (
+                                                    <blockquote className="border-l-2 border-green-400/40 pl-3 my-2">
+                                                      <p className="text-sm italic text-gray-400 leading-relaxed">
+                                                        {product.tagline}
+                                                      </p>
+                                                    </blockquote>
+                                                  )}
+                                                  {product.description && (
+                                                    <p
+                                                      className="text-sm md:text-base leading-relaxed text-gray-300 line-clamp-3 group-hover:line-clamp-none transition-all duration-300"
+                                                      style={{
+                                                        marginBottom: "12px",
+                                                      }}
+                                                    >
+                                                      {product.description}
+                                                    </p>
+                                                  )}
+                                                  {product.featureBullets &&
+                                                    product.featureBullets
+                                                      .length > 0 && (
+                                                      <ul
+                                                        className="flex flex-col gap-2"
+                                                        style={{
+                                                          marginBottom: "12px",
+                                                        }}
+                                                      >
+                                                        {product.featureBullets.map(
+                                                          (
+                                                            bullet: string,
+                                                            i: number,
+                                                          ) => (
+                                                            <li
+                                                              key={`b${String(i)}`}
+                                                              className="flex items-start gap-2"
+                                                            >
+                                                              <span className="w-4 h-4 rounded-full border border-green-400/50 bg-green-400/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                                <span className="text-green-400 text-[9px] font-bold leading-none">
+                                                                  ✓
+                                                                </span>
+                                                              </span>
+                                                              <span className="text-sm text-gray-300 leading-snug">
+                                                                {bullet}
+                                                              </span>
+                                                            </li>
+                                                          ),
+                                                        )}
+                                                      </ul>
+                                                    )}
+                                                  {product.bestFor && (
+                                                    <>
+                                                      <hr className="border-t border-white/10 my-1" />
+                                                      <div
+                                                        className="flex flex-wrap items-start gap-1 text-xs"
+                                                        style={{
+                                                          marginBottom: "8px",
+                                                        }}
+                                                      >
+                                                        <span className="font-bold uppercase tracking-widest text-green-400/80 font-mono">
+                                                          Best For:
+                                                        </span>
+                                                        <span className="text-gray-400">
+                                                          {product.bestFor}
+                                                        </span>
+                                                      </div>
+                                                    </>
+                                                  )}
+                                                  <div className="flex flex-col gap-3 mt-auto pt-4 border-t border-white/10">
+                                                    <div
+                                                      aria-label={`Get started with ${product.name}`}
+                                                    >
+                                                      <GetStartedButton
+                                                        productName={
+                                                          product.name
+                                                        }
+                                                        displayPrice={ghPrice}
+                                                        navigateTo={
+                                                          ghQuestionnaireRoute
+                                                        }
+                                                      />
+                                                    </div>
+                                                    <Link
+                                                      to="/services/product/$productId"
+                                                      params={{
+                                                        productId: String(
+                                                          product.id,
+                                                        ),
+                                                      }}
+                                                      className="relative inline-flex items-center justify-center gap-1 text-sm font-medium text-green-400 hover:text-green-300 after:absolute after:bottom-0 after:left-0 after:h-px after:w-0 after:bg-green-400 after:transition-all after:duration-300 hover:after:w-full"
+                                                      style={{
+                                                        textDecoration: "none",
+                                                      }}
+                                                      aria-label={`Learn more about ${product.name}`}
+                                                      data-ocid={`products.view_details.${String(product.id)}`}
+                                                    >
+                                                      View Details
+                                                      <span className="inline-block transition-transform duration-200 group-hover:translate-x-1 ml-1">
+                                                        →
+                                                      </span>
+                                                    </Link>
+                                                    {CATEGORY_SHOWCASE_ROUTES[
+                                                      product.product_type
+                                                    ] && (
+                                                      <Link
+                                                        to={
+                                                          CATEGORY_SHOWCASE_ROUTES[
+                                                            product.product_type
+                                                          ]
+                                                        }
+                                                        className="relative inline-flex items-center justify-center gap-1 text-sm font-medium text-green-400 hover:text-green-300 after:absolute after:bottom-0 after:left-0 after:h-px after:w-0 after:bg-green-400 after:transition-all after:duration-300 hover:after:w-full"
+                                                        style={{
+                                                          textDecoration:
+                                                            "none",
+                                                        }}
+                                                        aria-label={`View our work for ${product.product_type}`}
+                                                        data-ocid={`products.view_our_work.${String(product.id)}`}
+                                                      >
+                                                        View Our Work
+                                                        <span className="inline-block transition-transform duration-200 group-hover:translate-x-1 ml-1">
+                                                          →
+                                                        </span>
+                                                      </Link>
+                                                    )}
+                                                    <Link
+                                                      to="/intake"
+                                                      search={{
+                                                        service: getServiceId(
+                                                          product.product_type,
+                                                        ),
+                                                      }}
+                                                      className="relative inline-flex items-center justify-center gap-1 text-sm font-medium text-green-400 hover:text-green-300 after:absolute after:bottom-0 after:left-0 after:h-px after:w-0 after:bg-green-400 after:transition-all after:duration-300 hover:after:w-full"
+                                                      style={{
+                                                        textDecoration: "none",
+                                                      }}
+                                                      aria-label={`Inquire about ${product.name}`}
+                                                      data-ocid={`products.inquire.${String(product.id)}`}
+                                                    >
+                                                      Inquire
+                                                      <span className="inline-block transition-transform duration-200 group-hover:translate-x-1 ml-1">
+                                                        →
+                                                      </span>
+                                                    </Link>
+                                                  </div>
+                                                </div>
+                                              </motion.div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
+                            {tab === "SaaS Plans" &&
+                              (() => {
+                                const allSaasProducts =
+                                  groupedProducts.get("SaaS Plans") ?? [];
+                                const speedyPlans = allSaasProducts.filter(
+                                  (p) =>
+                                    [
+                                      "basic",
+                                      "booking",
+                                      "commerce",
+                                      "storefront",
+                                    ].some((k) =>
+                                      p.name.toLowerCase().includes(k),
+                                    ),
+                                );
+                                const managementPlans = allSaasProducts.filter(
+                                  (p) =>
+                                    [
+                                      "keep",
+                                      "stay",
+                                      "full",
+                                      "enterprise",
+                                      "switch",
+                                      "partner",
+                                    ].some((k) =>
+                                      p.name.toLowerCase().includes(k),
+                                    ),
+                                );
+                                if (
+                                  speedyPlans.length === 0 &&
+                                  managementPlans.length === 0
+                                )
+                                  return null;
+                                const renderSaasCard = (
+                                  product: Product,
+                                  idx: number,
+                                ) => {
+                                  const pt = product.payment_type as
+                                    | string
+                                    | null
+                                    | undefined;
+                                  const saasBasePrice =
+                                    pt === "one_time" || pt === "deposit_50"
+                                      ? (product.price_onetime ??
+                                        product.price_monthly ??
+                                        0)
+                                      : pt === "annual"
+                                        ? (product.price_annual ??
+                                          product.price_monthly ??
+                                          0)
+                                        : (product.price_monthly ??
+                                          product.price_onetime ??
+                                          0);
+                                  const saasPaymentType =
+                                    product.payment_type ?? "one_time";
+                                  const saasPrice =
+                                    saasBasePrice == null
+                                      ? "\u2014"
+                                      : saasPaymentType === "monthly"
+                                        ? `${saasBasePrice.toLocaleString()}/mo`
+                                        : saasPaymentType === "quarterly"
+                                          ? `${saasBasePrice.toLocaleString()}/quarter`
+                                          : saasPaymentType === "annual"
+                                            ? `${saasBasePrice.toLocaleString()}/year`
+                                            : saasPaymentType === "deposit_50"
+                                              ? `${saasBasePrice.toLocaleString()} (50% deposit)`
+                                              : saasBasePrice.toLocaleString();
+                                  return (
+                                    <motion.div
+                                      key={String(product.id)}
+                                      initial={{ opacity: 0, y: 20 }}
+                                      whileInView={{ opacity: 1, y: 0 }}
+                                      viewport={{ once: true }}
+                                      transition={{
+                                        duration: 0.4,
+                                        delay: idx * 0.08,
+                                      }}
+                                    >
+                                      <div
+                                        style={{ ...cardStyle, height: "100%" }}
+                                        className="group rounded-2xl border border-white/10 overflow-hidden transition-all duration-300 ease-in-out hover:-translate-y-2 hover:shadow-2xl hover:border-white/20 hover:ring-1 hover:ring-green-400/30"
+                                        onMouseEnter={(e) =>
+                                          cardHoverEnter(e.currentTarget)
+                                        }
+                                        onMouseLeave={(e) =>
+                                          cardHoverLeave(e.currentTarget)
+                                        }
+                                      >
+                                        {product.imageUrl && (
+                                          <div
+                                            className="relative overflow-hidden"
+                                            style={{
+                                              borderRadius: "8px",
+                                              marginBottom: "12px",
+                                            }}
+                                          >
+                                            <img
+                                              src={product.imageUrl}
+                                              alt={product.name}
+                                              className="w-full rounded-xl object-cover border border-green-400/20 aspect-video"
+                                            />
+                                            <div
+                                              className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none"
+                                              aria-hidden="true"
+                                            />
+                                          </div>
+                                        )}
+                                        <div className="flex items-center gap-2 mb-1">
+                                          <span className="w-1 h-3 bg-green-400/60 rounded-full flex-shrink-0" />
+                                          <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-green-400/70 font-mono">
+                                            SaaS Plans
+                                          </span>
+                                        </div>
+                                        <h2 className="text-2xl md:text-3xl font-extrabold uppercase tracking-widest text-white leading-tight mb-1">
+                                          <TypewriterText
+                                            text={product.name}
+                                            speed={45}
+                                          />
+                                        </h2>
+                                        <div className="flex items-baseline gap-2 my-2">
+                                          <span
+                                            style={{
+                                              fontSize:
+                                                "clamp(2rem, 5vw, 2.75rem)",
+                                              fontWeight: 900,
+                                              color: "#5EF08A",
+                                              fontFamily:
+                                                "JetBrains Mono, monospace",
+                                              lineHeight: 1,
+                                            }}
+                                          >
+                                            {"$"}
+                                            {saasBasePrice != null
+                                              ? saasBasePrice.toLocaleString()
+                                              : "\u2014"}
+                                          </span>
+                                          <span className="text-sm text-gray-400 font-normal">
+                                            {saasPaymentType === "monthly"
+                                              ? "/mo"
+                                              : saasPaymentType === "quarterly"
+                                                ? "/quarter"
+                                                : saasPaymentType === "annual"
+                                                  ? "/year"
+                                                  : saasPaymentType ===
+                                                      "deposit_50"
+                                                    ? "50% deposit today"
+                                                    : "one-time payment"}
+                                          </span>
+                                        </div>
+                                        {product.tagline && (
+                                          <blockquote className="border-l-2 border-green-400/40 pl-3 my-2">
+                                            <p className="text-sm italic text-gray-400 leading-relaxed">
+                                              {product.tagline}
+                                            </p>
+                                          </blockquote>
+                                        )}
+                                        {product.description && (
+                                          <p
+                                            className="text-sm md:text-base leading-relaxed text-gray-300 line-clamp-3 group-hover:line-clamp-none transition-all duration-300"
+                                            style={{ marginBottom: "12px" }}
+                                          >
+                                            {product.description}
+                                          </p>
+                                        )}
+                                        {product.featureBullets &&
+                                          product.featureBullets.length > 0 && (
+                                            <ul
+                                              className="flex flex-col gap-2"
+                                              style={{ marginBottom: "12px" }}
+                                            >
+                                              {product.featureBullets.map(
+                                                (bullet: string, i: number) => (
+                                                  <li
+                                                    key={`b${String(i)}`}
+                                                    className="flex items-start gap-2"
+                                                  >
+                                                    <span className="w-4 h-4 rounded-full border border-green-400/50 bg-green-400/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                      <span className="text-green-400 text-[9px] font-bold leading-none">
+                                                        &#10003;
+                                                      </span>
+                                                    </span>
+                                                    <span className="text-sm text-gray-300 leading-snug">
+                                                      {bullet}
+                                                    </span>
+                                                  </li>
+                                                ),
+                                              )}
+                                            </ul>
+                                          )}
+                                        {product.bestFor && (
+                                          <>
+                                            <hr className="border-t border-white/10 my-1" />
+                                            <div
+                                              className="flex flex-wrap items-start gap-1 text-xs"
+                                              style={{ marginBottom: "8px" }}
+                                            >
+                                              <span className="font-bold uppercase tracking-widest text-green-400/80 font-mono">
+                                                Best For:
+                                              </span>
+                                              <span className="text-gray-400">
+                                                {product.bestFor}
+                                              </span>
+                                            </div>
+                                          </>
+                                        )}
+                                        <div className="flex flex-col gap-3 mt-auto pt-4 border-t border-white/10">
+                                          <div
+                                            aria-label={`Get started with ${product.name}`}
+                                          >
+                                            <GetStartedButton
+                                              productName={product.name}
+                                              displayPrice={saasPrice}
+                                            />
+                                          </div>
+                                          <Link
+                                            to="/services/product/$productId"
+                                            params={{
+                                              productId: String(product.id),
+                                            }}
+                                            className="relative inline-flex items-center justify-center gap-1 text-sm font-medium text-green-400 hover:text-green-300 after:absolute after:bottom-0 after:left-0 after:h-px after:w-0 after:bg-green-400 after:transition-all after:duration-300 hover:after:w-full"
+                                            style={{ textDecoration: "none" }}
+                                            aria-label={`Learn more about ${product.name}`}
+                                            data-ocid={`products.view_details.${String(product.id)}`}
+                                          >
+                                            View Details
+                                            <span className="inline-block transition-transform duration-200 group-hover:translate-x-1 ml-1">
+                                              &#8594;
+                                            </span>
+                                          </Link>
+                                          {CATEGORY_SHOWCASE_ROUTES[
+                                            product.product_type
+                                          ] && (
+                                            <Link
+                                              to={
+                                                CATEGORY_SHOWCASE_ROUTES[
+                                                  product.product_type
+                                                ]
+                                              }
+                                              className="relative inline-flex items-center justify-center gap-1 text-sm font-medium text-green-400 hover:text-green-300 after:absolute after:bottom-0 after:left-0 after:h-px after:w-0 after:bg-green-400 after:transition-all after:duration-300 hover:after:w-full"
+                                              style={{ textDecoration: "none" }}
+                                              aria-label={`View our work for ${product.product_type}`}
+                                              data-ocid={`products.view_our_work.${String(product.id)}`}
+                                            >
+                                              View Our Work
+                                              <span className="inline-block transition-transform duration-200 group-hover:translate-x-1 ml-1">
+                                                &#8594;
+                                              </span>
+                                            </Link>
+                                          )}
+                                          <Link
+                                            to="/intake"
+                                            search={{
+                                              service: getServiceId(
+                                                product.product_type,
+                                              ),
+                                            }}
+                                            className="relative inline-flex items-center justify-center gap-1 text-sm font-medium text-green-400 hover:text-green-300 after:absolute after:bottom-0 after:left-0 after:h-px after:w-0 after:bg-green-400 after:transition-all after:duration-300 hover:after:w-full"
+                                            style={{ textDecoration: "none" }}
+                                            aria-label={`Inquire about ${product.name}`}
+                                            data-ocid={`products.inquire.${String(product.id)}`}
+                                          >
+                                            Inquire
+                                            <span className="inline-block transition-transform duration-200 group-hover:translate-x-1 ml-1">
+                                              &#8594;
+                                            </span>
+                                          </Link>
+                                        </div>
+                                      </div>
+                                    </motion.div>
+                                  );
+                                };
+                                return (
+                                  <div className="space-y-10 mb-8">
+                                    {speedyPlans.length > 0 && (
+                                      <div>
+                                        <div className="flex items-center gap-4 mb-6">
+                                          <div className="h-px flex-1 bg-white/10" />
+                                          <h3 className="text-lg font-bold text-white px-4 whitespace-nowrap">
+                                            Speedy Site SaaS Plans
+                                          </h3>
+                                          <div className="h-px flex-1 bg-white/10" />
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                                          {speedyPlans.map((p, i) =>
+                                            renderSaasCard(p, i),
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {managementPlans.length > 0 && (
+                                      <div>
+                                        <div className="flex items-center gap-4 mb-6">
+                                          <div className="h-px flex-1 bg-white/10" />
+                                          <h3 className="text-lg font-bold text-white px-4 whitespace-nowrap">
+                                            Custom Management Plans
+                                          </h3>
+                                          <div className="h-px flex-1 bg-white/10" />
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                                          {managementPlans.map((p, i) =>
+                                            renderSaasCard(p, i),
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             <div
+                              ref={gridRef}
+                              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 items-stretch w-full"
                               style={{
-                                width: "40px",
-                                height: "40px",
-                                borderRadius: "10px",
-                                background: "rgba(94,240,138,0.1)",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                flexShrink: 0,
+                                padding: "24px 0",
+                                display:
+                                  tab === "Growth Hub" || tab === "SaaS Plans"
+                                    ? "none"
+                                    : undefined,
                               }}
                             >
-                              <Icon size={20} color="#5EF08A" />
+                              {(groupedProducts.get(activeTab) ?? []).map(
+                                (product, index) => {
+                                  // Derive base price from whichever price field is set
+                                  const basePrice =
+                                    product.price_onetime != null
+                                      ? product.price_onetime
+                                      : product.price_monthly != null
+                                        ? product.price_monthly
+                                        : product.price_annual != null
+                                          ? product.price_annual
+                                          : null;
+                                  const paymentType =
+                                    product.payment_type ?? "one_time";
+                                  const price =
+                                    basePrice == null
+                                      ? "—"
+                                      : paymentType === "monthly"
+                                        ? `${basePrice.toLocaleString()}/mo`
+                                        : paymentType === "quarterly"
+                                          ? `${basePrice.toLocaleString()}/quarter`
+                                          : paymentType === "deposit_50"
+                                            ? `${basePrice.toLocaleString()}`
+                                            : `${basePrice.toLocaleString()}`;
+                                  const _depositLabel =
+                                    paymentType === "deposit_50" &&
+                                    basePrice != null
+                                      ? `${basePrice.toLocaleString()} — 50% deposit today`
+                                      : null;
+
+                                  // Questionnaire-first routing for Cinematic Ads, Product Ads, AI Receptionist
+                                  const questionnaireRoute: string | undefined =
+                                    product.product_type === "Cinematic Ads"
+                                      ? `/ads-builder?price=${product.price_onetime ?? ""}`
+                                      : product.product_type === "Product Ads"
+                                        ? "/product-lab-brief"
+                                        : product.product_type ===
+                                            "AI Receptionist"
+                                          ? "/ai-receptionist-setup"
+                                          : undefined;
+
+                                  // Feature 5: Product Ads Flash tier navigation
+                                  const isProductAdsFlash =
+                                    product.product_type === "Product Ads" &&
+                                    product.name
+                                      .toLowerCase()
+                                      .includes("flash");
+                                  return (
+                                    <motion.div
+                                      key={String(product.id)}
+                                      className="w-full"
+                                      initial={{ opacity: 0, y: 24 }}
+                                      whileInView={{ opacity: 1, y: 0 }}
+                                      viewport={{ once: true }}
+                                      transition={{
+                                        duration: 0.5,
+                                        delay: index * 0.1,
+                                      }}
+                                    >
+                                      <div
+                                        style={{ ...cardStyle, height: "100%" }}
+                                        className="group rounded-2xl border border-white/10 overflow-hidden transition-all duration-300 ease-in-out hover:-translate-y-2 hover:shadow-2xl hover:border-white/20 hover:ring-1 hover:ring-green-400/30"
+                                        onMouseEnter={(e) =>
+                                          cardHoverEnter(e.currentTarget)
+                                        }
+                                        onMouseLeave={(e) =>
+                                          cardHoverLeave(e.currentTarget)
+                                        }
+                                      >
+                                        {product.imageUrl && (
+                                          <div
+                                            className="relative overflow-hidden"
+                                            style={{
+                                              borderRadius: "8px",
+                                              marginBottom: "12px",
+                                            }}
+                                          >
+                                            <img
+                                              src={product.imageUrl}
+                                              alt={product.name}
+                                              className="w-full rounded-xl object-cover border border-green-400/20 aspect-video"
+                                            />
+                                            <div
+                                              className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none"
+                                              aria-hidden="true"
+                                            />
+                                          </div>
+                                        )}
+                                        <div className="flex items-center gap-2 mb-1">
+                                          <span className="w-1 h-3 bg-green-400/60 rounded-full flex-shrink-0" />
+                                          <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-green-400/70 font-mono">
+                                            <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-green-400/70 font-mono">
+                                              {product.product_type}
+                                            </span>
+                                          </span>
+                                        </div>
+                                        <h2 className="text-2xl md:text-3xl font-extrabold uppercase tracking-widest text-white leading-tight mb-1">
+                                          <TypewriterText
+                                            text={product.name}
+                                            speed={45}
+                                          />
+                                        </h2>
+                                        <div className="flex items-baseline gap-2 my-2">
+                                          <span
+                                            style={{
+                                              fontSize:
+                                                "clamp(2rem, 5vw, 2.75rem)",
+                                              fontWeight: 900,
+                                              color: "#5EF08A",
+                                              fontFamily:
+                                                "JetBrains Mono, monospace",
+                                              lineHeight: 1,
+                                            }}
+                                          >
+                                            $
+                                            {basePrice != null
+                                              ? basePrice.toLocaleString()
+                                              : "—"}
+                                          </span>
+                                          <span className="text-sm text-gray-400 font-normal">
+                                            {paymentType === "monthly"
+                                              ? "/mo"
+                                              : paymentType === "quarterly"
+                                                ? "/quarter"
+                                                : paymentType === "deposit_50"
+                                                  ? "50% deposit today"
+                                                  : "one-time"}
+                                          </span>
+                                        </div>
+                                        {product.tagline && (
+                                          <blockquote className="border-l-2 border-green-400/40 pl-3 my-2">
+                                            <p className="text-sm italic text-gray-400 leading-relaxed">
+                                              {product.tagline}
+                                            </p>
+                                          </blockquote>
+                                        )}
+                                        {product.description && (
+                                          <p
+                                            className="text-sm md:text-base leading-relaxed text-gray-300 line-clamp-3 group-hover:line-clamp-none transition-all duration-300"
+                                            style={{ marginBottom: "12px" }}
+                                          >
+                                            {product.description}
+                                          </p>
+                                        )}
+                                        {product.featureBullets &&
+                                          product.featureBullets.length > 0 && (
+                                            <ul
+                                              className="flex flex-col gap-2"
+                                              style={{ marginBottom: "12px" }}
+                                            >
+                                              {product.featureBullets.map(
+                                                (bullet: string, i: number) => (
+                                                  <li
+                                                    key={`b${String(i)}`}
+                                                    className="flex items-start gap-2"
+                                                  >
+                                                    <span className="w-4 h-4 rounded-full border border-green-400/50 bg-green-400/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                      <span className="text-green-400 text-[9px] font-bold leading-none">
+                                                        ✓
+                                                      </span>
+                                                    </span>
+                                                    <span className="text-sm text-gray-300 leading-snug">
+                                                      {bullet}
+                                                    </span>
+                                                  </li>
+                                                ),
+                                              )}
+                                            </ul>
+                                          )}
+                                        {product.bestFor && (
+                                          <>
+                                            <hr className="border-t border-white/10 my-1" />
+                                            <div
+                                              className="flex flex-wrap items-start gap-1 text-xs"
+                                              style={{ marginBottom: "8px" }}
+                                            >
+                                              <span className="font-bold uppercase tracking-widest text-green-400/80 font-mono">
+                                                Best For:
+                                              </span>
+                                              <span className="text-gray-400">
+                                                {product.bestFor}
+                                              </span>
+                                            </div>
+                                          </>
+                                        )}
+
+                                        <div className="flex flex-col gap-3 mt-auto pt-4 border-t border-white/10">
+                                          <div
+                                            aria-label={`Get started with ${product.name}`}
+                                          >
+                                            <GetStartedButton
+                                              productName={product.name}
+                                              displayPrice={price}
+                                              navigateTo={
+                                                isProductAdsFlash
+                                                  ? "/product-lab-brief?tier=flash"
+                                                  : questionnaireRoute
+                                              }
+                                            />
+                                          </div>
+                                          <Link
+                                            to="/services/product/$productId"
+                                            params={{
+                                              productId: String(product.id),
+                                            }}
+                                            className="relative inline-flex items-center justify-center gap-1 text-sm font-medium text-green-400 hover:text-green-300 after:absolute after:bottom-0 after:left-0 after:h-px after:w-0 after:bg-green-400 after:transition-all after:duration-300 hover:after:w-full"
+                                            style={{
+                                              textDecoration: "none",
+                                            }}
+                                            aria-label={`Learn more about ${product.name}`}
+                                            data-ocid={`products.view_details.${String(product.id)}`}
+                                          >
+                                            View Details
+                                            <span className="inline-block transition-transform duration-200 group-hover:translate-x-1 ml-1">
+                                              →
+                                            </span>
+                                          </Link>
+                                          {CATEGORY_SHOWCASE_ROUTES[
+                                            product.product_type
+                                          ] && (
+                                            <Link
+                                              to={
+                                                CATEGORY_SHOWCASE_ROUTES[
+                                                  product.product_type
+                                                ]
+                                              }
+                                              className="relative inline-flex items-center justify-center gap-1 text-sm font-medium text-green-400 hover:text-green-300 after:absolute after:bottom-0 after:left-0 after:h-px after:w-0 after:bg-green-400 after:transition-all after:duration-300 hover:after:w-full"
+                                              style={{
+                                                textDecoration: "none",
+                                              }}
+                                              aria-label={`View our work for ${product.product_type}`}
+                                              data-ocid={`products.view_our_work.${String(product.id)}`}
+                                            >
+                                              View Our Work
+                                              <span className="inline-block transition-transform duration-200 group-hover:translate-x-1 ml-1">
+                                                →
+                                              </span>
+                                            </Link>
+                                          )}
+                                          <Link
+                                            to="/intake"
+                                            search={{
+                                              service: getServiceId(
+                                                product.product_type,
+                                              ),
+                                            }}
+                                            className="relative inline-flex items-center justify-center gap-1 text-sm font-medium text-green-400 hover:text-green-300 after:absolute after:bottom-0 after:left-0 after:h-px after:w-0 after:bg-green-400 after:transition-all after:duration-300 hover:after:w-full"
+                                            style={{
+                                              textDecoration: "none",
+                                            }}
+                                            aria-label={`Inquire about ${product.name}`}
+                                            data-ocid={`products.inquire.${String(product.id)}`}
+                                          >
+                                            Inquire
+                                            <span className="inline-block transition-transform duration-200 group-hover:translate-x-1 ml-1">
+                                              →
+                                            </span>
+                                          </Link>
+                                        </div>
+                                      </div>
+                                    </motion.div>
+                                  );
+                                },
+                              )}
                             </div>
-                            <div>
-                              <h3
-                                style={{
-                                  color: "#EEF0F8",
-                                  fontSize: "1rem",
-                                  fontWeight: "700",
-                                  marginBottom: "4px",
-                                }}
-                              >
-                                <EditableText
-                                  textKey={`products.growth_hub_item_name_${itemSlug}`}
-                                  defaultText={item.name}
-                                />
-                              </h3>
-                              <p
-                                style={{
-                                  color: "#5EF08A",
-                                  fontSize: "1.1rem",
-                                  fontWeight: "700",
-                                  marginBottom: "8px",
-                                }}
-                              >
-                                {resolvedDisplay}
-                              </p>
-                              <p
-                                style={{
-                                  color: "#7A7D90",
-                                  fontSize: "0.85rem",
-                                  lineHeight: "1.5",
-                                }}
-                              >
-                                <EditableText
-                                  textKey={`products.growth_hub_item_desc_${itemSlug}`}
-                                  defaultText={item.desc}
-                                />
-                              </p>
-                            </div>
-                            <div style={{ flex: 1 }} />
-                            <ActivateButton
-                              productName={item.backendName}
-                              displayPrice={resolvedDisplay}
-                              textKey={`products.growth_hub_item_cta_${itemSlug}`}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </motion.div>
-        </AnimatePresence>
+                            {tab === "Cinematic Ads" && (
+                              <div className="mb-10">
+                                <div className="text-center mb-8">
+                                  <h2 className="text-2xl md:text-3xl font-extrabold text-white mb-2">
+                                    What Makes Imperidome Different
+                                  </h2>
+                                  <p className="text-gray-400">
+                                    Five pillars that separate our work from
+                                    every other production house.
+                                  </p>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+                                  <div className="rounded-2xl border border-[rgba(94,240,138,0.2)] bg-black/50 p-6">
+                                    <div className="text-5xl font-black text-green-400/20 leading-none mb-2">
+                                      01
+                                    </div>
+                                    <h3 className="text-lg font-bold text-white mb-2">
+                                      Attention First
+                                    </h3>
+                                    <p className="text-sm text-gray-400 leading-relaxed">
+                                      Every frame is engineered to stop the
+                                      scroll. We craft the first three seconds
+                                      with the precision of a hook, not an
+                                      afterthought.
+                                    </p>
+                                  </div>
+                                  <div className="rounded-2xl border border-[rgba(94,240,138,0.2)] bg-black/50 p-6">
+                                    <div className="text-5xl font-black text-green-400/20 leading-none mb-2">
+                                      02
+                                    </div>
+                                    <h3 className="text-lg font-bold text-white mb-2">
+                                      Product Consistency
+                                    </h3>
+                                    <p className="text-sm text-gray-400 leading-relaxed">
+                                      Your product looks identical across every
+                                      ad, every platform, every format. Brand
+                                      integrity is non-negotiable in our
+                                      production process.
+                                    </p>
+                                  </div>
+                                  <div className="rounded-2xl border border-[rgba(94,240,138,0.2)] bg-black/50 p-6">
+                                    <div className="text-5xl font-black text-green-400/20 leading-none mb-2">
+                                      03
+                                    </div>
+                                    <h3 className="text-lg font-bold text-white mb-2">
+                                      Convert, Not Just Look
+                                    </h3>
+                                    <p className="text-sm text-gray-400 leading-relaxed">
+                                      Beautiful ads that don&apos;t convert are
+                                      expensive decoration. We balance
+                                      aesthetics with psychology — every visual
+                                      decision serves the CTA.
+                                    </p>
+                                  </div>
+                                  <div className="rounded-2xl border border-[rgba(94,240,138,0.2)] bg-black/50 p-6">
+                                    <div className="text-5xl font-black text-green-400/20 leading-none mb-2">
+                                      04
+                                    </div>
+                                    <h3 className="text-lg font-bold text-white mb-2">
+                                      Studio Quality
+                                    </h3>
+                                    <p className="text-sm text-gray-400 leading-relaxed">
+                                      4K capture, professional color grading,
+                                      and frame-by-frame editing — without the
+                                      studio overhead. Enterprise production at
+                                      a fraction of the cost.
+                                    </p>
+                                  </div>
+                                  <div className="rounded-2xl border border-[rgba(94,240,138,0.2)] bg-black/50 p-6 sm:col-span-2">
+                                    <div className="text-5xl font-black text-green-400/20 leading-none mb-2">
+                                      05
+                                    </div>
+                                    <h3 className="text-lg font-bold text-white mb-2">
+                                      Sound Design
+                                    </h3>
+                                    <p className="text-sm text-gray-400 leading-relaxed">
+                                      85% of video content is watched without
+                                      sound — and we design for both. Our sound
+                                      design layer elevates the visual story
+                                      while our silent-optimized captions ensure
+                                      full impact either way.
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            {tab === "Cinematic Ads" && (
+                              <div className="w-full max-w-2xl mx-auto mt-8 rounded-2xl border border-[rgba(94,240,138,0.3)] bg-black/60 backdrop-blur-sm p-8">
+                                <h2 className="text-2xl font-bold text-white mb-1">
+                                  Build Your Cinematic Ad
+                                </h2>
+                                <p className="text-gray-400 mb-6">
+                                  Select your ad length and get started
+                                  instantly
+                                </p>
+                                <div className="mb-4">
+                                  <div className="flex justify-between text-sm text-gray-400 mb-1">
+                                    <span>15s</span>
+                                    <span className="text-[#5ef08a] font-bold">
+                                      {adSeconds} seconds
+                                    </span>
+                                    <span>60s</span>
+                                  </div>
+                                  <input
+                                    type="range"
+                                    min={15}
+                                    max={60}
+                                    step={5}
+                                    value={adSeconds}
+                                    onChange={(e) =>
+                                      setAdSeconds(Number(e.target.value))
+                                    }
+                                    className="w-full accent-[#5ef08a]"
+                                  />
+                                </div>
+                                <div className="text-center mb-6">
+                                  <span className="text-4xl font-bold text-[#5ef08a]">
+                                    ${cinematicPrice ?? "—"}
+                                  </span>
+                                  <span className="text-gray-400 ml-2">
+                                    one-time
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (cinematicPrice == null) return;
+                                    navigate({
+                                      to: `/ads-builder?seconds=${adSeconds}&price=${cinematicPrice}`,
+                                    });
+                                  }}
+                                  className="w-full py-4 rounded-xl bg-[#5ef08a] hover:bg-[#4dd47a] text-black font-bold text-lg transition-colors"
+                                >
+                                  {`Get Started — ${cinematicPrice ?? "—"}`}
+                                </button>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </main>
       <Footer />
+
+      {/* Scroll-to-top floating button */}
+      <AnimatePresence>
+        {showScrollTop && (
+          <motion.button
+            type="button"
+            aria-label="Scroll to top"
+            data-ocid="products.scroll_to_top_button"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+            style={{
+              position: "fixed",
+              bottom: "32px",
+              right: "32px",
+              zIndex: 50,
+              width: "48px",
+              height: "48px",
+              borderRadius: "9999px",
+              background: "rgba(15,17,32,0.92)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              boxShadow: "0 4px 24px rgba(0,0,0,0.4)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              backdropFilter: "blur(12px)",
+              WebkitBackdropFilter: "blur(12px)",
+              transition: "background 0.2s, box-shadow 0.2s, border-color 0.2s",
+            }}
+            whileHover={{
+              background: "rgba(99,102,241,0.85)",
+              boxShadow: "0 6px 28px rgba(99,102,241,0.4)",
+              borderColor: "rgba(99,102,241,0.6)",
+            }}
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 20 20"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M10 4L4 10M10 4L16 10M10 4V16"
+                stroke="#EEF0F8"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </motion.button>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

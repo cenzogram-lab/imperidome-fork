@@ -1,3 +1,4 @@
+import { Footer } from "@/components/Footer";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   BarChart2,
@@ -20,6 +21,7 @@ import {
   Server,
   Settings,
   Settings2,
+  Share2,
   ShoppingBag,
   Star,
   Table2,
@@ -29,15 +31,24 @@ import {
   Users,
   X,
 } from "lucide-react";
-import type { ReactNode } from "react";
 import {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
 } from "react";
+import type {
+  CSSProperties,
+  MutableRefObject,
+  ReactNode,
+  RefObject,
+} from "react";
+import type { backendInterface } from "../../backend.d";
 import { SessionTimeoutModal } from "../../components/SessionTimeoutModal";
+
 import { useActor } from "../../hooks/useActor";
 import { useIdleTimer } from "../../hooks/useIdleTimer";
 import { useSession } from "../../hooks/useSession";
@@ -115,6 +126,7 @@ function useConnectionSpeed(): ConnectionSpeed {
 
   useEffect(() => {
     function update() {
+      if (document.visibilityState !== "visible") return;
       setSpeed(readConnectionSpeed());
     }
 
@@ -154,7 +166,7 @@ function ConnectionCog() {
   const iconColor = isOffline ? "#EF4444" : "#9CA3AF";
 
   const statusColors: Record<ConnectionStatus, string> = {
-    Strong: "#5EF08A",
+    Strong: "#22C55E",
     Moderate: "#FBBF24",
     Weak: "#F97316",
     Offline: "#EF4444",
@@ -162,7 +174,7 @@ function ConnectionCog() {
 
   const labelColor = statusColors[status];
 
-  const spinStyle: React.CSSProperties = isOffline
+  const spinStyle: CSSProperties = isOffline
     ? {
         animation: "pulse 1.5s ease-in-out infinite",
         color: iconColor,
@@ -224,6 +236,20 @@ function ConnectionCog() {
   );
 }
 
+// ─── Admin Pending Refresh Context ──────────────────────────────────────────
+interface AdminPendingRefreshContextValue {
+  refreshPendingSubCount: () => void;
+}
+
+const AdminPendingRefreshContext =
+  createContext<AdminPendingRefreshContextValue>({
+    refreshPendingSubCount: () => {},
+  });
+
+export function useAdminPendingRefresh(): AdminPendingRefreshContextValue {
+  return useContext(AdminPendingRefreshContext);
+}
+
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 interface NavItem {
   label: string;
@@ -231,6 +257,7 @@ interface NavItem {
   path: string;
   ocid: string;
   hasRedDot?: boolean;
+  pendingBadge?: number;
 }
 
 interface NavGroup {
@@ -255,11 +282,32 @@ export default function AdminLayout({
   const { actor, isFetching } = useActor();
   const { editMode, setEditMode, fetchAllSiteText } = useSiteTextStore();
   const [unreviewedCount, setUnreviewedCount] = useState(0);
+  const [pendingSubCount, setPendingSubCount] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [backdropVisible, setBackdropVisible] = useState(false);
   const [installPrompt, setInstallPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const backdropTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ─── Sub-admin tab permissions ──────────────────────────────────────────────
+  const [adminTabs, setAdminTabs] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    if (!actor || isFetching) return;
+    (actor as backendInterface)
+      .getMyAdminPermissions()
+      .then((r) => {
+        if ("ok" in r) setAdminTabs(r.ok);
+        else setAdminTabs(["*"]);
+      })
+      .catch(() => setAdminTabs(["*"]));
+  }, [actor, isFetching]);
+
+  const canSeeTab = (label: string): boolean => {
+    if (!adminTabs || adminTabs[0] === "*" || adminTabs.length === 0)
+      return true;
+    return adminTabs.some((t) => t.toLowerCase() === label.toLowerCase());
+  };
 
   // ─── PWA: Service worker registration (admin scope only) ─────────────────
   useEffect(() => {
@@ -267,10 +315,14 @@ export default function AdminLayout({
       navigator.serviceWorker
         .register("/admin-sw.js", { scope: "/admin/" })
         .then((reg) => {
-          console.log("[PWA] Admin SW registered:", reg.scope);
+          if (import.meta.env.DEV) {
+            console.log("[PWA] Admin SW registered:", reg.scope);
+          }
         })
         .catch((err) => {
-          console.warn("[PWA] Admin SW registration failed:", err);
+          if (import.meta.env.DEV) {
+            console.warn("[PWA] Admin SW registration failed:", err);
+          }
         });
     }
   }, []);
@@ -291,24 +343,16 @@ export default function AdminLayout({
   }, []);
 
   // ─── Scroll preservation ────────────────────────────────────────────────────
-  // The <main> element is the actual scrollable container (overflow-y-auto).
-  // We track scroll position continuously via onScroll and unconditionally
-  // restore it after every render. The unconditional restore (no `if` guard)
-  // is the key: React can silently reset scrollTop during reconciliation, and
-  // the conditional check was allowing that reset to stick.
   const mainRef = useRef<HTMLElement>(null);
   const lastScrollTop = useRef(0);
 
-  // After EVERY render, unconditionally restore scrollTop to what the user set.
-  // This prevents any React state update (notifications badge, site text fetch,
-  // actor isFetching transition, etc.) from snapping the view back to the top.
   useLayoutEffect(() => {
     if (mainRef.current) {
       mainRef.current.scrollTop = lastScrollTop.current;
     }
   });
 
-  const SUPER_ADMIN_EMAIL = "vincenzo@imperidome.com";
+  // SUPER_ADMIN_EMAIL removed — Edit Site Text is available to any authenticated admin
 
   // ─── PWA: Install handler ─────────────────────────────────────────────────
   async function handleInstallApp() {
@@ -321,7 +365,7 @@ export default function AdminLayout({
   // ─── Session timeout ────────────────────────────────────────────────────────
   const handleLogout = useCallback(() => {
     clearSession();
-    navigate({ to: "/login" as any });
+    navigate({ to: "/login" });
   }, [clearSession, navigate]);
 
   const { isWarning, timeRemaining, resetTimer } = useIdleTimer({
@@ -332,26 +376,54 @@ export default function AdminLayout({
   });
 
   useEffect(() => {
-    if (!session || session.role !== "admin") {
-      navigate({ to: "/login" as any });
+    if (!session) {
+      navigate({ to: "/login" });
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, navigate]);
+    if (!actor || isFetching) return;
+    (actor as backendInterface)
+      .isCallerAdmin()
+      .then((ok: boolean) => {
+        if (!ok) navigate({ to: "/login" });
+      })
+      .catch(() => {
+        // Graceful fallback — if check fails, fall back to session role
+        if (session.role !== "admin") navigate({ to: "/login" });
+      });
+  }, [actor, isFetching, session, navigate]);
 
   useEffect(() => {
     if (!actor || isFetching) return;
+    const sessionEmail = session?.email ?? "";
+    if (!sessionEmail) return;
     actor
       .getAdminStats()
       .then((s) => {
         setUnreviewedCount(Number(s.unreviewedQuestionnaires));
       })
-      .catch(() => {});
-  }, [actor, isFetching]);
+      .catch((err) => {
+        if (import.meta.env.DEV) {
+          console.warn("getAdminStats failed:", err);
+        }
+      });
+  }, [actor, isFetching, session?.email]);
 
   useEffect(() => {
     if (!actor || isFetching) return;
     fetchAllSiteText(actor as Parameters<typeof fetchAllSiteText>[0]);
   }, [actor, isFetching, fetchAllSiteText]);
+
+  const refreshPendingSubCount = useCallback(() => {
+    if (!actor || isFetching) return;
+    (actor as backendInterface)
+      .getPendingSubscriptions()
+      .then((subs) => setPendingSubCount(subs.length))
+      .catch(() => {});
+  }, [actor, isFetching]);
+
+  useEffect(() => {
+    refreshPendingSubCount();
+  }, [refreshPendingSubCount]);
 
   useEffect(() => {
     if (backdropTimer.current) clearTimeout(backdropTimer.current);
@@ -367,10 +439,6 @@ export default function AdminLayout({
     };
   }, [sidebarOpen]);
 
-  function closeSidebar() {
-    setSidebarOpen(false);
-  }
-
   const navGroups: NavGroup[] = [
     {
       id: "overview",
@@ -381,6 +449,7 @@ export default function AdminLayout({
           icon: <LayoutDashboard size={16} />,
           path: "/admin/dashboard",
           ocid: "admin.nav.dashboard.link",
+          pendingBadge: pendingSubCount > 0 ? pendingSubCount : undefined,
         },
         {
           label: "Analytics",
@@ -432,6 +501,12 @@ export default function AdminLayout({
           ocid: "admin.nav.orders.link",
         },
         {
+          label: "Annual Revenue",
+          icon: <BarChart2 size={16} />,
+          path: "/admin/annual-revenue",
+          ocid: "admin.nav.annual-revenue.link",
+        },
+        {
           label: "Stripe Settings",
           icon: <CreditCard size={16} />,
           path: "/admin/stripe-settings",
@@ -442,6 +517,12 @@ export default function AdminLayout({
           icon: <Table2 size={16} />,
           path: "/admin/spreadsheet",
           ocid: "admin.nav.spreadsheet.link",
+        },
+        {
+          label: "Platform Overview",
+          icon: <Globe size={16} />,
+          path: "/admin/platform",
+          ocid: "admin.nav.platform.link",
         },
       ],
     },
@@ -528,6 +609,12 @@ export default function AdminLayout({
           ocid: "admin.nav.google-calendar.link",
         },
         {
+          label: "Social Media",
+          icon: <Share2 size={16} />,
+          path: "/admin/social-media",
+          ocid: "admin.nav.social-media.link",
+        },
+        {
           label: "Fleet",
           icon: <Server size={16} />,
           path: "/admin/fleet",
@@ -543,6 +630,17 @@ export default function AdminLayout({
     },
   ];
 
+  // Filter nav groups based on permissions — groups with no visible items are hidden entirely
+  const filteredNavGroups: NavGroup[] =
+    adminTabs === null
+      ? navGroups // still loading — show all to avoid flicker
+      : navGroups
+          .map((group) => ({
+            ...group,
+            items: group.items.filter((item) => canSeeTab(item.label)),
+          }))
+          .filter((group) => group.items.length > 0);
+
   // Determine which group contains the active path
   function getActiveGroupId(path: string): string {
     for (const group of navGroups) {
@@ -555,8 +653,6 @@ export default function AdminLayout({
 
   const initialOpenGroup = getActiveGroupId(currentPath);
 
-  // Track open groups — only one group open at a time (accordion style),
-  // but multiple can be opened manually. We use a Set stored as an array.
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {
       overview: false,
@@ -569,7 +665,6 @@ export default function AdminLayout({
     return initial;
   });
 
-  // When the active path changes (navigation), ensure the containing group is open
   // biome-ignore lint/correctness/useExhaustiveDependencies: getActiveGroupId is stable (defined in render body, no captured state)
   useEffect(() => {
     const activeGroup = getActiveGroupId(currentPath);
@@ -587,551 +682,94 @@ export default function AdminLayout({
     setOpenGroups((prev) => ({ ...prev, [id]: !prev[id] }));
   }
 
-  /** Nav items + bottom section only — used in the mobile drawer's inner scrollable div */
-  function MobileSidebarNav({ onNavClick }: { onNavClick?: () => void }) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          minHeight: "100%",
-          paddingTop: "8px",
-        }}
+  return (
+    <AdminPendingRefreshContext.Provider value={{ refreshPendingSubCount }}>
+      <AdminLayoutInner
+        adminEmail={adminEmail}
+        navGroups={filteredNavGroups}
+        openGroups={openGroups}
+        currentPath={currentPath}
+        editMode={editMode}
+        setEditMode={setEditMode}
+        toggleGroup={toggleGroup}
+        handleLogout={handleLogout}
+        handleInstallApp={handleInstallApp}
+        installPrompt={installPrompt}
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+        backdropVisible={backdropVisible}
+        mainRef={mainRef}
+        lastScrollTop={lastScrollTop}
+        isWarning={isWarning}
+        timeRemaining={timeRemaining}
+        resetTimer={resetTimer}
+        pageTitle={pageTitle}
+        navigate={navigate}
       >
-        {/* Grouped nav */}
-        <nav
-          style={{
-            padding: "0 12px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "2px",
-          }}
-        >
-          {navGroups.map((group) => {
-            const isOpen = openGroups[group.id];
-            const hasActiveItem = group.items.some(
-              (item) => currentPath === item.path,
-            );
-            return (
-              <div key={group.id}>
-                {/* Group header */}
-                <button
-                  type="button"
-                  data-ocid={`admin.nav.group.${group.id}.toggle`}
-                  onClick={() => toggleGroup(group.id)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    width: "100%",
-                    padding: "7px 16px 5px",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    marginTop: "6px",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: "10px",
-                      fontWeight: 700,
-                      letterSpacing: "0.1em",
-                      textTransform: "uppercase",
-                      color: hasActiveItem
-                        ? "rgba(94,240,138,0.7)"
-                        : "rgba(122,125,144,0.55)",
-                    }}
-                  >
-                    {group.label}
-                  </span>
-                  <ChevronDown
-                    size={12}
-                    style={{
-                      color: hasActiveItem
-                        ? "rgba(94,240,138,0.7)"
-                        : "rgba(122,125,144,0.45)",
-                      transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
-                      transition: "transform 0.2s ease",
-                      flexShrink: 0,
-                    }}
-                  />
-                </button>
+        {children}
+      </AdminLayoutInner>
+    </AdminPendingRefreshContext.Provider>
+  );
+}
 
-                {/* Group items */}
-                <div
-                  style={{
-                    overflow: "hidden",
-                    maxHeight: isOpen ? "600px" : "0",
-                    transition: "max-height 0.25s ease",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "1px",
-                  }}
-                >
-                  {group.items.map((item) => {
-                    const isActive = currentPath === item.path;
-                    return (
-                      <Link
-                        key={item.path}
-                        to={item.path as any}
-                        data-ocid={item.ocid}
-                        onClick={onNavClick}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "10px",
-                          padding: "9px 16px 9px 24px",
-                          borderRadius: "8px",
-                          background: isActive
-                            ? "rgba(94,240,138,0.1)"
-                            : "transparent",
-                          color: isActive ? "#5EF08A" : "#7A7D90",
-                          fontSize: "13.5px",
-                          fontWeight: isActive ? 600 : 400,
-                          textDecoration: "none",
-                          transition: "background 0.15s, color 0.15s",
-                          position: "relative",
-                        }}
-                      >
-                        <span style={{ flexShrink: 0 }}>{item.icon}</span>
-                        <span style={{ flex: 1 }}>{item.label}</span>
-                        {item.hasRedDot && (
-                          <span
-                            style={{
-                              width: "8px",
-                              height: "8px",
-                              borderRadius: "50%",
-                              background: "#EF4444",
-                              flexShrink: 0,
-                            }}
-                            aria-label="Unreviewed submissions"
-                          />
-                        )}
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </nav>
+// ─── Inner layout props ────────────────────────────────────────────────────────
+interface AdminLayoutInnerProps {
+  adminEmail: string;
+  navGroups: NavGroup[];
+  openGroups: Record<string, boolean>;
+  currentPath: string;
+  editMode: boolean;
+  setEditMode: (v: boolean) => void;
+  toggleGroup: (id: string) => void;
+  handleLogout: () => void;
+  handleInstallApp: () => Promise<void>;
+  installPrompt: BeforeInstallPromptEvent | null;
+  sidebarOpen: boolean;
+  setSidebarOpen: (v: boolean) => void;
+  backdropVisible: boolean;
+  mainRef: RefObject<HTMLElement | null>;
+  lastScrollTop: MutableRefObject<number>;
+  isWarning: boolean;
+  timeRemaining: number;
+  resetTimer: () => void;
+  pageTitle: string;
+  navigate: ReturnType<typeof import("@tanstack/react-router").useNavigate>;
+  children: ReactNode;
+}
 
-        {/* Bottom */}
-        <div
-          style={{
-            padding: "24px",
-            borderTop: "1px solid #1C1F33",
-            marginTop: "auto",
-          }}
-        >
-          {adminEmail === SUPER_ADMIN_EMAIL && (
-            <div
-              style={{
-                marginBottom: "16px",
-                padding: "12px",
-                borderRadius: "8px",
-                background: editMode
-                  ? "rgba(57,255,20,0.08)"
-                  : "rgba(255,255,255,0.04)",
-                border: `1px solid ${editMode ? "rgba(57,255,20,0.3)" : "#1C1F33"}`,
-              }}
-            >
-              <button
-                type="button"
-                data-ocid="admin.edit-site-text.toggle"
-                onClick={() => setEditMode(!editMode)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  width: "100%",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: 0,
-                  gap: "8px",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    color: editMode ? "#39FF14" : "#7A7D90",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {editMode ? "✏️ Edit Mode: ON" : "✏️ Edit Site Text"}
-                </span>
-                <span
-                  style={{
-                    flexShrink: 0,
-                    width: "32px",
-                    height: "18px",
-                    borderRadius: "999px",
-                    background: editMode ? "#39FF14" : "#374151",
-                    position: "relative",
-                    transition: "background 0.2s",
-                  }}
-                >
-                  <span
-                    style={{
-                      position: "absolute",
-                      top: "2px",
-                      left: editMode ? "16px" : "2px",
-                      width: "14px",
-                      height: "14px",
-                      borderRadius: "50%",
-                      background: editMode ? "#0a0a0a" : "#6B7280",
-                      transition: "left 0.2s, background 0.2s",
-                    }}
-                  />
-                </span>
-              </button>
-              {editMode && (
-                <p
-                  style={{
-                    margin: "6px 0 0",
-                    fontSize: "10px",
-                    color: "rgba(57,255,20,0.6)",
-                    lineHeight: 1.4,
-                  }}
-                >
-                  Click text on live pages to edit
-                </p>
-              )}
-            </div>
-          )}
-          <p
-            style={{
-              color: "#7A7D90",
-              fontSize: "12px",
-              marginBottom: "8px",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {adminEmail}
-          </p>
-          <button
-            type="button"
-            onClick={handleLogout}
-            data-ocid="admin.logout.button"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              color: "#f87171",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: 0,
-              fontSize: "12px",
-              fontWeight: 500,
-            }}
-          >
-            <LogOut size={12} />
-            Log Out
-          </button>
-        </div>
-      </div>
-    );
+function AdminLayoutInner({
+  adminEmail,
+  navGroups,
+  openGroups,
+  currentPath,
+  editMode,
+  setEditMode,
+  toggleGroup,
+  handleLogout,
+  handleInstallApp,
+  installPrompt,
+  sidebarOpen,
+  setSidebarOpen,
+  backdropVisible,
+  mainRef,
+  lastScrollTop,
+  isWarning,
+  timeRemaining,
+  resetTimer,
+  pageTitle,
+  navigate,
+  children,
+}: AdminLayoutInnerProps) {
+  function closeSidebarInner() {
+    setSidebarOpen(false);
   }
 
-  function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
-    return (
-      <div
-        style={
-          {
-            display: "flex",
-            flexDirection: "column",
-            height: "100%",
-            overflowY: "auto",
-            WebkitOverflowScrolling: "touch",
-            overscrollBehavior: "contain",
-            scrollbarWidth: "none",
-            msOverflowStyle: "none",
-          } as React.CSSProperties
-        }
-      >
-        {/* Wordmark + badge */}
-        <div style={{ padding: "24px 24px 0", flexShrink: 0 }}>
-          <span
-            style={{
-              fontSize: "20px",
-              letterSpacing: "0.15em",
-              marginBottom: "8px",
-              fontWeight: 700,
-              color: "#5EF08A",
-              display: "block",
-            }}
-          >
-            IMPERIDOME
-          </span>
-          <span
-            style={{
-              display: "inline-block",
-              background: "rgba(94,240,138,0.15)",
-              color: "#5EF08A",
-              fontSize: "11px",
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              padding: "2px 8px",
-              borderRadius: "4px",
-              marginBottom: "16px",
-              textTransform: "uppercase",
-            }}
-          >
-            Admin Panel
-          </span>
-        </div>
-
-        {/* Grouped nav */}
-        <nav
-          style={{
-            padding: "0 12px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "2px",
-          }}
-        >
-          {navGroups.map((group) => {
-            const isOpen = openGroups[group.id];
-            const hasActiveItem = group.items.some(
-              (item) => currentPath === item.path,
-            );
-            return (
-              <div key={group.id}>
-                {/* Group header */}
-                <button
-                  type="button"
-                  data-ocid={`admin.nav.group.${group.id}.toggle`}
-                  onClick={() => toggleGroup(group.id)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    width: "100%",
-                    padding: "7px 16px 5px",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    marginTop: "6px",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: "10px",
-                      fontWeight: 700,
-                      letterSpacing: "0.1em",
-                      textTransform: "uppercase",
-                      color: hasActiveItem
-                        ? "rgba(94,240,138,0.7)"
-                        : "rgba(122,125,144,0.55)",
-                    }}
-                  >
-                    {group.label}
-                  </span>
-                  <ChevronDown
-                    size={12}
-                    style={{
-                      color: hasActiveItem
-                        ? "rgba(94,240,138,0.7)"
-                        : "rgba(122,125,144,0.45)",
-                      transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
-                      transition: "transform 0.2s ease",
-                      flexShrink: 0,
-                    }}
-                  />
-                </button>
-
-                {/* Group items */}
-                <div
-                  style={{
-                    overflow: "hidden",
-                    maxHeight: isOpen ? "600px" : "0",
-                    transition: "max-height 0.25s ease",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "1px",
-                  }}
-                >
-                  {group.items.map((item) => {
-                    const isActive = currentPath === item.path;
-                    return (
-                      <Link
-                        key={item.path}
-                        to={item.path as any}
-                        data-ocid={item.ocid}
-                        onClick={onNavClick}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "10px",
-                          padding: "9px 16px 9px 24px",
-                          borderRadius: "8px",
-                          background: isActive
-                            ? "rgba(94,240,138,0.1)"
-                            : "transparent",
-                          color: isActive ? "#5EF08A" : "#7A7D90",
-                          fontSize: "13.5px",
-                          fontWeight: isActive ? 600 : 400,
-                          textDecoration: "none",
-                          transition: "background 0.15s, color 0.15s",
-                          position: "relative",
-                        }}
-                      >
-                        <span style={{ flexShrink: 0 }}>{item.icon}</span>
-                        <span style={{ flex: 1 }}>{item.label}</span>
-                        {item.hasRedDot && (
-                          <span
-                            style={{
-                              width: "8px",
-                              height: "8px",
-                              borderRadius: "50%",
-                              background: "#EF4444",
-                              flexShrink: 0,
-                            }}
-                            aria-label="Unreviewed submissions"
-                          />
-                        )}
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </nav>
-
-        {/* Bottom */}
-        <div
-          style={{
-            padding: "24px",
-            borderTop: "1px solid #1C1F33",
-            marginTop: "auto",
-            flexShrink: 0,
-          }}
-        >
-          {/* Edit Site Text toggle — Super Admin only */}
-          {adminEmail === SUPER_ADMIN_EMAIL && (
-            <div
-              style={{
-                marginBottom: "16px",
-                padding: "12px",
-                borderRadius: "8px",
-                background: editMode
-                  ? "rgba(57,255,20,0.08)"
-                  : "rgba(255,255,255,0.04)",
-                border: `1px solid ${editMode ? "rgba(57,255,20,0.3)" : "#1C1F33"}`,
-              }}
-            >
-              <button
-                type="button"
-                data-ocid="admin.edit-site-text.toggle"
-                onClick={() => setEditMode(!editMode)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  width: "100%",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: 0,
-                  gap: "8px",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    color: editMode ? "#39FF14" : "#7A7D90",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {editMode ? "✏️ Edit Mode: ON" : "✏️ Edit Site Text"}
-                </span>
-                {/* Pill toggle */}
-                <span
-                  style={{
-                    flexShrink: 0,
-                    width: "32px",
-                    height: "18px",
-                    borderRadius: "999px",
-                    background: editMode ? "#39FF14" : "#374151",
-                    position: "relative",
-                    transition: "background 0.2s",
-                  }}
-                >
-                  <span
-                    style={{
-                      position: "absolute",
-                      top: "2px",
-                      left: editMode ? "16px" : "2px",
-                      width: "14px",
-                      height: "14px",
-                      borderRadius: "50%",
-                      background: editMode ? "#0a0a0a" : "#6B7280",
-                      transition: "left 0.2s, background 0.2s",
-                    }}
-                  />
-                </span>
-              </button>
-              {editMode && (
-                <p
-                  style={{
-                    margin: "6px 0 0",
-                    fontSize: "10px",
-                    color: "rgba(57,255,20,0.6)",
-                    lineHeight: 1.4,
-                  }}
-                >
-                  Click text on live pages to edit
-                </p>
-              )}
-            </div>
-          )}
-
-          <p
-            style={{
-              color: "#7A7D90",
-              fontSize: "12px",
-              marginBottom: "8px",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {adminEmail}
-          </p>
-          <button
-            type="button"
-            onClick={handleLogout}
-            data-ocid="admin.logout.button"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              color: "#f87171",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: 0,
-              fontSize: "12px",
-              fontWeight: 500,
-            }}
-          >
-            <LogOut size={12} />
-            Log Out
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const { getText } = useSiteTextStore();
+  const contactEmail = getText("contact_email", "admin@example.com");
+  const contactPhone = getText("contact_phone", "856 553 3446");
 
   return (
-    <div className="min-h-screen" style={{ background: "#0A0B14" }}>
+    <div className="min-h-screen" style={{ background: "#0F172A" }}>
       {/* Session timeout warning modal */}
       <SessionTimeoutModal
         isOpen={isWarning}
@@ -1145,13 +783,22 @@ export default function AdminLayout({
         className="hidden md:flex flex-col fixed top-0 left-0 h-screen z-40"
         style={{
           width: "240px",
-          background: "rgba(14,16,32,1)",
-          borderRight: "1px solid #1C1F33",
+          background: "#0F172A",
+          borderRight: "1px solid rgba(34,197,94,0.1)",
           overflow: "hidden",
           height: "100vh",
         }}
       >
-        <SidebarContent />
+        <SidebarContent
+          adminEmail={adminEmail}
+          navGroups={navGroups}
+          openGroups={openGroups}
+          currentPath={currentPath}
+          editMode={editMode}
+          setEditMode={setEditMode}
+          toggleGroup={toggleGroup}
+          handleLogout={handleLogout}
+        />
       </aside>
 
       {/* ===== MOBILE OVERLAY BACKDROP ===== */}
@@ -1159,8 +806,8 @@ export default function AdminLayout({
         <button
           type="button"
           data-ocid="admin.sidebar.overlay"
-          onClick={closeSidebar}
-          onKeyDown={(e) => e.key === "Escape" && closeSidebar()}
+          onClick={closeSidebarInner}
+          onKeyDown={(e) => e.key === "Escape" && closeSidebarInner()}
           style={{
             position: "fixed",
             inset: 0,
@@ -1184,8 +831,8 @@ export default function AdminLayout({
         style={{
           width: "240px",
           height: "100dvh",
-          background: "rgba(14,16,32,1)",
-          borderRight: "1px solid #1C1F33",
+          background: "#0F172A",
+          borderRight: "1px solid #334155",
           transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)",
           transition: "transform 0.25s ease",
           overflow: "hidden",
@@ -1210,7 +857,7 @@ export default function AdminLayout({
                 fontSize: "18px",
                 letterSpacing: "0.15em",
                 fontWeight: 700,
-                color: "#5EF08A",
+                color: "#22C55E",
                 display: "block",
               }}
             >
@@ -1219,8 +866,8 @@ export default function AdminLayout({
             <span
               style={{
                 display: "inline-block",
-                background: "rgba(94,240,138,0.15)",
-                color: "#5EF08A",
+                background: "rgba(34,197,94,0.1)",
+                color: "#22C55E",
                 fontSize: "11px",
                 fontWeight: 700,
                 letterSpacing: "0.08em",
@@ -1235,7 +882,7 @@ export default function AdminLayout({
           </div>
           <button
             type="button"
-            onClick={closeSidebar}
+            onClick={closeSidebarInner}
             style={{
               background: "none",
               border: "none",
@@ -1261,15 +908,28 @@ export default function AdminLayout({
               overscrollBehavior: "contain",
               scrollbarWidth: "none",
               msOverflowStyle: "none",
-            } as React.CSSProperties
+            } as CSSProperties
           }
         >
-          <MobileSidebarNav onNavClick={closeSidebar} />
+          <MobileSidebarNav
+            onNavClick={closeSidebarInner}
+            adminEmail={adminEmail}
+            navGroups={navGroups}
+            openGroups={openGroups}
+            currentPath={currentPath}
+            editMode={editMode}
+            setEditMode={setEditMode}
+            toggleGroup={toggleGroup}
+            handleLogout={handleLogout}
+          />
         </div>
       </aside>
 
       {/* ===== MAIN CONTENT ===== */}
-      <div className="md:ml-[240px] flex flex-col h-screen">
+      <div
+        className="md:ml-[240px] flex flex-col h-screen"
+        style={{ background: "#0F172A" }}
+      >
         {/* Header bar */}
         <header
           data-ocid="admin.header.panel"
@@ -1277,7 +937,7 @@ export default function AdminLayout({
           style={{
             height: "64px",
             background: "rgba(14,16,32,1)",
-            borderBottom: "1px solid #1C1F33",
+            borderBottom: "1px solid #334155",
             display: "flex",
             alignItems: "center",
             padding: "0 24px",
@@ -1333,8 +993,8 @@ export default function AdminLayout({
             >
               <span
                 style={{
-                  background: "rgba(94,240,138,0.15)",
-                  color: "#5EF08A",
+                  background: "rgba(34,197,94,0.1)",
+                  color: "#22C55E",
                   fontSize: "11px",
                   fontWeight: 600,
                   padding: "2px 10px",
@@ -1374,7 +1034,7 @@ export default function AdminLayout({
                 type="button"
                 data-ocid="admin.notifications.button"
                 aria-label="Notifications"
-                onClick={() => navigate({ to: "/admin/dashboard" as any })}
+                onClick={() => navigate({ to: "/admin/notifications" })}
                 style={{
                   background: "none",
                   border: "none",
@@ -1401,8 +1061,8 @@ export default function AdminLayout({
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               <span
                 style={{
-                  background: "rgba(94,240,138,0.15)",
-                  color: "#5EF08A",
+                  background: "rgba(34,197,94,0.1)",
+                  color: "#22C55E",
                   fontSize: "11px",
                   fontWeight: 600,
                   padding: "2px 10px",
@@ -1444,7 +1104,7 @@ export default function AdminLayout({
                 type="button"
                 data-ocid="admin.notifications.button"
                 aria-label="Notifications"
-                onClick={() => navigate({ to: "/admin/dashboard" as any })}
+                onClick={() => navigate({ to: "/admin/notifications" })}
                 style={{
                   background: "none",
                   border: "none",
@@ -1475,7 +1135,704 @@ export default function AdminLayout({
           }}
         >
           {children}
+          {/* Admin footer — compact contact strip */}
+          <div
+            style={{
+              marginTop: "48px",
+              borderTop: "1px solid rgba(71,85,105,0.15)",
+              paddingTop: "16px",
+              paddingBottom: "16px",
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: "16px 32px",
+            }}
+            data-ocid="admin.footer.contact"
+          >
+            <span
+              style={{
+                fontSize: "11px",
+                color: "rgba(122,125,144,0.6)",
+                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                letterSpacing: "0.08em",
+              }}
+            >
+              WEBLY LLC
+            </span>
+            <a
+              href={`mailto:${contactEmail}`}
+              style={{
+                fontSize: "11px",
+                color: "rgba(94,240,138,0.6)",
+                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                textDecoration: "none",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+              data-ocid="admin.footer.email"
+            >
+              <span
+                style={{
+                  color: "rgba(94,240,138,0.4)",
+                  fontSize: "10px",
+                  fontWeight: 700,
+                }}
+              >
+                EMAIL
+              </span>
+              {contactEmail}
+            </a>
+            <a
+              href={`tel:${contactPhone}`}
+              style={{
+                fontSize: "11px",
+                color: "rgba(94,240,138,0.6)",
+                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                textDecoration: "none",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+              data-ocid="admin.footer.phone"
+            >
+              <span
+                style={{
+                  color: "rgba(94,240,138,0.4)",
+                  fontSize: "10px",
+                  fontWeight: 700,
+                }}
+              >
+                PHONE
+              </span>
+              {contactPhone}
+            </a>
+          </div>
         </main>
+      </div>
+    </div>
+  );
+}
+
+// ─── Shared sidebar nav props ──────────────────────────────────────────────────
+interface SidebarNavProps {
+  adminEmail: string;
+  navGroups: NavGroup[];
+  openGroups: Record<string, boolean>;
+  currentPath: string;
+  editMode: boolean;
+  setEditMode: (v: boolean) => void;
+  toggleGroup: (id: string) => void;
+  handleLogout: () => void;
+  onNavClick?: () => void;
+}
+
+/** Nav items + bottom section only — used in the mobile drawer's inner scrollable div */
+function MobileSidebarNav({
+  adminEmail,
+  navGroups,
+  openGroups,
+  currentPath,
+  editMode,
+  setEditMode,
+  toggleGroup,
+  handleLogout,
+  onNavClick,
+}: SidebarNavProps) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        minHeight: "100%",
+        paddingTop: "8px",
+      }}
+    >
+      {/* Grouped nav */}
+      <nav
+        style={{
+          padding: "0 12px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "2px",
+        }}
+      >
+        {navGroups.map((group) => {
+          const isOpen = openGroups[group.id];
+          const hasActiveItem = group.items.some(
+            (item) => currentPath === item.path,
+          );
+          return (
+            <div key={group.id}>
+              {/* Group header */}
+              <button
+                type="button"
+                data-ocid={`admin.nav.group.${group.id}.toggle`}
+                onClick={() => toggleGroup(group.id)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  width: "100%",
+                  padding: "7px 16px 5px",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  marginTop: "6px",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                    color: hasActiveItem
+                      ? "rgba(94,240,138,0.7)"
+                      : "rgba(122,125,144,0.55)",
+                  }}
+                >
+                  {group.label}
+                </span>
+                <ChevronDown
+                  size={12}
+                  style={{
+                    color: hasActiveItem
+                      ? "rgba(94,240,138,0.7)"
+                      : "rgba(122,125,144,0.45)",
+                    transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+                    transition: "transform 0.2s ease",
+                    flexShrink: 0,
+                  }}
+                />
+              </button>
+
+              {/* Group items */}
+              <div
+                style={{
+                  overflow: "hidden",
+                  maxHeight: isOpen ? "600px" : "0",
+                  transition: "max-height 0.25s ease",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "1px",
+                }}
+              >
+                {group.items.map((item) => {
+                  const isActive = currentPath === item.path;
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      data-ocid={item.ocid}
+                      onClick={onNavClick}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        padding: "9px 16px 9px 24px",
+                        borderRadius: "8px",
+                        background: isActive
+                          ? "rgba(34,197,94,0.08)"
+                          : "transparent",
+                        color: isActive ? "#22C55E" : "#7A7D90",
+                        fontSize: "13.5px",
+                        fontWeight: isActive ? 600 : 400,
+                        textDecoration: "none",
+                        transition: "background 0.15s, color 0.15s",
+                        position: "relative",
+                      }}
+                    >
+                      <span style={{ flexShrink: 0 }}>{item.icon}</span>
+                      <span style={{ flex: 1 }}>{item.label}</span>
+                      {item.hasRedDot && (
+                        <span
+                          style={{
+                            width: "8px",
+                            height: "8px",
+                            borderRadius: "50%",
+                            background: "#EF4444",
+                            flexShrink: 0,
+                          }}
+                          aria-label="Unreviewed submissions"
+                        />
+                      )}
+                      {item.pendingBadge !== undefined &&
+                        item.pendingBadge > 0 && (
+                          <span
+                            data-ocid="admin.nav.dashboard.pending_badge"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              background: "#22C55E",
+                              color: "#061209",
+                              fontSize: "10px",
+                              fontWeight: 700,
+                              borderRadius: "999px",
+                              minWidth: "18px",
+                              height: "18px",
+                              padding: "0 5px",
+                              flexShrink: 0,
+                              lineHeight: 1,
+                            }}
+                            aria-label={`${item.pendingBadge} pending subscriptions`}
+                          >
+                            {item.pendingBadge}
+                          </span>
+                        )}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </nav>
+
+      {/* Bottom */}
+      <div
+        style={{
+          padding: "24px",
+          borderTop: "1px solid #334155",
+          marginTop: "auto",
+        }}
+      >
+        {!!adminEmail && (
+          <div
+            style={{
+              marginBottom: "16px",
+              padding: "12px",
+              borderRadius: "8px",
+              background: editMode
+                ? "rgba(71,85,105,0.15)"
+                : "rgba(255,255,255,0.04)",
+              border: `1px solid ${editMode ? "rgba(57,255,20,0.3)" : "#334155"}`,
+            }}
+          >
+            <button
+              type="button"
+              data-ocid="admin.edit-site-text.toggle"
+              onClick={() => setEditMode(!editMode)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                width: "100%",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: 0,
+                gap: "8px",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  color: editMode ? "#39FF14" : "#7A7D90",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {editMode ? "✏️ Edit Mode: ON" : "✏️ Edit Site Text"}
+              </span>
+              <span
+                style={{
+                  flexShrink: 0,
+                  width: "32px",
+                  height: "18px",
+                  borderRadius: "999px",
+                  background: editMode ? "#39FF14" : "#374151",
+                  position: "relative",
+                  transition: "background 0.2s",
+                }}
+              >
+                <span
+                  style={{
+                    position: "absolute",
+                    top: "2px",
+                    left: editMode ? "16px" : "2px",
+                    width: "14px",
+                    height: "14px",
+                    borderRadius: "50%",
+                    background: editMode ? "#0a0a0a" : "#6B7280",
+                    transition: "left 0.2s, background 0.2s",
+                  }}
+                />
+              </span>
+            </button>
+            {editMode && (
+              <p
+                style={{
+                  margin: "6px 0 0",
+                  fontSize: "10px",
+                  color: "rgba(57,255,20,0.6)",
+                  lineHeight: 1.4,
+                }}
+              >
+                Click text on live pages to edit
+              </p>
+            )}
+          </div>
+        )}
+        <p
+          style={{
+            color: "#7A7D90",
+            fontSize: "12px",
+            marginBottom: "8px",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {adminEmail}
+        </p>
+        <button
+          type="button"
+          onClick={handleLogout}
+          data-ocid="admin.logout.button"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            color: "#f87171",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: 0,
+            fontSize: "12px",
+            fontWeight: 500,
+          }}
+        >
+          <LogOut size={12} />
+          Log Out
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SidebarContent({
+  adminEmail,
+  navGroups,
+  openGroups,
+  currentPath,
+  editMode,
+  setEditMode,
+  toggleGroup,
+  handleLogout,
+  onNavClick,
+}: SidebarNavProps) {
+  return (
+    <div
+      style={
+        {
+          display: "flex",
+          flexDirection: "column",
+          height: "100%",
+          overflowY: "auto",
+          WebkitOverflowScrolling: "touch",
+          overscrollBehavior: "contain",
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
+        } as CSSProperties
+      }
+    >
+      {/* Wordmark + badge */}
+      <div style={{ padding: "24px 24px 0", flexShrink: 0 }}>
+        <span
+          style={{
+            fontSize: "20px",
+            letterSpacing: "0.15em",
+            marginBottom: "8px",
+            fontWeight: 700,
+            color: "#22C55E",
+            display: "block",
+          }}
+        >
+          IMPERIDOME
+        </span>
+        <span
+          style={{
+            display: "inline-block",
+            background: "rgba(34,197,94,0.1)",
+            color: "#22C55E",
+            fontSize: "11px",
+            fontWeight: 700,
+            letterSpacing: "0.08em",
+            padding: "2px 8px",
+            borderRadius: "4px",
+            marginBottom: "16px",
+            textTransform: "uppercase",
+          }}
+        >
+          Admin Panel
+        </span>
+      </div>
+
+      {/* Grouped nav */}
+      <nav
+        style={{
+          padding: "0 12px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "2px",
+        }}
+      >
+        {navGroups.map((group) => {
+          const isOpen = openGroups[group.id];
+          const hasActiveItem = group.items.some(
+            (item) => currentPath === item.path,
+          );
+          return (
+            <div key={group.id}>
+              {/* Group header */}
+              <button
+                type="button"
+                data-ocid={`admin.nav.group.${group.id}.toggle`}
+                onClick={() => toggleGroup(group.id)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  width: "100%",
+                  padding: "7px 16px 5px",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  marginTop: "6px",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                    color: hasActiveItem
+                      ? "rgba(94,240,138,0.7)"
+                      : "rgba(122,125,144,0.55)",
+                  }}
+                >
+                  {group.label}
+                </span>
+                <ChevronDown
+                  size={12}
+                  style={{
+                    color: hasActiveItem
+                      ? "rgba(94,240,138,0.7)"
+                      : "rgba(122,125,144,0.45)",
+                    transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+                    transition: "transform 0.2s ease",
+                    flexShrink: 0,
+                  }}
+                />
+              </button>
+
+              {/* Group items */}
+              <div
+                style={{
+                  overflow: "hidden",
+                  maxHeight: isOpen ? "600px" : "0",
+                  transition: "max-height 0.25s ease",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "1px",
+                }}
+              >
+                {group.items.map((item) => {
+                  const isActive = currentPath === item.path;
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      data-ocid={item.ocid}
+                      onClick={onNavClick}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        padding: "9px 16px 9px 24px",
+                        borderRadius: "8px",
+                        background: isActive
+                          ? "rgba(34,197,94,0.08)"
+                          : "transparent",
+                        color: isActive ? "#22C55E" : "#7A7D90",
+                        fontSize: "13.5px",
+                        fontWeight: isActive ? 600 : 400,
+                        textDecoration: "none",
+                        transition: "background 0.15s, color 0.15s",
+                        position: "relative",
+                      }}
+                    >
+                      <span style={{ flexShrink: 0 }}>{item.icon}</span>
+                      <span style={{ flex: 1 }}>{item.label}</span>
+                      {item.hasRedDot && (
+                        <span
+                          style={{
+                            width: "8px",
+                            height: "8px",
+                            borderRadius: "50%",
+                            background: "#EF4444",
+                            flexShrink: 0,
+                          }}
+                          aria-label="Unreviewed submissions"
+                        />
+                      )}
+                      {item.pendingBadge !== undefined &&
+                        item.pendingBadge > 0 && (
+                          <span
+                            data-ocid="admin.nav.dashboard.pending_badge"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              background: "#22C55E",
+                              color: "#061209",
+                              fontSize: "10px",
+                              fontWeight: 700,
+                              borderRadius: "999px",
+                              minWidth: "18px",
+                              height: "18px",
+                              padding: "0 5px",
+                              flexShrink: 0,
+                              lineHeight: 1,
+                            }}
+                            aria-label={`${item.pendingBadge} pending subscriptions`}
+                          >
+                            {item.pendingBadge}
+                          </span>
+                        )}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </nav>
+
+      {/* Bottom */}
+      <div
+        style={{
+          padding: "24px",
+          borderTop: "1px solid #334155",
+          marginTop: "auto",
+          flexShrink: 0,
+        }}
+      >
+        {/* Edit Site Text toggle */}
+        {!!adminEmail && (
+          <div
+            style={{
+              marginBottom: "16px",
+              padding: "12px",
+              borderRadius: "8px",
+              background: editMode
+                ? "rgba(71,85,105,0.15)"
+                : "rgba(255,255,255,0.04)",
+              border: `1px solid ${editMode ? "rgba(57,255,20,0.3)" : "#334155"}`,
+            }}
+          >
+            <button
+              type="button"
+              data-ocid="admin.edit-site-text.toggle"
+              onClick={() => setEditMode(!editMode)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                width: "100%",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: 0,
+                gap: "8px",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  color: editMode ? "#39FF14" : "#7A7D90",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {editMode ? "✏️ Edit Mode: ON" : "✏️ Edit Site Text"}
+              </span>
+              {/* Pill toggle */}
+              <span
+                style={{
+                  flexShrink: 0,
+                  width: "32px",
+                  height: "18px",
+                  borderRadius: "999px",
+                  background: editMode ? "#39FF14" : "#374151",
+                  position: "relative",
+                  transition: "background 0.2s",
+                }}
+              >
+                <span
+                  style={{
+                    position: "absolute",
+                    top: "2px",
+                    left: editMode ? "16px" : "2px",
+                    width: "14px",
+                    height: "14px",
+                    borderRadius: "50%",
+                    background: editMode ? "#0a0a0a" : "#6B7280",
+                    transition: "left 0.2s, background 0.2s",
+                  }}
+                />
+              </span>
+            </button>
+            {editMode && (
+              <p
+                style={{
+                  margin: "6px 0 0",
+                  fontSize: "10px",
+                  color: "rgba(57,255,20,0.6)",
+                  lineHeight: 1.4,
+                }}
+              >
+                Click text on live pages to edit
+              </p>
+            )}
+          </div>
+        )}
+
+        <p
+          style={{
+            color: "#7A7D90",
+            fontSize: "12px",
+            marginBottom: "8px",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {adminEmail}
+        </p>
+        <button
+          type="button"
+          onClick={handleLogout}
+          data-ocid="admin.logout.button"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            color: "#f87171",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: 0,
+            fontSize: "12px",
+            fontWeight: 500,
+          }}
+        >
+          <LogOut size={12} />
+          Log Out
+        </button>
       </div>
     </div>
   );

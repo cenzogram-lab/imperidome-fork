@@ -17,19 +17,7 @@ export default function AboutPage() {
           sid = crypto.randomUUID();
           sessionStorage.setItem("_vis_sid", sid);
         }
-        let countryCode: string | null = null;
-        try {
-          const ctrl = new AbortController();
-          const timer = setTimeout(() => ctrl.abort(), 2000);
-          const res = await fetch("https://ipapi.co/country/", {
-            signal: ctrl.signal,
-          });
-          clearTimeout(timer);
-          const text = (await res.text()).trim();
-          if (/^[A-Z]{2}$/.test(text)) countryCode = text;
-        } catch {
-          // geolocation failed — use null
-        }
+        const countryCode: string | null = null;
         const publicActor = await createActorWithConfig(createActor);
         await (publicActor as backendInterface).recordVisit(
           "/about",

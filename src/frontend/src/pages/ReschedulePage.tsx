@@ -8,6 +8,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { createActor } from "../backend";
 import type { backendInterface } from "../backend";
+import TypewriterText from "../components/TypewriterText";
 import { createActorWithConfig } from "../config";
 import { useActor } from "../hooks/useActor";
 
@@ -348,19 +349,7 @@ export default function ReschedulePage() {
           sid = crypto.randomUUID();
           sessionStorage.setItem("_vis_sid", sid);
         }
-        let countryCode: string | null = null;
-        try {
-          const ctrl = new AbortController();
-          const timer = setTimeout(() => ctrl.abort(), 2000);
-          const res = await fetch("https://ipapi.co/country/", {
-            signal: ctrl.signal,
-          });
-          clearTimeout(timer);
-          const text = (await res.text()).trim();
-          if (/^[A-Z]{2}$/.test(text)) countryCode = text;
-        } catch {
-          // geolocation failed — use null
-        }
+        const countryCode: string | null = null;
         const publicActor = await createActorWithConfig(createActor);
         await (publicActor as backendInterface).recordVisit(
           window.location.pathname,
@@ -622,9 +611,10 @@ export default function ReschedulePage() {
               fontSize: "22px",
               fontWeight: 700,
               marginBottom: "10px",
+              fontFamily: "'Courier New', monospace",
             }}
           >
-            Link not found
+            <TypewriterText text="Link not found" speed={55} />
           </h2>
           <p
             style={{
@@ -688,9 +678,10 @@ export default function ReschedulePage() {
               fontSize: "22px",
               fontWeight: 700,
               marginBottom: "10px",
+              fontFamily: "'Courier New', monospace",
             }}
           >
-            Reschedule link expired
+            <TypewriterText text="Reschedule link expired" speed={50} />
           </h2>
           <p
             style={{
@@ -781,9 +772,10 @@ export default function ReschedulePage() {
               fontSize: "24px",
               fontWeight: 700,
               marginBottom: "10px",
+              fontFamily: "'Courier New', monospace",
             }}
           >
-            Meeting rescheduled!
+            <TypewriterText text="Meeting rescheduled!" speed={50} />
           </h2>
           <p
             style={{
@@ -874,9 +866,10 @@ export default function ReschedulePage() {
               fontSize: "22px",
               fontWeight: 700,
               marginBottom: "8px",
+              fontFamily: "'Courier New', monospace",
             }}
           >
-            Change your booking
+            <TypewriterText text="Change your booking" speed={50} />
           </h2>
           <p style={{ color: MUTED, fontSize: "14px", lineHeight: 1.6 }}>
             Pick a new date and time below.

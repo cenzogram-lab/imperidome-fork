@@ -1,21 +1,90 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <rect width="512" height="512" rx="80" fill="#111111"/>
-  <!-- Outer gold ring accent -->
-  <circle cx="256" cy="256" r="192" fill="none" stroke="#b8860b" stroke-width="6" opacity="0.4"/>
-  <!-- Inner decorative ring -->
-  <circle cx="256" cy="256" r="168" fill="none" stroke="#b8860b" stroke-width="1.5" opacity="0.15"/>
-  <!-- Gold "I" monogram -->
-  <!-- Top bar -->
-  <rect x="160" y="138" width="192" height="32" rx="8" fill="#b8860b"/>
-  <!-- Vertical stem -->
-  <rect x="236" y="170" width="40" height="134" rx="6" fill="#d4a017"/>
-  <!-- Bottom bar -->
-  <rect x="160" y="304" width="192" height="32" rx="8" fill="#b8860b"/>
-  <!-- Subtle highlight on stem -->
-  <rect x="248" y="170" width="14" height="134" rx="6" fill="#f0c040" opacity="0.45"/>
-  <!-- Corner accent dots -->
-  <circle cx="176" cy="154" r="6" fill="#b8860b" opacity="0.6"/>
-  <circle cx="336" cy="154" r="6" fill="#b8860b" opacity="0.6"/>
-  <circle cx="176" cy="320" r="6" fill="#b8860b" opacity="0.6"/>
-  <circle cx="336" cy="320" r="6" fill="#b8860b" opacity="0.6"/>
+  <defs>
+    <!-- Background radial gradient for depth -->
+    <radialGradient id="bgGrad" cx="50%" cy="100%" r="80%" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0f1a0f"/>
+      <stop offset="100%" stop-color="#0d0d0d"/>
+    </radialGradient>
+
+    <!-- Dome fill gradient -->
+    <radialGradient id="domeGrad" cx="50%" cy="100%" r="100%" gradientUnits="userSpaceOnUse"
+      x1="256" y1="460" x2="256" y2="220">
+      <stop offset="0%" stop-color="#1a4d1a"/>
+      <stop offset="55%" stop-color="#22a022"/>
+      <stop offset="100%" stop-color="#39ff14"/>
+    </radialGradient>
+
+    <!-- Dome glow filter -->
+    <filter id="domeGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+
+    <!-- Outer halo filter for the dome edge -->
+    <filter id="halo" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="18" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- I letter glow -->
+    <filter id="letterGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Ground glow -->
+    <radialGradient id="groundGlow" cx="50%" cy="0%" r="50%">
+      <stop offset="0%" stop-color="#39ff14" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#39ff14" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Dome stroke gradient -->
+    <linearGradient id="domeStroke" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#1a4d1a"/>
+      <stop offset="100%" stop-color="#39ff14"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" fill="url(#bgGrad)" rx="64"/>
+
+  <!-- Ground glow ellipse -->
+  <ellipse cx="256" cy="460" rx="180" ry="28" fill="url(#groundGlow)"/>
+
+  <!-- Dome halo (blur layer behind dome) -->
+  <path d="M 96 460 A 160 160 0 0 1 416 460" fill="none" stroke="#39ff14" stroke-width="3" opacity="0.25" filter="url(#halo)"/>
+
+  <!-- Dome filled hemisphere -->
+  <path d="M 80 460 A 176 176 0 0 1 432 460 Z" fill="url(#domeGrad)" filter="url(#domeGlow)" opacity="0.95"/>
+
+  <!-- Dome arc edge highlight -->
+  <path d="M 80 460 A 176 176 0 0 1 432 460" fill="none" stroke="url(#domeStroke)" stroke-width="2.5" opacity="0.9"/>
+
+  <!-- Dome inner sheen -->
+  <path d="M 110 460 A 146 146 0 0 1 402 460" fill="none" stroke="#39ff14" stroke-width="1" opacity="0.3"/>
+
+  <!-- Grid lines on dome for tech feel -->
+  <path d="M 256 284 L 256 460" stroke="#39ff14" stroke-width="0.8" opacity="0.2"/>
+  <path d="M 166 310 Q 256 284 346 310" fill="none" stroke="#39ff14" stroke-width="0.8" opacity="0.15"/>
+  <path d="M 128 350 Q 256 316 384 350" fill="none" stroke="#39ff14" stroke-width="0.8" opacity="0.15"/>
+  <path d="M 100 400 Q 256 358 412 400" fill="none" stroke="#39ff14" stroke-width="0.8" opacity="0.15"/>
+
+  <!-- Bold I letter - top serif bar -->
+  <g filter="url(#letterGlow)">
+    <!-- Top bar -->
+    <rect x="204" y="120" width="104" height="18" rx="4" fill="#e8ffe8"/>
+    <!-- Vertical stem -->
+    <rect x="238" y="138" width="36" height="144" rx="3" fill="#ffffff"/>
+    <!-- Bottom bar -->
+    <rect x="204" y="282" width="104" height="18" rx="4" fill="#e8ffe8"/>
+  </g>
+
+  <!-- Top apex glow dot -->
+  <circle cx="256" cy="284" r="8" fill="#39ff14" opacity="0.8" filter="url(#letterGlow)"/>
 </svg>

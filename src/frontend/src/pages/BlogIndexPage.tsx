@@ -4,13 +4,15 @@ import type { BlogPost, backendInterface } from "../backend";
 import { EditableText } from "../components/EditableText";
 import { Footer } from "../components/Footer";
 import { Navbar } from "../components/Navbar";
+import TypewriterText from "../components/TypewriterText";
 import { createActorWithConfig } from "../config";
 import { useActor } from "../hooks/useActor";
 import { useSeoMeta } from "../hooks/useSeoMeta";
 
-const GREEN = "#39FF14";
-const CARD_BG = "#111111";
-const BORDER = "rgba(255,255,255,0.08)";
+const GREEN = "#5EF08A";
+const CARD_BG = "rgba(11,13,26,0.85)";
+const BORDER_DIM = "rgba(94,240,138,0.12)";
+const BORDER_HOV = "rgba(94,240,138,0.45)";
 
 function formatDate(ts: bigint): string {
   const ms = Number(ts) / 1_000_000;
@@ -23,19 +25,12 @@ function formatDate(ts: bigint): string {
 
 function SkeletonCard() {
   return (
-    <div
-      style={{
-        background: CARD_BG,
-        borderRadius: "16px",
-        border: `1px solid ${BORDER}`,
-        overflow: "hidden",
-      }}
-    >
+    <div className="matrix-card" style={{ overflow: "hidden" }}>
       <div
         style={{
           paddingBottom: "56.25%",
           position: "relative",
-          background: "#1a1a1a",
+          background: "#0a0d1a",
           animation: "skeletonPulse 1.6s ease-in-out infinite",
         }}
       />
@@ -47,60 +42,18 @@ function SkeletonCard() {
           gap: "12px",
         }}
       >
-        <div
-          style={{
-            height: "14px",
-            width: "72px",
-            background: "#1a1a1a",
-            borderRadius: "999px",
-            animation: "skeletonPulse 1.6s ease-in-out infinite",
-          }}
-        />
-        <div
-          style={{
-            height: "22px",
-            width: "90%",
-            background: "#1a1a1a",
-            borderRadius: "6px",
-            animation: "skeletonPulse 1.6s ease-in-out infinite 0.1s",
-          }}
-        />
-        <div
-          style={{
-            height: "22px",
-            width: "70%",
-            background: "#1a1a1a",
-            borderRadius: "6px",
-            animation: "skeletonPulse 1.6s ease-in-out infinite 0.15s",
-          }}
-        />
-        <div
-          style={{
-            height: "14px",
-            width: "100%",
-            background: "#1a1a1a",
-            borderRadius: "4px",
-            animation: "skeletonPulse 1.6s ease-in-out infinite 0.2s",
-          }}
-        />
-        <div
-          style={{
-            height: "14px",
-            width: "80%",
-            background: "#1a1a1a",
-            borderRadius: "4px",
-            animation: "skeletonPulse 1.6s ease-in-out infinite 0.25s",
-          }}
-        />
-        <div
-          style={{
-            height: "14px",
-            width: "55%",
-            background: "#1a1a1a",
-            borderRadius: "4px",
-            animation: "skeletonPulse 1.6s ease-in-out infinite 0.3s",
-          }}
-        />
+        {["72px", "90%", "70%", "100%", "80%", "55%"].map((w, i) => (
+          <div
+            key={w}
+            style={{
+              height: i < 2 ? "18px" : "13px",
+              width: w,
+              background: "rgba(94,240,138,0.06)",
+              borderRadius: "4px",
+              animation: `skeletonPulse 1.6s ease-in-out infinite ${i * 0.05}s`,
+            }}
+          />
+        ))}
       </div>
     </div>
   );
@@ -116,8 +69,8 @@ function PostCard({ post }: { post: BlogPost }) {
       onMouseLeave={() => setHovered(false)}
       style={{
         background: CARD_BG,
-        borderRadius: "16px",
-        border: `1px solid ${hovered ? "rgba(57,255,20,0.25)" : BORDER}`,
+        borderRadius: "12px",
+        border: `1px solid ${hovered ? BORDER_HOV : BORDER_DIM}`,
         overflow: "hidden",
         display: "flex",
         flexDirection: "column",
@@ -125,8 +78,8 @@ function PostCard({ post }: { post: BlogPost }) {
           "transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease",
         transform: hovered ? "scale(1.02)" : "scale(1)",
         boxShadow: hovered
-          ? "0 0 20px rgba(57,255,20,0.15), 0 8px 32px rgba(0,0,0,0.4)"
-          : "0 2px 8px rgba(0,0,0,0.3)",
+          ? "0 0 20px rgba(94,240,138,0.18), 0 8px 32px rgba(0,0,0,0.5)"
+          : "0 2px 8px rgba(0,0,0,0.4)",
       }}
     >
       {/* 16:9 featured image */}
@@ -135,7 +88,7 @@ function PostCard({ post }: { post: BlogPost }) {
           paddingBottom: "56.25%",
           position: "relative",
           overflow: "hidden",
-          background: "#0d0d0d",
+          background: "#070910",
         }}
       >
         {post.featured_image_url ? (
@@ -156,7 +109,7 @@ function PostCard({ post }: { post: BlogPost }) {
               position: "absolute",
               inset: 0,
               background:
-                "linear-gradient(135deg, #111 0%, #1a1a1a 50%, #222 100%)",
+                "linear-gradient(135deg, #060810 0%, #0c0f1e 50%, #111628 100%)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -166,9 +119,10 @@ function PostCard({ post }: { post: BlogPost }) {
               style={{
                 fontSize: "64px",
                 fontWeight: 900,
-                color: "rgba(57,255,20,0.08)",
+                color: "rgba(94,240,138,0.06)",
                 letterSpacing: "-0.04em",
                 userSelect: "none",
+                fontFamily: "monospace",
               }}
             >
               I
@@ -187,34 +141,13 @@ function PostCard({ post }: { post: BlogPost }) {
           flex: 1,
         }}
       >
-        {/* Category badge */}
-        {post.category && (
-          <span
-            style={{
-              display: "inline-block",
-              background: "rgba(57,255,20,0.08)",
-              color: GREEN,
-              fontSize: "10px",
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              padding: "4px 12px",
-              borderRadius: "999px",
-              alignSelf: "flex-start",
-              border: "1px solid rgba(57,255,20,0.18)",
-            }}
-          >
-            {post.category}
-          </span>
-        )}
+        {post.category && <span className="matrix-badge">{post.category}</span>}
 
-        {/* Title */}
         <h3
+          className="matrix-heading"
           style={{
-            margin: 0,
-            fontSize: "18px",
+            fontSize: "17px",
             fontWeight: 700,
-            color: "#ffffff",
             lineHeight: 1.35,
             display: "-webkit-box",
             WebkitLineClamp: 2,
@@ -222,16 +155,14 @@ function PostCard({ post }: { post: BlogPost }) {
             overflow: "hidden",
           }}
         >
-          {post.title}
+          <TypewriterText text={post.title} speed={25} />
         </h3>
 
-        {/* Excerpt */}
         {post.excerpt && (
           <p
+            className="matrix-text"
             style={{
-              margin: 0,
-              fontSize: "14px",
-              color: "rgba(156,163,175,0.8)",
+              fontSize: "13px",
               lineHeight: 1.65,
               flex: 1,
               display: "-webkit-box",
@@ -240,39 +171,29 @@ function PostCard({ post }: { post: BlogPost }) {
               overflow: "hidden",
             }}
           >
-            {post.excerpt}
+            <TypewriterText text={post.excerpt} speed={12} />
           </p>
         )}
 
-        {/* Author + date */}
         <p
-          style={{
-            margin: 0,
-            fontSize: "12px",
-            color: "rgba(156,163,175,0.55)",
-            letterSpacing: "0.01em",
-          }}
+          className="matrix-muted"
+          style={{ fontSize: "11px", letterSpacing: "0.01em" }}
         >
-          {post.author}
-          {pubDate ? ` · ${pubDate}` : ""}
+          <TypewriterText
+            text={`${post.author}${pubDate ? ` · ${pubDate}` : ""}`}
+            speed={15}
+          />
         </p>
 
-        {/* Read More button */}
         <a
           href={`/blog/${post.slug}`}
+          className="matrix-btn-outline"
           style={{
             display: "block",
             textAlign: "center",
-            padding: "10px 20px",
-            borderRadius: "8px",
-            border: `1px solid ${GREEN}`,
-            color: GREEN,
-            fontSize: "13px",
-            fontWeight: 600,
-            textDecoration: "none",
-            transition: "background 0.2s, color 0.2s",
+            padding: "9px 18px",
             marginTop: "4px",
-            background: hovered ? "rgba(57,255,20,0.08)" : "transparent",
+            textDecoration: "none",
           }}
           data-ocid="blog.card.read_more"
         >
@@ -298,19 +219,7 @@ export default function BlogIndexPage() {
           sid = crypto.randomUUID();
           sessionStorage.setItem("_vis_sid", sid);
         }
-        let countryCode: string | null = null;
-        try {
-          const ctrl = new AbortController();
-          const timer = setTimeout(() => ctrl.abort(), 2000);
-          const res = await fetch("https://ipapi.co/country/", {
-            signal: ctrl.signal,
-          });
-          clearTimeout(timer);
-          const text = (await res.text()).trim();
-          if (/^[A-Z]{2}$/.test(text)) countryCode = text;
-        } catch {
-          // geolocation failed — use null
-        }
+        const countryCode: string | null = null;
         const publicActor = await createActorWithConfig(createActor);
         await (publicActor as backendInterface).recordVisit(
           window.location.pathname,
@@ -319,7 +228,7 @@ export default function BlogIndexPage() {
           countryCode,
         );
       } catch {
-        // silent
+        /* silent */
       }
     };
     track();
@@ -354,23 +263,12 @@ export default function BlogIndexPage() {
   const isLoading = isFetching || posts === null;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0a0a0a" }}>
+    <div className="matrix-bg" style={{ minHeight: "100vh" }}>
       <style>{`
-        @keyframes skeletonPulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.35; }
-        }
-        .blog-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 28px;
-        }
-        @media (max-width: 1024px) {
-          .blog-grid { grid-template-columns: repeat(2, 1fr) !important; }
-        }
-        @media (max-width: 640px) {
-          .blog-grid { grid-template-columns: 1fr !important; }
-        }
+        @keyframes skeletonPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+        .blog-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+        @media (max-width: 1024px) { .blog-grid { grid-template-columns: repeat(2, 1fr) !important; } }
+        @media (max-width: 640px) { .blog-grid { grid-template-columns: 1fr !important; } }
       `}</style>
 
       <Navbar />
@@ -379,62 +277,60 @@ export default function BlogIndexPage() {
       {/* Page header */}
       <section
         style={{
-          background: "#0a0a0a",
+          background: "#0A0B14",
           padding: "72px 32px 56px",
           textAlign: "center",
           position: "relative",
           overflow: "hidden",
         }}
       >
-        {/* Ambient glow */}
         <div
           style={{
             position: "absolute",
             inset: 0,
             background:
-              "radial-gradient(ellipse 60% 80% at 50% 0%, rgba(57,255,20,0.05) 0%, transparent 70%)",
+              "radial-gradient(ellipse 60% 80% at 50% 0%, rgba(94,240,138,0.05) 0%, transparent 70%)",
             pointerEvents: "none",
           }}
         />
         <div style={{ position: "relative", zIndex: 1 }}>
-          <EditableText
-            textKey="blog.hero.heading"
-            defaultText="The Imperidome Blog"
-            as="h1"
+          <h1
+            className="matrix-heading"
             style={{
               margin: "0 0 8px",
               fontSize: "clamp(34px, 5vw, 52px)",
               fontWeight: 800,
-              color: "#ffffff",
               letterSpacing: "-0.03em",
               lineHeight: 1.1,
             }}
-          />
-          {/* Neon underline accent */}
+          >
+            <TypewriterText text="THE IMPERIDOME BLOG" speed={35} />
+            <span className="blink-cursor" />
+          </h1>
           <div
             style={{
               width: "64px",
-              height: "3px",
+              height: "2px",
               background: GREEN,
               borderRadius: "2px",
-              margin: "12px auto 20px",
+              margin: "14px auto 20px",
               boxShadow: `0 0 10px ${GREEN}`,
             }}
           />
-          <EditableText
-            textKey="blog.hero.subtext"
-            defaultText="Insights, case studies, and agency news"
-            as="p"
+          <p
+            className="matrix-muted"
             style={{
-              margin: 0,
-              fontSize: "17px",
-              color: "rgba(156,163,175,0.75)",
-              maxWidth: "520px",
-              marginLeft: "auto",
-              marginRight: "auto",
+              margin: "0 auto",
+              fontSize: "16px",
+              maxWidth: "500px",
               lineHeight: 1.65,
             }}
-          />
+          >
+            <TypewriterText
+              text="Insights, case studies, and agency intel"
+              speed={20}
+            />
+          </p>
         </div>
       </section>
 
@@ -449,13 +345,17 @@ export default function BlogIndexPage() {
             style={{ textAlign: "center", padding: "64px 0" }}
           >
             <p
+              className="matrix-badge-red"
               style={{
-                color: "#f87171",
-                fontSize: "15px",
-                marginBottom: "12px",
+                display: "inline-block",
+                padding: "8px 18px",
+                borderRadius: "8px",
               }}
             >
-              Could not load posts. Please try refreshing.
+              <TypewriterText
+                text="Could not load posts. Please try refreshing."
+                speed={20}
+              />
             </p>
           </div>
         )}
@@ -476,22 +376,16 @@ export default function BlogIndexPage() {
             <div
               style={{
                 width: "48px",
-                height: "2px",
+                height: "1px",
                 background: GREEN,
                 margin: "0 auto 24px",
                 boxShadow: `0 0 8px ${GREEN}`,
               }}
             />
-            <p
-              style={{
-                fontSize: "18px",
-                color: "rgba(255,255,255,0.6)",
-                margin: 0,
-              }}
-            >
-              <EditableText
-                textKey="blog.empty.text"
-                defaultText="No posts yet. Check back soon."
+            <p className="matrix-text" style={{ fontSize: "18px", margin: 0 }}>
+              <TypewriterText
+                text="No posts yet. Check back soon."
+                speed={30}
               />
             </p>
           </div>

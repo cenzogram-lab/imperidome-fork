@@ -1,16 +1,12 @@
 import { useNavigate } from "@tanstack/react-router";
 import { Mail, Monitor, Receipt, Trash2, Users, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, ChangeEvent } from "react";
 import type { backendInterface } from "../../backend.d";
 import type { CrmClient, EmailTemplate } from "../../backend.d";
+import TypewriterText from "../../components/TypewriterText";
 import { useActor } from "../../hooks/useActor";
-import { getSession } from "../../hooks/useSession";
 import AdminLayout from "./AdminLayout";
-
-function getAdminEmail(): string {
-  const s = getSession();
-  return s?.email ?? localStorage.getItem("imperidome_admin_email") ?? "";
-}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -72,28 +68,32 @@ const MILESTONE_COLORS: Record<
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const DARK_CARD: React.CSSProperties = {
-  background: "rgba(17,19,34,0.7)",
+const DARK_CARD: CSSProperties = {
+  background: "rgba(30,41,59,0.92)",
   backdropFilter: "blur(12px)",
-  border: "1px solid #1C1F33",
+  border: "1px solid rgba(148,163,184,0.15)",
   borderRadius: 8,
+  boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
 };
 
-const INPUT_STYLE: React.CSSProperties = {
-  border: "1px solid #1C1F33",
+const INPUT_STYLE: CSSProperties = {
+  border: "1px solid rgba(148,163,184,0.2)",
   borderRadius: 6,
   padding: "9px 13px",
   fontSize: 14,
   color: "#EEF0F8",
-  background: "rgba(19,21,36,1)",
+  background: "rgba(15,23,42,0.95)",
   outline: "none",
   boxSizing: "border-box",
   height: 40,
+  fontFamily: "'Inter', 'Geist', system-ui, sans-serif",
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatDate(ts: bigint): string {
+  if (ts === 0n) return "—";
+  if (Number.isNaN(Number(ts))) return "—";
   const ms = Number(ts) / 1_000_000;
   const d = new Date(ms);
   if (Number.isNaN(d.getTime())) return "—";
@@ -107,10 +107,7 @@ function formatDate(ts: bigint): string {
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 // Maps backend source values to display labels and badge colors
-const SOURCE_CONFIG: Record<
-  string,
-  { label: string; style: React.CSSProperties }
-> = {
+const SOURCE_CONFIG: Record<string, { label: string; style: CSSProperties }> = {
   Customer: {
     label: "PURCHASE",
     style: {
@@ -206,7 +203,7 @@ function MilestoneDropdown({
 
   const colors = milestone > 0 ? MILESTONE_COLORS[milestone] : null;
 
-  async function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+  async function handleChange(e: ChangeEvent<HTMLSelectElement>) {
     const newMilestone = Number(e.target.value);
     if (newMilestone <= milestone) return; // only advancing allowed
     const prevMilestone = milestone;
@@ -803,7 +800,7 @@ function ResendEmailModal({
 }: {
   clientName: string;
   clientId: string;
-  actor: unknown;
+  actor: backendInterface;
   onClose: () => void;
   onToast: (msg: string, type: "success" | "error") => void;
 }) {
@@ -813,7 +810,7 @@ function ResendEmailModal({
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    (actor as backendInterface)
+    actor
       .getEmailTemplates()
       .then((tpls) => {
         setTemplates(tpls);
@@ -835,15 +832,7 @@ function ResendEmailModal({
     if (!selectedKey) return;
     setSending(true);
     try {
-      const ok = await (
-        actor as {
-          resendEmail(
-            adminEmail: string,
-            id: string,
-            key: string,
-          ): Promise<boolean>;
-        }
-      ).resendEmail(getAdminEmail(), clientId, selectedKey);
+      const ok = await actor.resendEmail(clientId, selectedKey);
       if (ok) {
         onToast("Email sent successfully", "success");
         onClose();
@@ -1213,8 +1202,9 @@ export default function AdminClientsPage() {
   useEffect(() => {
     if (!actor || isFetching) return;
     function fetchUnreadCounts() {
+      if (document.visibilityState !== "visible") return;
       (actor as backendInterface)
-        .getUnreadMessageCounts("vincenzo@imperidome.com")
+        .getUnreadMessageCounts()
         .then((pairs) => {
           const map: Record<string, number> = {};
           for (const [email, count] of pairs) {
@@ -1237,7 +1227,7 @@ export default function AdminClientsPage() {
     setLoading(true);
     setError(null);
     (actor as backendInterface)
-      .getClients(getAdminEmail())
+      .getClients()
       .then((data) => setClients(data))
       .catch(() => setError("Failed to load clients. Please refresh."))
       .finally(() => setLoading(false));
@@ -1246,7 +1236,6 @@ export default function AdminClientsPage() {
   async function handleMilestoneChange(clientId: string, newMilestone: number) {
     if (!actor) throw new Error("Actor not ready");
     const result = (await (actor as backendInterface).updateClientMilestone(
-      getAdminEmail(),
       clientId,
       BigInt(newMilestone),
     )) as { ok: null } | { err: string };
@@ -1269,9 +1258,15 @@ export default function AdminClientsPage() {
     if (!actor) return;
     setDeleting(true);
     try {
-      await (actor as backendInterface).deleteClient(getAdminEmail(), clientId);
-      setClients((prev) => prev.filter((c) => c.id !== clientId));
-      setDeleteConfirmId(null);
+      const result = await (actor as backendInterface).deleteClient(clientId);
+      if ("ok" in result) {
+        setClients((prev) => prev.filter((c) => c.id !== clientId));
+        setDeleteConfirmId(null);
+        showToast("Client deleted successfully", "success");
+      } else {
+        const errMsg = "err" in result ? String(result.err) : "Unknown error";
+        showToast(`Delete failed: ${errMsg}`, "error");
+      }
     } catch {
       showToast("Failed to delete client. Please try again.", "error");
     } finally {
@@ -1445,7 +1440,7 @@ export default function AdminClientsPage() {
             padding: "0",
             overflowX: "auto",
             WebkitOverflowScrolling:
-              "touch" as React.CSSProperties["WebkitOverflowScrolling"],
+              "touch" as CSSProperties["WebkitOverflowScrolling"],
           }}
         >
           <table
@@ -1465,12 +1460,13 @@ export default function AdminClientsPage() {
                       padding: "12px 14px",
                       fontSize: 11,
                       fontWeight: 700,
-                      color: "#7A7D90",
+                      color: "#5EF08A",
                       textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                      borderBottom: "1px solid #1C1F33",
+                      letterSpacing: "0.08em",
+                      borderBottom: "1px solid rgba(94,240,138,0.2)",
                       whiteSpace: "nowrap",
-                      background: "rgba(14,16,32,0.6)",
+                      background: "rgba(7,8,16,0.95)",
+                      fontFamily: "'Courier New', Courier, monospace",
                     }}
                   >
                     {col}
@@ -1563,6 +1559,9 @@ export default function AdminClientsPage() {
                     onMilestoneChange={handleMilestoneChange}
                     onDeleteRequest={() => setDeleteConfirmId(client.id)}
                     onResendEmail={() => setResendClient(client)}
+                    onViewPortal={() => {
+                      setPortalClient(client);
+                    }}
                   />
                 ))
               )}
@@ -1735,7 +1734,7 @@ export default function AdminClientsPage() {
         <ResendEmailModal
           clientName={resendClient.name}
           clientId={resendClient.id}
-          actor={actor}
+          actor={actor as backendInterface}
           onClose={() => setResendClient(null)}
           onToast={showToast}
         />
@@ -1756,6 +1755,7 @@ function ClientRow({
   onMilestoneChange,
   onDeleteRequest,
   onResendEmail,
+  onViewPortal,
 }: {
   client: CrmClientWithMilestone;
   index: number;
@@ -1763,6 +1763,7 @@ function ClientRow({
   onMilestoneChange: (id: string, milestone: number) => Promise<void>;
   onDeleteRequest: () => void;
   onResendEmail: () => void;
+  onViewPortal: () => void;
 }) {
   const navigate = useNavigate();
   const services =
@@ -1891,7 +1892,7 @@ function ClientRow({
           <button
             type="button"
             data-ocid={`clients.view_portal.button.${index + 1}`}
-            onClick={() => window.open("/portal/dashboard", "_blank")}
+            onClick={onViewPortal}
             aria-label={`View portal for ${client.name}`}
             style={{
               display: "inline-flex",

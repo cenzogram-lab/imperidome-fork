@@ -1,9 +1,10 @@
 import { ExternalLink, Globe, Pencil, Plus, Trash2, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, FormEvent } from "react";
 import type { backendInterface } from "../../backend.d";
 import type { Build as BuildBase } from "../../backend.d";
+import TypewriterText from "../../components/TypewriterText";
 import { useActor } from "../../hooks/useActor";
-import { getSession } from "../../hooks/useSession";
 import AdminLayout from "./AdminLayout";
 
 // Extend the base Build type to include new optional fields
@@ -13,21 +14,16 @@ type Build = BuildBase & {
   thumbnailUrl?: string;
 };
 
-function getAdminEmail(): string {
-  const s = getSession();
-  return s?.email ?? localStorage.getItem("imperidome_admin_email") ?? "";
-}
-
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
-const DARK_CARD: React.CSSProperties = {
+const DARK_CARD: CSSProperties = {
   background: "rgba(17,19,34,0.85)",
   backdropFilter: "blur(12px)",
   border: "1px solid #1C1F33",
   borderRadius: "10px",
 };
 
-const INPUT_STYLE: React.CSSProperties = {
+const INPUT_STYLE: CSSProperties = {
   border: "1px solid #1C1F33",
   borderRadius: 6,
   padding: "10px 14px",
@@ -39,7 +35,7 @@ const INPUT_STYLE: React.CSSProperties = {
   width: "100%",
 };
 
-const LABEL_STYLE: React.CSSProperties = {
+const LABEL_STYLE: CSSProperties = {
   display: "block",
   color: "#7A7D90",
   fontSize: 12,
@@ -53,22 +49,11 @@ const NEON = "#00FFA3";
 const MUTED = "#7A7D90";
 const TEXT = "#EEF0F8";
 
-const CATEGORY_SUGGESTIONS = [
-  "E-commerce",
-  "SaaS",
-  "Landing Page",
-  "Branding",
-  "Portfolio",
-  "Consulting",
-  "Healthcare",
-  "Real Estate",
-  "Restaurant",
-  "Education",
-];
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatDate(ts: bigint): string {
+  if (ts === 0n) return "—";
+  if (Number.isNaN(Number(ts))) return "—";
   const ms = Number(ts) / 1_000_000;
   const d = new Date(ms);
   if (Number.isNaN(d.getTime())) return "—";
@@ -315,6 +300,7 @@ function EditBuildModal({
   onSave,
   onCancel,
   saving,
+  categorySuggestions,
 }: {
   build: Build;
   onSave: (
@@ -327,6 +313,7 @@ function EditBuildModal({
   ) => void;
   onCancel: () => void;
   saving: boolean;
+  categorySuggestions: string[];
 }) {
   const [editName, setEditName] = useState(build.clientName);
   const [editUrl, setEditUrl] = useState(build.siteUrl);
@@ -350,7 +337,7 @@ function EditBuildModal({
     return null;
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const err = validateUrl(editUrl);
     setUrlErr(err);
@@ -562,8 +549,8 @@ function EditBuildModal({
                 style={INPUT_STYLE}
               />
               <datalist id="edit-category-suggestions">
-                {CATEGORY_SUGGESTIONS.map((s) => (
-                  <option key={s} value={s} />
+                {categorySuggestions.map((cat) => (
+                  <option key={cat} value={cat} />
                 ))}
               </datalist>
             </div>
@@ -660,10 +647,16 @@ function EditBuildModal({
 export default function AdminBuildsPage() {
   const { actor, isFetching } = useActor();
   const [builds, setBuilds] = useState<Build[]>([]);
+  const categorySuggestions = useMemo(
+    () =>
+      [
+        ...new Set(builds.map((b) => b.category).filter(Boolean)),
+      ].sort() as string[],
+    [builds],
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Add form state
   const [clientName, setClientName] = useState("");
   const [siteUrl, setSiteUrl] = useState("");
   const [newDescription, setNewDescription] = useState("");
@@ -672,16 +665,13 @@ export default function AdminBuildsPage() {
   const [urlError, setUrlError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
 
-  // Edit state
   const [editingBuild, setEditingBuild] = useState<Build | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Delete state
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteName, setDeleteName] = useState("");
   const [deleting, setDeleting] = useState(false);
 
-  // Toasts
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const toastCounter = useRef(0);
 
@@ -698,16 +688,20 @@ export default function AdminBuildsPage() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }
 
-  // Load builds on mount
-  useEffect(() => {
+  function fetchBuilds() {
     if (!actor || isFetching) return;
     setLoading(true);
     setError(null);
     actor
-      .getBuilds(getAdminEmail())
+      .getBuilds()
       .then((data) => setBuilds(data as Build[]))
       .catch(() => setError("Failed to load builds. Please refresh."))
       .finally(() => setLoading(false));
+  }
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: fetchBuilds captures actor+isFetching internally; only actor/isFetching changes should re-trigger this mount effect
+  useEffect(() => {
+    fetchBuilds();
   }, [actor, isFetching]);
 
   function validateUrl(url: string): string | null {
@@ -717,7 +711,7 @@ export default function AdminBuildsPage() {
     return null;
   }
 
-  async function handleAdd(e: React.FormEvent) {
+  async function handleAdd(e: FormEvent) {
     e.preventDefault();
     const urlErr = validateUrl(siteUrl);
     setUrlError(urlErr);
@@ -730,17 +724,19 @@ export default function AdminBuildsPage() {
       const descArg = newDescription.trim() ? newDescription.trim() : null;
       const catArg = newCategory.trim() ? newCategory.trim() : null;
       const thumbArg = newThumbnailUrl.trim() ? newThumbnailUrl.trim() : null;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (actor as backendInterface).addBuild(
-        getAdminEmail(),
         clientName.trim(),
         siteUrl.trim(),
         descArg,
         catArg,
         thumbArg,
       );
-      if ("ok" in result) {
-        setBuilds((prev) => [result.ok as Build, ...prev]);
+      if ("ok" in result || "okAlreadyAdvanced" in result) {
+        if ("ok" in result && result.ok != null) {
+          setBuilds((prev) => [result.ok as Build, ...prev]);
+        } else if ("okAlreadyAdvanced" in result) {
+          fetchBuilds();
+        }
         setClientName("");
         setSiteUrl("");
         setNewDescription("");
@@ -772,9 +768,7 @@ export default function AdminBuildsPage() {
       const descArg = updatedDesc.trim() ? updatedDesc.trim() : null;
       const catArg = updatedCat.trim() ? updatedCat.trim() : null;
       const thumbArg = updatedThumb.trim() ? updatedThumb.trim() : null;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (actor as backendInterface).editBuild(
-        getAdminEmail(),
         id,
         updatedName,
         updatedUrl,
@@ -782,10 +776,12 @@ export default function AdminBuildsPage() {
         catArg,
         thumbArg,
       );
-      if ("ok" in result) {
-        setBuilds((prev) =>
-          prev.map((b) => (b.id === id ? (result.ok as Build) : b)),
-        );
+      if ("ok" in result || "okAlreadyAdvanced" in result) {
+        if ("ok" in result && result.ok != null) {
+          setBuilds((prev) =>
+            prev.map((b) => (b.id === id ? (result.ok as Build) : b)),
+          );
+        }
         setEditingBuild(null);
         showToast("Build updated successfully.", "success");
       } else {
@@ -802,8 +798,8 @@ export default function AdminBuildsPage() {
     if (!actor || !deleteId) return;
     setDeleting(true);
     try {
-      const result = await actor.deleteBuild(getAdminEmail(), deleteId);
-      if ("ok" in result) {
+      const result = await actor.deleteBuild(deleteId);
+      if ("ok" in result || "okAlreadyAdvanced" in result) {
         setBuilds((prev) => prev.filter((b) => b.id !== deleteId));
         showToast("Build removed.", "success");
       } else {
@@ -821,7 +817,7 @@ export default function AdminBuildsPage() {
   return (
     <AdminLayout pageTitle="Builds">
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-        {/* ── Header ── */}
+        {/* Header */}
         <div
           style={{
             display: "flex",
@@ -833,43 +829,69 @@ export default function AdminBuildsPage() {
         >
           <div>
             <h2
-              style={{
-                color: TEXT,
-                fontWeight: 800,
-                fontSize: 22,
-                margin: 0,
-              }}
+              className="matrix-heading"
+              style={{ fontWeight: 800, fontSize: 22, margin: 0 }}
             >
-              Client Builds
+              <TypewriterText text="Client Builds" speed={40} />
             </h2>
-            <p style={{ color: MUTED, fontSize: 12, margin: "4px 0 0" }}>
+            <p
+              className="matrix-muted"
+              style={{ fontSize: 12, margin: "4px 0 0" }}
+            >
               Manage your clients' live site URLs. These entries power the Total
               Websites count on the dashboard.
             </p>
           </div>
-          {!loading && (
-            <span
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexShrink: 0,
+            }}
+          >
+            {!loading && (
+              <span
+                style={{
+                  background: "rgba(94,240,138,0.08)",
+                  border: "1px solid rgba(94,240,138,0.2)",
+                  color: NEON,
+                  borderRadius: 6,
+                  padding: "4px 14px",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  fontFamily: "'Courier New', monospace",
+                }}
+              >
+                {builds.length} {builds.length === 1 ? "build" : "builds"}
+              </span>
+            )}
+            <button
+              type="button"
+              data-ocid="builds.refresh_button"
+              onClick={fetchBuilds}
               style={{
-                background: "rgba(0,255,163,0.08)",
-                border: "1px solid rgba(0,255,163,0.2)",
+                background: "rgba(94,240,138,0.08)",
+                border: "1px solid rgba(94,240,138,0.2)",
                 color: NEON,
                 borderRadius: 6,
                 padding: "4px 14px",
                 fontSize: 13,
                 fontWeight: 700,
-                flexShrink: 0,
+                fontFamily: "'Courier New', monospace",
+                cursor: "pointer",
               }}
             >
-              {builds.length} {builds.length === 1 ? "build" : "builds"}
-            </span>
-          )}
+              Refresh
+            </button>
+          </div>
         </div>
 
-        {/* ── Add Build Form ── */}
+        {/* Add Build Form */}
         <div data-ocid="builds.add_form" style={{ ...DARK_CARD, padding: 20 }}>
           <h3
+            className="matrix-heading"
             style={{
-              color: TEXT,
               fontWeight: 700,
               fontSize: 15,
               margin: "0 0 16px",
@@ -878,8 +900,8 @@ export default function AdminBuildsPage() {
               gap: 8,
             }}
           >
-            <Plus size={15} color={NEON} />
-            Add New Build
+            <Plus size={15} color="#5EF08A" />
+            <TypewriterText text="Add New Build" speed={40} />
           </h3>
           <form onSubmit={handleAdd}>
             <div
@@ -890,7 +912,6 @@ export default function AdminBuildsPage() {
                 marginBottom: 16,
               }}
             >
-              {/* Client Name */}
               <div>
                 <label htmlFor="build-client-name" style={LABEL_STYLE}>
                   Client Name
@@ -906,8 +927,6 @@ export default function AdminBuildsPage() {
                   style={INPUT_STYLE}
                 />
               </div>
-
-              {/* Site URL */}
               <div>
                 <label htmlFor="build-site-url" style={LABEL_STYLE}>
                   Site URL
@@ -926,7 +945,9 @@ export default function AdminBuildsPage() {
                   required
                   style={{
                     ...INPUT_STYLE,
-                    borderColor: urlError ? "rgba(239,68,68,0.5)" : "#1C1F33",
+                    borderColor: urlError
+                      ? "rgba(239,68,68,0.5)"
+                      : "rgba(94,240,138,0.25)",
                   }}
                 />
                 {urlError && (
@@ -942,8 +963,6 @@ export default function AdminBuildsPage() {
                   </p>
                 )}
               </div>
-
-              {/* Short Description */}
               <div>
                 <label htmlFor="build-description" style={LABEL_STYLE}>
                   Short Description{" "}
@@ -968,8 +987,6 @@ export default function AdminBuildsPage() {
                   style={INPUT_STYLE}
                 />
               </div>
-
-              {/* Category */}
               <div>
                 <label htmlFor="build-category" style={LABEL_STYLE}>
                   Category{" "}
@@ -991,17 +1008,15 @@ export default function AdminBuildsPage() {
                   list="add-category-suggestions"
                   value={newCategory}
                   onChange={(e) => setNewCategory(e.target.value)}
-                  placeholder="e.g. E-commerce, SaaS, Landing Page, Branding, Portfolio"
+                  placeholder="e.g. E-commerce, SaaS, Landing Page"
                   style={INPUT_STYLE}
                 />
                 <datalist id="add-category-suggestions">
-                  {CATEGORY_SUGGESTIONS.map((s) => (
-                    <option key={s} value={s} />
+                  {categorySuggestions.map((cat) => (
+                    <option key={cat} value={cat} />
                   ))}
                 </datalist>
               </div>
-
-              {/* Thumbnail Image URL */}
               <div>
                 <label htmlFor="build-thumbnail-url" style={LABEL_STYLE}>
                   Thumbnail Image URL{" "}
@@ -1032,17 +1047,11 @@ export default function AdminBuildsPage() {
               type="submit"
               data-ocid="builds.add.submit_button"
               disabled={adding || !clientName.trim() || !siteUrl.trim()}
+              className="matrix-btn"
               style={{
-                background:
-                  adding || !clientName.trim() || !siteUrl.trim()
-                    ? "rgba(0,255,163,0.2)"
-                    : "rgba(0,255,163,0.9)",
-                color:
-                  adding || !clientName.trim() || !siteUrl.trim()
-                    ? "rgba(0,80,50,0.8)"
-                    : "#061209",
-                border: "none",
-                borderRadius: 7,
+                display: "flex",
+                alignItems: "center",
+                gap: 7,
                 padding: "10px 24px",
                 fontSize: 13,
                 fontWeight: 700,
@@ -1050,10 +1059,8 @@ export default function AdminBuildsPage() {
                   adding || !clientName.trim() || !siteUrl.trim()
                     ? "not-allowed"
                     : "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 7,
-                transition: "background 0.15s",
+                opacity:
+                  adding || !clientName.trim() || !siteUrl.trim() ? 0.5 : 1,
               }}
             >
               <Plus size={14} />
@@ -1062,7 +1069,7 @@ export default function AdminBuildsPage() {
           </form>
         </div>
 
-        {/* ── Error ── */}
+        {/* Error */}
         {error && (
           <div
             data-ocid="builds.error_state"
@@ -1079,17 +1086,13 @@ export default function AdminBuildsPage() {
           </div>
         )}
 
-        {/* ── Builds Table ── */}
+        {/* Builds Table */}
         <div
           data-ocid="builds.table"
           style={{ ...DARK_CARD, padding: 0, overflowX: "auto" }}
         >
           <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              minWidth: 500,
-            }}
+            style={{ width: "100%", borderCollapse: "collapse", minWidth: 500 }}
           >
             <thead>
               <tr>
@@ -1107,12 +1110,13 @@ export default function AdminBuildsPage() {
                       padding: "12px 16px",
                       fontSize: 11,
                       fontWeight: 700,
-                      color: MUTED,
+                      color: "rgba(94,240,138,0.7)",
                       textTransform: "uppercase",
                       letterSpacing: "0.06em",
-                      borderBottom: "1px solid #1C1F33",
+                      borderBottom: "1px solid rgba(94,240,138,0.15)",
                       whiteSpace: "nowrap",
-                      background: "rgba(14,16,32,0.6)",
+                      background: "rgba(0,0,0,0.3)",
+                      fontFamily: "'Courier New', monospace",
                     }}
                   >
                     {col}
@@ -1123,14 +1127,17 @@ export default function AdminBuildsPage() {
             <tbody>
               {loading ? (
                 ["a", "b", "c"].map((k) => (
-                  <tr key={k} style={{ borderBottom: "1px solid #1C1F33" }}>
+                  <tr
+                    key={k}
+                    style={{ borderBottom: "1px solid rgba(94,240,138,0.08)" }}
+                  >
                     {[1, 2, 3, 4, 5].map((i) => (
                       <td key={i} style={{ padding: "14px 16px" }}>
                         <div
                           style={{
                             height: 13,
                             width: i === 5 ? 60 : "70%",
-                            background: "rgba(255,255,255,0.05)",
+                            background: "rgba(94,240,138,0.05)",
                             borderRadius: 4,
                             animation: "pulse 1.5s ease-in-out infinite",
                           }}
@@ -1159,8 +1166,8 @@ export default function AdminBuildsPage() {
                           width: 48,
                           height: 48,
                           borderRadius: "50%",
-                          background: "rgba(0,255,163,0.07)",
-                          border: "1px solid rgba(0,255,163,0.2)",
+                          background: "rgba(94,240,138,0.07)",
+                          border: "1px solid rgba(94,240,138,0.2)",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -1170,21 +1177,18 @@ export default function AdminBuildsPage() {
                       </div>
                       <p
                         style={{
-                          color: TEXT,
+                          color: "#5EF08A",
                           fontWeight: 600,
                           fontSize: 15,
                           margin: 0,
+                          fontFamily: "'Courier New', monospace",
                         }}
                       >
                         No builds yet
                       </p>
                       <p
-                        style={{
-                          color: MUTED,
-                          fontSize: 13,
-                          margin: 0,
-                          maxWidth: 300,
-                        }}
+                        className="matrix-muted"
+                        style={{ fontSize: 13, margin: 0, maxWidth: 300 }}
                       >
                         Add your first client build above by entering a client
                         name and their live site URL.
@@ -1198,11 +1202,10 @@ export default function AdminBuildsPage() {
                     key={build.id}
                     data-ocid={`builds.item.${idx + 1}`}
                     style={{
-                      borderBottom: "1px solid #1C1F33",
+                      borderBottom: "1px solid rgba(94,240,138,0.08)",
                       transition: "background 0.12s",
                     }}
                   >
-                    {/* Client Name + Description */}
                     <td
                       style={{
                         padding: "14px 16px",
@@ -1224,8 +1227,8 @@ export default function AdminBuildsPage() {
                             width: 30,
                             height: 30,
                             borderRadius: "50%",
-                            background: "rgba(0,255,163,0.1)",
-                            border: "1px solid rgba(0,255,163,0.25)",
+                            background: "rgba(94,240,138,0.1)",
+                            border: "1px solid rgba(94,240,138,0.25)",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -1251,9 +1254,9 @@ export default function AdminBuildsPage() {
                           </span>
                           {build.description && (
                             <span
+                              className="matrix-muted"
                               style={{
                                 display: "block",
-                                color: MUTED,
                                 fontSize: 11,
                                 fontWeight: 400,
                                 marginTop: 2,
@@ -1269,37 +1272,15 @@ export default function AdminBuildsPage() {
                         </div>
                       </div>
                     </td>
-
-                    {/* Category badge */}
                     <td style={{ padding: "14px 16px", whiteSpace: "nowrap" }}>
                       {build.category ? (
-                        <span
-                          style={{
-                            background: "rgba(0,255,163,0.08)",
-                            border: "1px solid rgba(0,255,163,0.2)",
-                            color: NEON,
-                            borderRadius: 5,
-                            padding: "3px 10px",
-                            fontSize: 11,
-                            fontWeight: 700,
-                            letterSpacing: "0.03em",
-                          }}
-                        >
-                          {build.category}
-                        </span>
+                        <span className="matrix-badge">{build.category}</span>
                       ) : (
-                        <span
-                          style={{
-                            color: "rgba(122,125,144,0.4)",
-                            fontSize: 12,
-                          }}
-                        >
+                        <span className="matrix-muted" style={{ fontSize: 12 }}>
                           —
                         </span>
                       )}
                     </td>
-
-                    {/* Site URL */}
                     <td style={{ padding: "14px 16px" }}>
                       <a
                         href={build.siteUrl}
@@ -1324,20 +1305,16 @@ export default function AdminBuildsPage() {
                         {build.siteUrl}
                       </a>
                     </td>
-
-                    {/* Date Added */}
                     <td
+                      className="matrix-muted"
                       style={{
                         padding: "14px 16px",
-                        color: MUTED,
                         fontSize: 13,
                         whiteSpace: "nowrap",
                       }}
                     >
                       {formatDate(build.addedAt)}
                     </td>
-
-                    {/* Actions: Edit + Delete */}
                     <td style={{ padding: "14px 16px" }}>
                       <div
                         style={{
@@ -1350,19 +1327,14 @@ export default function AdminBuildsPage() {
                           type="button"
                           data-ocid={`builds.edit_button.${idx + 1}`}
                           onClick={() => setEditingBuild(build)}
+                          className="matrix-btn"
                           style={{
-                            background: "rgba(0,255,163,0.07)",
-                            border: "1px solid rgba(0,255,163,0.2)",
-                            borderRadius: 6,
-                            color: NEON,
                             padding: "6px 12px",
                             fontSize: 12,
                             fontWeight: 600,
-                            cursor: "pointer",
                             display: "flex",
                             alignItems: "center",
                             gap: 5,
-                            transition: "background 0.15s",
                           }}
                         >
                           <Pencil size={11} />
@@ -1403,17 +1375,16 @@ export default function AdminBuildsPage() {
         </div>
       </div>
 
-      {/* ── Edit Build Modal ── */}
       {editingBuild && (
         <EditBuildModal
           build={editingBuild}
           onSave={handleSaveEdit}
           onCancel={() => setEditingBuild(null)}
           saving={saving}
+          categorySuggestions={categorySuggestions}
         />
       )}
 
-      {/* ── Delete Confirm Modal ── */}
       {deleteId && (
         <DeleteConfirmModal
           buildName={deleteName}

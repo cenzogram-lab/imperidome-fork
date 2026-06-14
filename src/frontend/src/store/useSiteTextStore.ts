@@ -2,14 +2,13 @@ import { create } from "zustand";
 import { getSession } from "../hooks/useSession";
 
 const EDIT_MODE_KEY = "imperidome_edit_mode_enabled";
-const SUPER_ADMIN_EMAIL = "vincenzo@imperidome.com";
 const BROADCAST_CHANNEL_NAME = "sitetext-invalidate";
 const PERIODIC_REFETCH_INTERVAL_MS = 30_000;
 
 function readPersistedEditMode(): boolean {
   try {
     const session = getSession();
-    if (session?.email !== SUPER_ADMIN_EMAIL) return false;
+    if (session?.role !== "admin") return false;
     return localStorage.getItem(EDIT_MODE_KEY) === "true";
   } catch {
     return false;

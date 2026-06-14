@@ -2,254 +2,420 @@ import { Lock } from "lucide-react";
 import React from "react";
 import { EditableText } from "../components/EditableText";
 import { Footer } from "../components/Footer";
+import { Navbar } from "../components/Navbar";
+import TypewriterText from "../components/TypewriterText";
+
+const _SECTIONS = [
+  {
+    num: "01.",
+    textKey: "privacy.section_1.heading",
+    defaultText: "Information We Collect",
+    bodyKey: "privacy.section_1",
+    items: [
+      {
+        label: "privacy.section_1.item_1.label",
+        labelDefault: "Account Data:",
+        body: "privacy.section_1.item_1.body",
+        bodyDefault:
+          "Name, email address, phone number, and business details provided during onboarding.",
+      },
+      {
+        label: "privacy.section_1.item_2.label",
+        labelDefault: "Payment Information:",
+        body: "privacy.section_1.item_2.body",
+        bodyDefault:
+          "Processed securely via Stripe. Imperidome does not store full credit card numbers on our servers.",
+      },
+      {
+        label: "privacy.section_1.item_3.label",
+        labelDefault: "AI Training Data:",
+        body: "privacy.section_1.item_3.body",
+        bodyDefault:
+          "Voice samples (if opting for voice cloning), FAQs, and business scripts provided to train your AI Receptionist.",
+      },
+      {
+        label: "privacy.section_1.item_4.label",
+        labelDefault: "Media Assets:",
+        body: "privacy.section_1.item_4.body",
+        bodyDefault:
+          "Logos, brand images, and video files uploaded for Cinematic Ad production.",
+      },
+    ],
+    intro: "privacy.section_1.intro",
+    introDefault:
+      "We collect information you provide directly to us when you use our platform, including:",
+  },
+];
 
 export default function PrivacyPage() {
   return (
     <>
-      <div className="min-h-screen bg-[#0A0B14] text-gray-300 font-sans pb-32 pt-20">
-        <div className="max-w-4xl mx-auto px-6">
+      <div
+        className="bg-background"
+        style={{
+          minHeight: "100vh",
+          paddingBottom: "128px",
+          paddingTop: "80px",
+        }}
+      >
+        <Navbar />
+        <div className="h-[68px]" aria-hidden="true" />
+        <div style={{ maxWidth: "900px", margin: "0 auto", padding: "0 24px" }}>
           {/* HEADER */}
-          <div className="mb-16 text-center border-b border-[#1C1F33] pb-12">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#5EF08A]/10 border border-[#5EF08A]/30 text-[#5EF08A] text-xs font-bold tracking-widest uppercase mb-6">
+          <div
+            style={{
+              marginBottom: "64px",
+              textAlign: "center",
+              borderBottom: "1px solid rgba(34,197,94,0.12)",
+              paddingBottom: "48px",
+            }}
+          >
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "4px 12px",
+                borderRadius: "999px",
+                background: "rgba(34,197,94,0.08)",
+                border: "1px solid rgba(34,197,94,0.25)",
+                color: "#22C55E",
+                fontSize: "11px",
+                fontWeight: 700,
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                marginBottom: "24px",
+              }}
+            >
               <Lock className="w-4 h-4" />
-              <EditableText
-                textKey="privacy.header.badge"
-                defaultText="Data Protection"
-              />
+              <TypewriterText text="Data Protection" speed={30} />
             </div>
-            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-6 text-white">
+            <h1
+              className="text-white font-bold"
+              style={{
+                fontSize: "clamp(32px,5vw,48px)",
+                fontWeight: 800,
+                letterSpacing: "-0.02em",
+                marginBottom: "20px",
+                lineHeight: 1.1,
+              }}
+            >
               <EditableText
                 textKey="privacy.hero.heading_prefix"
                 defaultText="Imperidome"
               />{" "}
-              <span className="text-[#5EF08A]">
-                <EditableText
-                  textKey="privacy.hero.heading_accent"
-                  defaultText="Privacy Policy"
-                />
+              <span style={{ color: "#22C55E" }}>
+                <TypewriterText text="Privacy Policy" speed={40} />
+                <span className="blink-cursor" />
               </span>
             </h1>
-            <p className="text-xl text-gray-400">
-              <EditableText
-                textKey="privacy.hero.subtext"
-                defaultText="How we collect, use, and protect your data."
+            <p
+              className="text-slate-200"
+              style={{
+                fontSize: "18px",
+                maxWidth: "520px",
+                margin: "0 auto 16px",
+              }}
+            >
+              <TypewriterText
+                text="How we collect, use, and protect your data."
+                speed={20}
               />
             </p>
-            <p className="text-xs text-gray-500 mt-4 font-bold uppercase tracking-widest">
-              <EditableText
-                textKey="privacy.hero.effective_date"
-                defaultText="Effective Date: January 1, 2025"
+            <p
+              className="text-slate-400"
+              style={{
+                fontSize: "11px",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+              }}
+            >
+              <TypewriterText
+                text="Effective Date: January 1, 2025"
+                speed={20}
               />
             </p>
           </div>
 
-          {/* CONTENT STYLED AS PROSE */}
-          <div className="space-y-10 text-sm md:text-base leading-relaxed text-gray-300">
-            <section>
-              <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-                <span className="text-[#5EF08A]">01.</span>
-                <EditableText
-                  textKey="privacy.section_1.heading"
-                  defaultText="Information We Collect"
-                />
+          {/* CONTENT */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "40px",
+              fontSize: "15px",
+              lineHeight: 1.75,
+            }}
+          >
+            {/* Section 1 */}
+            <section
+              className="bg-slate-800 border border-slate-700 rounded-xl"
+              style={{ padding: "32px" }}
+            >
+              <h2
+                className="text-white font-bold"
+                style={{
+                  fontSize: "20px",
+                  fontWeight: 700,
+                  marginBottom: "16px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                }}
+              >
+                <span style={{ color: "#22C55E" }}>01.</span>
+                <TypewriterText text="Information We Collect" speed={30} />
               </h2>
-              <p>
-                <EditableText
-                  textKey="privacy.section_1.intro"
-                  defaultText="We collect information you provide directly to us when you use our platform, including:"
+              <p className="text-slate-200" style={{ marginBottom: "12px" }}>
+                <TypewriterText
+                  text="We collect information you provide directly to us when you use our platform, including:"
+                  speed={15}
                 />
               </p>
-              <ul className="list-disc pl-6 mt-3 space-y-2">
-                <li>
-                  <strong className="text-white">
-                    <EditableText
-                      textKey="privacy.section_1.item_1.label"
-                      defaultText="Account Data:"
-                    />
-                  </strong>{" "}
-                  <EditableText
-                    textKey="privacy.section_1.item_1.body"
-                    defaultText="Name, email address, phone number, and business details provided during onboarding."
-                  />
-                </li>
-                <li>
-                  <strong className="text-white">
-                    <EditableText
-                      textKey="privacy.section_1.item_2.label"
-                      defaultText="Payment Information:"
-                    />
-                  </strong>{" "}
-                  <EditableText
-                    textKey="privacy.section_1.item_2.body"
-                    defaultText="Processed securely via Stripe. Imperidome does not store full credit card numbers on our servers."
-                  />
-                </li>
-                <li>
-                  <strong className="text-white">
-                    <EditableText
-                      textKey="privacy.section_1.item_3.label"
-                      defaultText="AI Training Data:"
-                    />
-                  </strong>{" "}
-                  <EditableText
-                    textKey="privacy.section_1.item_3.body"
-                    defaultText="Voice samples (if opting for voice cloning), FAQs, and business scripts provided to train your AI Receptionist."
-                  />
-                </li>
-                <li>
-                  <strong className="text-white">
-                    <EditableText
-                      textKey="privacy.section_1.item_4.label"
-                      defaultText="Media Assets:"
-                    />
-                  </strong>{" "}
-                  <EditableText
-                    textKey="privacy.section_1.item_4.body"
-                    defaultText="Logos, brand images, and video files uploaded for Cinematic Ad production."
-                  />
-                </li>
+              <ul
+                style={{
+                  listStyle: "none",
+                  padding: 0,
+                  margin: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                }}
+              >
+                {[
+                  {
+                    lbl: "Account Data:",
+                    body: "Name, email address, phone number, and business details provided during onboarding.",
+                  },
+                  {
+                    lbl: "Payment Information:",
+                    body: "Processed securely via Stripe. Imperidome does not store full credit card numbers on our servers.",
+                  },
+                  {
+                    lbl: "AI Training Data:",
+                    body: "Voice samples (if opting for voice cloning), FAQs, and business scripts provided to train your AI Receptionist.",
+                  },
+                  {
+                    lbl: "Media Assets:",
+                    body: "Logos, brand images, and video files uploaded for Cinematic Ad production.",
+                  },
+                ].map(({ lbl, body }) => (
+                  <li
+                    key={lbl}
+                    style={{
+                      display: "flex",
+                      gap: "8px",
+                      alignItems: "flex-start",
+                    }}
+                  >
+                    <span style={{ color: "#22C55E", flexShrink: 0 }}>▸</span>
+                    <span className="text-slate-200">
+                      <strong style={{ color: "#22C55E" }}>{lbl}</strong>{" "}
+                      <TypewriterText text={body} speed={12} />
+                    </span>
+                  </li>
+                ))}
               </ul>
             </section>
 
-            <section>
-              <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-                <span className="text-[#5EF08A]">02.</span>
-                <EditableText
-                  textKey="privacy.section_2.heading"
-                  defaultText="How We Use Your Data"
-                />
+            {/* Section 2 */}
+            <section
+              className="bg-slate-800 border border-slate-700 rounded-xl"
+              style={{ padding: "32px" }}
+            >
+              <h2
+                className="text-white font-bold"
+                style={{
+                  fontSize: "20px",
+                  fontWeight: 700,
+                  marginBottom: "16px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                }}
+              >
+                <span style={{ color: "#22C55E" }}>02.</span>
+                <TypewriterText text="How We Use Your Data" speed={30} />
               </h2>
-              <p>
-                <EditableText
-                  textKey="privacy.section_2.intro"
-                  defaultText="We use the data we collect solely to provide, maintain, and improve our services to you:"
+              <p className="text-slate-200" style={{ marginBottom: "12px" }}>
+                <TypewriterText
+                  text="We use the data we collect solely to provide, maintain, and improve our services to you:"
+                  speed={15}
                 />
               </p>
-              <ul className="list-disc pl-6 mt-3 space-y-2">
-                <li>
-                  <EditableText
-                    textKey="privacy.section_2.item_1"
-                    defaultText="To build and deploy your Imperidome website infrastructure."
-                  />
-                </li>
-                <li>
-                  <EditableText
-                    textKey="privacy.section_2.item_2"
-                    defaultText="To configure and train your Vapi-powered AI Receptionist using your provided business logic."
-                  />
-                </li>
-                <li>
-                  <EditableText
-                    textKey="privacy.section_2.item_3"
-                    defaultText="To generate your Seedance cinematic video ads."
-                  />
-                </li>
-                <li>
-                  <EditableText
-                    textKey="privacy.section_2.item_4"
-                    defaultText="To process transactions, send invoices, and handle recurring subscriptions."
-                  />
-                </li>
-                <li>
-                  <EditableText
-                    textKey="privacy.section_2.item_5"
-                    defaultText="To communicate strictly regarding account updates, system maintenance, and performance reporting."
-                  />
-                </li>
+              <ul
+                style={{
+                  listStyle: "none",
+                  padding: 0,
+                  margin: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                }}
+              >
+                {[
+                  "To build and deploy your Imperidome website infrastructure.",
+                  "To configure and train your Vapi-powered AI Receptionist using your provided business logic.",
+                  "To generate your Seedance cinematic video ads.",
+                  "To process transactions, send invoices, and handle recurring subscriptions.",
+                  "To communicate strictly regarding account updates, system maintenance, and performance reporting.",
+                ].map((item) => (
+                  <li
+                    key={item}
+                    style={{
+                      display: "flex",
+                      gap: "8px",
+                      alignItems: "flex-start",
+                    }}
+                  >
+                    <span style={{ color: "#22C55E", flexShrink: 0 }}>▸</span>
+                    <span className="text-slate-200">
+                      <TypewriterText text={item} speed={12} />
+                    </span>
+                  </li>
+                ))}
               </ul>
             </section>
 
-            <section>
-              <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-                <span className="text-[#5EF08A]">03.</span>
-                <EditableText
-                  textKey="privacy.section_3.heading"
-                  defaultText="Third-Party Service Providers"
+            {/* Section 3 */}
+            <section
+              className="bg-slate-800 border border-slate-700 rounded-xl"
+              style={{ padding: "32px" }}
+            >
+              <h2
+                className="text-white font-bold"
+                style={{
+                  fontSize: "20px",
+                  fontWeight: 700,
+                  marginBottom: "16px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                }}
+              >
+                <span style={{ color: "#22C55E" }}>03.</span>
+                <TypewriterText
+                  text="Third-Party Service Providers"
+                  speed={30}
                 />
               </h2>
-              <p>
-                <EditableText
-                  textKey="privacy.section_3.intro"
-                  defaultText="We do not sell your personal data. We only share data with essential third-party infrastructure partners necessary to deliver our services:"
+              <p className="text-slate-200" style={{ marginBottom: "12px" }}>
+                <TypewriterText
+                  text="We do not sell your personal data. We only share data with essential third-party infrastructure partners necessary to deliver our services:"
+                  speed={15}
                 />
               </p>
-              <ul className="list-disc pl-6 mt-3 space-y-2">
-                <li>
-                  <strong className="text-white">
-                    <EditableText
-                      textKey="privacy.section_3.item_1.label"
-                      defaultText="Stripe:"
-                    />
-                  </strong>{" "}
-                  <EditableText
-                    textKey="privacy.section_3.item_1.body"
-                    defaultText="For secure payment processing and subscription billing."
-                  />
-                </li>
-                <li>
-                  <strong className="text-white">
-                    <EditableText
-                      textKey="privacy.section_3.item_2.label"
-                      defaultText="Vapi & Twilio:"
-                    />
-                  </strong>{" "}
-                  <EditableText
-                    textKey="privacy.section_3.item_2.body"
-                    defaultText="For telecom routing and AI voice synthesis. Your AI training data is securely transmitted to these APIs for real-time call handling."
-                  />
-                </li>
-                <li>
-                  <strong className="text-white">
-                    <EditableText
-                      textKey="privacy.section_3.item_3.label"
-                      defaultText="Internet Computer (ICP):"
-                    />
-                  </strong>{" "}
-                  <EditableText
-                    textKey="privacy.section_3.item_3.body"
-                    defaultText="Our Motoko backend infrastructure where your encrypted lead data is stored."
-                  />
-                </li>
+              <ul
+                style={{
+                  listStyle: "none",
+                  padding: 0,
+                  margin: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                }}
+              >
+                {[
+                  {
+                    lbl: "Stripe:",
+                    body: "For secure payment processing and subscription billing.",
+                  },
+                  {
+                    lbl: "Vapi & Twilio:",
+                    body: "For telecom routing and AI voice synthesis. Your AI training data is securely transmitted to these APIs for real-time call handling.",
+                  },
+                  {
+                    lbl: "Internet Computer (ICP):",
+                    body: "Our Motoko backend infrastructure where your encrypted lead data is stored.",
+                  },
+                ].map(({ lbl, body }) => (
+                  <li
+                    key={lbl}
+                    style={{
+                      display: "flex",
+                      gap: "8px",
+                      alignItems: "flex-start",
+                    }}
+                  >
+                    <span style={{ color: "#22C55E", flexShrink: 0 }}>▸</span>
+                    <span className="text-slate-200">
+                      <strong style={{ color: "#22C55E" }}>{lbl}</strong>{" "}
+                      <TypewriterText text={body} speed={12} />
+                    </span>
+                  </li>
+                ))}
               </ul>
             </section>
 
-            <section>
-              <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-                <span className="text-[#5EF08A]">04.</span>
-                <EditableText
-                  textKey="privacy.section_4.heading"
-                  defaultText="Data Security & Retention"
-                />
+            {/* Section 4 */}
+            <section
+              className="bg-slate-800 border border-slate-700 rounded-xl"
+              style={{ padding: "32px" }}
+            >
+              <h2
+                className="text-white font-bold"
+                style={{
+                  fontSize: "20px",
+                  fontWeight: 700,
+                  marginBottom: "16px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                }}
+              >
+                <span style={{ color: "#22C55E" }}>04.</span>
+                <TypewriterText text="Data Security & Retention" speed={30} />
               </h2>
-              <p>
-                <EditableText
-                  textKey="privacy.section_4.body"
-                  defaultText="We implement enterprise-grade security measures to protect your data. Your lead capture data, call logs, and transcripts are stored securely in our stable backend arrays. We retain your data only for as long as your account is active. If your account is suspended or terminated (as outlined in our Terms of Service), your data will be archived for 60 days before permanent deletion."
+              <p className="text-slate-200">
+                <TypewriterText
+                  text="We implement enterprise-grade security measures to protect your data. Your lead capture data, call logs, and transcripts are stored securely in our stable backend arrays. We retain your data only for as long as your account is active. If your account is suspended or terminated (as outlined in our Terms of Service), your data will be archived for 60 days before permanent deletion."
+                  speed={12}
                 />
               </p>
             </section>
 
-            <section>
-              <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-                <span className="text-[#5EF08A]">05.</span>
-                <EditableText
-                  textKey="privacy.section_5.heading"
-                  defaultText="Your Privacy Rights"
-                />
+            {/* Section 5 */}
+            <section
+              className="bg-slate-800 border border-slate-700 rounded-xl"
+              style={{ padding: "32px" }}
+            >
+              <h2
+                className="text-white font-bold"
+                style={{
+                  fontSize: "20px",
+                  fontWeight: 700,
+                  marginBottom: "16px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                }}
+              >
+                <span style={{ color: "#22C55E" }}>05.</span>
+                <TypewriterText text="Your Privacy Rights" speed={30} />
               </h2>
-              <p>
-                <EditableText
-                  textKey="privacy.section_5.body"
-                  defaultText="Depending on your jurisdiction (e.g., CCPA, GDPR), you may have the right to request access to, correction of, or deletion of your personal data. To initiate a data export or deletion request, please submit a written request to our support team. Note that exercising a deletion right will immediately terminate your active website and AI services."
+              <p className="text-slate-200">
+                <TypewriterText
+                  text="Depending on your jurisdiction (e.g., CCPA, GDPR), you may have the right to request access to, correction of, or deletion of your personal data. To initiate a data export or deletion request, please submit a written request to our support team. Note that exercising a deletion right will immediately terminate your active website and AI services."
+                  speed={12}
                 />
               </p>
             </section>
 
-            <section className="mt-16 pt-12 border-t border-[#1C1F33]">
-              <p className="text-xs text-gray-500 text-center">
-                <EditableText
-                  textKey="privacy.footer.note"
-                  defaultText="This Privacy Policy was prepared by Imperidome. If you have any questions about this policy, please contact your account manager."
+            {/* Footer note */}
+            <section
+              style={{
+                paddingTop: "32px",
+                borderTop: "1px solid rgba(34,197,94,0.12)",
+              }}
+            >
+              <p
+                className="text-slate-400"
+                style={{ textAlign: "center", fontSize: "12px" }}
+              >
+                <TypewriterText
+                  text="This Privacy Policy was prepared by Imperidome. If you have any questions about this policy, please contact your account manager."
+                  speed={12}
                 />
               </p>
             </section>

@@ -59,7 +59,6 @@ interface FormState {
   industry: string;
   monthlyRevenue: string;
   websiteUrl: string;
-  bestTime: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -770,12 +769,6 @@ function ContactFormStep({
     "$50k+",
   ];
 
-  const BEST_TIME_OPTIONS = [
-    "Morning (9am–12pm)",
-    "Afternoon (12pm–5pm)",
-    "Evening (5pm–8pm)",
-  ];
-
   const isValid =
     !!form.name.trim() &&
     !!form.email.trim() &&
@@ -1065,31 +1058,6 @@ function ContactFormStep({
                 style={inputStyle}
               />
             </div>
-          </div>
-        </div>
-
-        {/* ── Best Time ── */}
-        <div>
-          <p style={sectionHeadingStyle}>Availability</p>
-          <div>
-            <label htmlFor="cal-best-time" style={labelStyle}>
-              Best Time to Call{" "}
-              <span style={{ color: MUTED, fontWeight: 400 }}>(optional)</span>
-            </label>
-            <select
-              id="cal-best-time"
-              value={form.bestTime}
-              onChange={(e) => onChange({ bestTime: e.target.value })}
-              data-ocid="cal.besttime_select"
-              style={{ ...inputStyle, cursor: "pointer" }}
-            >
-              <option value="">No preference</option>
-              {BEST_TIME_OPTIONS.map((t) => (
-                <option key={t} value={t} style={{ background: "#0A0B14" }}>
-                  {t}
-                </option>
-              ))}
-            </select>
           </div>
         </div>
       </div>
@@ -1421,7 +1389,6 @@ export default function HomepageCalendarBooking() {
     industry: "",
     monthlyRevenue: "",
     websiteUrl: "",
-    bestTime: "",
   });
 
   const [submitting, setSubmitting] = useState(false);
@@ -1498,7 +1465,6 @@ export default function HomepageCalendarBooking() {
       industry: form.industry,
       monthly_revenue: form.monthlyRevenue,
       website_url: form.websiteUrl,
-      best_time: form.bestTime,
     });
 
     try {
@@ -1534,7 +1500,6 @@ export default function HomepageCalendarBooking() {
       industry: "",
       monthlyRevenue: "",
       websiteUrl: "",
-      bestTime: "",
     });
     setSubmitError(null);
     setSubmitted(false);

@@ -7,35 +7,37 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import type { backendInterface } from "../../backend.d";
+import TypewriterText from "../../components/TypewriterText";
 import { useActor } from "../../hooks/useActor";
 import { useSession } from "../../hooks/useSession";
 import PortalLayout from "./PortalLayout";
 
-// ---------------------------------------------------------------------------
-// Stat card
-// ---------------------------------------------------------------------------
-interface StatCardProps {
+function StatCard({
+  icon,
+  label,
+  value,
+  loading,
+  ocid,
+}: {
   icon: React.ReactNode;
   label: string;
   value: string | number;
   loading: boolean;
   ocid: string;
-}
-
-function StatCard({ icon, label, value, loading, ocid }: StatCardProps) {
+}) {
   return (
     <div
       data-ocid={ocid}
+      className="matrix-card"
       style={{
         flex: 1,
         minWidth: "160px",
-        borderRadius: "12px",
-        border: "1px solid rgba(255,255,255,0.08)",
-        background: "rgba(17,19,34,0.8)",
         padding: "24px",
         display: "flex",
         flexDirection: "column",
         gap: "12px",
+        border: "1px solid rgba(94,240,138,0.2)",
       }}
     >
       <div
@@ -44,7 +46,7 @@ function StatCard({ icon, label, value, loading, ocid }: StatCardProps) {
           height: "40px",
           borderRadius: "10px",
           background: "rgba(94,240,138,0.1)",
-          border: "1px solid rgba(94,240,138,0.2)",
+          border: "1px solid rgba(94,240,138,0.25)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -59,9 +61,10 @@ function StatCard({ icon, label, value, loading, ocid }: StatCardProps) {
             margin: "0 0 4px",
             fontSize: "12px",
             fontWeight: 600,
-            color: "#7A7D90",
+            color: "#5EF08A",
             textTransform: "uppercase",
             letterSpacing: "0.06em",
+            fontFamily: "monospace",
           }}
         >
           {label}
@@ -72,7 +75,7 @@ function StatCard({ icon, label, value, loading, ocid }: StatCardProps) {
               height: "28px",
               width: "60px",
               borderRadius: "6px",
-              background: "rgba(255,255,255,0.06)",
+              background: "rgba(94,240,138,0.08)",
               animation: "shimmer 1.4s ease-in-out infinite",
             }}
           />
@@ -82,8 +85,9 @@ function StatCard({ icon, label, value, loading, ocid }: StatCardProps) {
               margin: 0,
               fontSize: "28px",
               fontWeight: 700,
-              color: "#EEF0F8",
+              color: "#5EF08A",
               lineHeight: 1,
+              fontFamily: "monospace",
             }}
           >
             {value}
@@ -94,9 +98,6 @@ function StatCard({ icon, label, value, loading, ocid }: StatCardProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Copied toast (inline, green, auto-fades)
-// ---------------------------------------------------------------------------
 function CopiedToast({ visible }: { visible: boolean }) {
   return (
     <div
@@ -131,14 +132,10 @@ function CopiedToast({ visible }: { visible: boolean }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main page
-// ---------------------------------------------------------------------------
 export default function PortalReferralsPage() {
   const { session } = useSession();
   const clientEmail = session?.email ?? "";
   const { actor, isFetching } = useActor();
-
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [conversions, setConversions] = useState<bigint | null>(null);
   const [clicks, setClicks] = useState<bigint | null>(null);
@@ -148,52 +145,38 @@ export default function PortalReferralsPage() {
   const [conversionsError, setConversionsError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const referralUrl = referralCode
     ? `${window.location.origin}/?ref=${referralCode}`
     : "";
 
-  // Fetch referral code + conversion count on mount
   useEffect(() => {
     if (!actor || isFetching || !clientEmail) return;
     let cancelled = false;
-
     async function load() {
       setLoading(true);
       setCodeError(null);
       setClicksError(null);
       setConversionsError(null);
-
-      // Fetch each stat independently so one failure doesn't block the others
       const [codeResult, convsResult, clksResult] = await Promise.allSettled([
-        actor!.getOrCreateMyReferralCode(),
-        actor!.getMyReferralConversions(clientEmail),
-        actor!.getMyReferralClicks(),
+        (actor as unknown as backendInterface).getOrCreateMyReferralCode(),
+        (actor as unknown as backendInterface).getMyReferralConversions(
+          clientEmail,
+        ),
+        (actor as unknown as backendInterface).getMyReferralClicks(),
       ]);
-
       if (!cancelled) {
-        if (codeResult.status === "fulfilled") {
+        if (codeResult.status === "fulfilled")
           setReferralCode(codeResult.value);
-        } else {
+        else
           setCodeError("Could not load referral link. Refresh to try again.");
-        }
-
-        if (convsResult.status === "fulfilled") {
+        if (convsResult.status === "fulfilled")
           setConversions(convsResult.value);
-        } else {
-          setConversionsError("Could not load conversions.");
-        }
-
-        if (clksResult.status === "fulfilled") {
-          setClicks(clksResult.value);
-        } else {
-          setClicksError("Could not load clicks.");
-        }
-
+        else setConversionsError("Could not load conversions.");
+        if (clksResult.status === "fulfilled") setClicks(clksResult.value);
+        else setClicksError("Could not load clicks.");
         setLoading(false);
       }
     }
-
     load();
     return () => {
       cancelled = true;
@@ -210,11 +193,15 @@ export default function PortalReferralsPage() {
   }
 
   const isLoading = isFetching || loading;
-  // Overall error only when all three queries failed
-  const totalError = !!codeError && !!clicksError && !!conversionsError;
+  const totalError = !!codeError || !!clicksError || !!conversionsError;
 
   return (
     <PortalLayout pageTitle="Referrals">
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes shimmer { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.8; } }
+      `}</style>
+
       <div
         data-ocid="referrals.page"
         style={{
@@ -224,21 +211,22 @@ export default function PortalReferralsPage() {
           maxWidth: "760px",
         }}
       >
-        {/* Page header */}
         <div data-ocid="referrals.page-header">
           <h1
             style={{
               margin: "0 0 6px",
-              fontSize: "22px",
-              fontWeight: 700,
-              color: "#EEF0F8",
               display: "flex",
               alignItems: "center",
               gap: "10px",
             }}
           >
             <Gift size={22} style={{ color: "#5EF08A" }} />
-            Referral Program
+            <TypewriterText
+              text="Referral Program"
+              className="matrix-heading"
+              style={{ fontSize: "22px", fontWeight: 700 }}
+              speed={40}
+            />
           </h1>
           <p style={{ margin: 0, fontSize: "14px", color: "#7A7D90" }}>
             Share your unique link and earn rewards when your referrals become
@@ -246,14 +234,11 @@ export default function PortalReferralsPage() {
           </p>
         </div>
 
-        {/* Loading state */}
         {isLoading && (
           <div
             data-ocid="referrals.loading_state"
+            className="matrix-card"
             style={{
-              borderRadius: "12px",
-              border: "1px solid rgba(255,255,255,0.08)",
-              background: "rgba(17,19,34,0.8)",
               padding: "40px",
               display: "flex",
               alignItems: "center",
@@ -267,11 +252,12 @@ export default function PortalReferralsPage() {
               size={18}
               style={{ animation: "spin 0.8s linear infinite" }}
             />
-            Loading your referral link…
+            <span style={{ fontFamily: "monospace" }}>
+              Loading your referral link…
+            </span>
           </div>
         )}
 
-        {/* Error state — only when all three queries failed */}
         {!isLoading && totalError && (
           <div
             data-ocid="referrals.error_state"
@@ -289,17 +275,9 @@ export default function PortalReferralsPage() {
           </div>
         )}
 
-        {/* Main content — shown as long as not all queries failed */}
         {!isLoading && !totalError && (
           <>
-            {/* Stat cards row */}
-            <div
-              style={{
-                display: "flex",
-                gap: "16px",
-                flexWrap: "wrap",
-              }}
-            >
+            <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
               <StatCard
                 icon={<MousePointerClick size={18} />}
                 label="Total Clicks"
@@ -348,7 +326,6 @@ export default function PortalReferralsPage() {
               )}
             </div>
 
-            {/* Referral link card — or inline error if code failed */}
             {codeError ? (
               <div
                 data-ocid="referrals.link.error_state"
@@ -366,26 +343,23 @@ export default function PortalReferralsPage() {
             ) : (
               <div
                 data-ocid="referrals.link.card"
+                className="matrix-card"
                 style={{
-                  borderRadius: "12px",
-                  border: "1px solid rgba(94,240,138,0.2)",
-                  background: "rgba(17,19,34,0.8)",
                   padding: "28px",
                   display: "flex",
                   flexDirection: "column",
                   gap: "20px",
+                  border: "1px solid rgba(94,240,138,0.25)",
                 }}
               >
                 <div>
-                  <h2
-                    style={{
-                      margin: "0 0 6px",
-                      fontSize: "16px",
-                      fontWeight: 700,
-                      color: "#EEF0F8",
-                    }}
-                  >
-                    Your Referral Link
+                  <h2 style={{ margin: "0 0 6px" }}>
+                    <TypewriterText
+                      text="Your Referral Link"
+                      className="matrix-heading"
+                      style={{ fontSize: "16px", fontWeight: 700 }}
+                      speed={40}
+                    />
                   </h2>
                   <p
                     style={{
@@ -395,26 +369,22 @@ export default function PortalReferralsPage() {
                       lineHeight: "1.5",
                     }}
                   >
-                    Share this link with friends or colleagues. You’ll receive
+                    Share this link with friends or colleagues. You'll receive
                     credit every time someone signs up.
                   </p>
                 </div>
-
-                {/* Plain text URL */}
                 <p
                   data-ocid="referrals.url.text"
                   style={{
                     margin: 0,
                     fontSize: "13px",
-                    color: "#7A7D90",
+                    color: "#5EF08A",
                     wordBreak: "break-all",
                     fontFamily: "monospace",
                   }}
                 >
                   {referralUrl}
                 </p>
-
-                {/* Copyable input + button */}
                 <div
                   style={{
                     display: "flex",
@@ -423,7 +393,7 @@ export default function PortalReferralsPage() {
                     borderRadius: "8px",
                     border: "1px solid rgba(94,240,138,0.35)",
                     overflow: "hidden",
-                    background: "rgba(255,255,255,0.03)",
+                    background: "rgba(7,8,16,0.8)",
                   }}
                 >
                   <input
@@ -481,8 +451,6 @@ export default function PortalReferralsPage() {
                     )}
                   </button>
                 </div>
-
-                {/* Code badge */}
                 {referralCode && (
                   <div
                     style={{
@@ -503,17 +471,11 @@ export default function PortalReferralsPage() {
                     </span>
                     <span
                       data-ocid="referrals.code.badge"
+                      className="matrix-badge"
                       style={{
-                        display: "inline-block",
-                        padding: "4px 12px",
-                        borderRadius: "9999px",
-                        background: "rgba(94,240,138,0.1)",
-                        border: "1px solid rgba(94,240,138,0.25)",
-                        color: "#5EF08A",
-                        fontSize: "13px",
-                        fontWeight: 700,
-                        letterSpacing: "0.08em",
                         fontFamily: "monospace",
+                        letterSpacing: "0.08em",
+                        fontSize: "13px",
                       }}
                     >
                       {referralCode}
@@ -523,27 +485,18 @@ export default function PortalReferralsPage() {
               </div>
             )}
 
-            {/* How it works */}
             <div
               data-ocid="referrals.how-it-works.card"
-              style={{
-                borderRadius: "12px",
-                border: "1px solid rgba(255,255,255,0.08)",
-                background: "rgba(17,19,34,0.8)",
-                padding: "24px 28px",
-              }}
+              className="matrix-card"
+              style={{ padding: "24px 28px" }}
             >
-              <h3
-                style={{
-                  margin: "0 0 16px",
-                  fontSize: "14px",
-                  fontWeight: 700,
-                  color: "#B0B3C6",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                }}
-              >
-                How It Works
+              <h3 style={{ margin: "0 0 16px" }}>
+                <TypewriterText
+                  text="How It Works"
+                  className="matrix-heading"
+                  style={{ fontSize: "14px", fontWeight: 700 }}
+                  speed={40}
+                />
               </h3>
               <ol
                 style={{
@@ -577,16 +530,7 @@ export default function PortalReferralsPage() {
         )}
       </div>
 
-      {/* Copied toast */}
       <CopiedToast visible={copied} />
-
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes shimmer {
-          0%, 100% { opacity: 0.4; }
-          50% { opacity: 0.8; }
-        }
-      `}</style>
     </PortalLayout>
   );
 }

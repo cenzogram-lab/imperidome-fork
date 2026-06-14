@@ -1,13 +1,12 @@
 import { ArrowDownToLine, FileDown, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { backendInterface } from "../../backend";
+import type { CSSProperties } from "react";
+import type { backendInterface } from "../../backend.d";
+import TypewriterText from "../../components/TypewriterText";
 import { useActor } from "../../hooks/useActor";
 import { useSession } from "../../hooks/useSession";
 import PortalLayout from "./PortalLayout";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 interface ClientFileMetadata {
   id: string;
   clientEmail: string;
@@ -18,10 +17,9 @@ interface ClientFileMetadata {
   objectKey: string;
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 function formatTimestamp(ts: bigint): string {
+  if (ts === 0n) return "—";
+  if (Number.isNaN(Number(ts))) return "—";
   const ms = Number(ts) / 1_000_000;
   return new Date(ms).toLocaleDateString("en-US", {
     month: "long",
@@ -30,9 +28,6 @@ function formatTimestamp(ts: bigint): string {
   });
 }
 
-// ---------------------------------------------------------------------------
-// Toast
-// ---------------------------------------------------------------------------
 interface ToastState {
   message: string;
   type: "success" | "error";
@@ -46,7 +41,6 @@ function Toast({
     const t = setTimeout(onDismiss, 5000);
     return () => clearTimeout(t);
   }, [onDismiss]);
-
   return (
     <div
       data-ocid="files.toast"
@@ -59,13 +53,9 @@ function Toast({
         borderRadius: "10px",
         background:
           toast.type === "success"
-            ? "rgba(5,46,22,0.95)"
-            : "rgba(69,10,10,0.95)",
-        border: `1px solid ${
-          toast.type === "success"
-            ? "rgba(94,240,138,0.4)"
-            : "rgba(239,68,68,0.4)"
-        }`,
+            ? "rgba(5,46,22,0.97)"
+            : "rgba(69,10,10,0.97)",
+        border: `1px solid ${toast.type === "success" ? "rgba(94,240,138,0.4)" : "rgba(239,68,68,0.4)"}`,
         color: toast.type === "success" ? "#86EFAC" : "#FCA5A5",
         fontSize: "14px",
         fontWeight: 600,
@@ -99,9 +89,6 @@ function Toast({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Skeleton row
-// ---------------------------------------------------------------------------
 function SkeletonRow() {
   return (
     <div
@@ -110,7 +97,7 @@ function SkeletonRow() {
         alignItems: "center",
         gap: "12px",
         padding: "16px 0",
-        borderBottom: "1px solid #1C1F33",
+        borderBottom: "1px solid rgba(94,240,138,0.1)",
       }}
     >
       <div
@@ -118,7 +105,7 @@ function SkeletonRow() {
           flex: 1,
           height: "14px",
           borderRadius: "4px",
-          background: "rgba(40,45,70,0.8)",
+          background: "rgba(94,240,138,0.06)",
           animation: "pulse 1.5s ease-in-out infinite",
         }}
       />
@@ -127,7 +114,7 @@ function SkeletonRow() {
           width: "100px",
           height: "14px",
           borderRadius: "4px",
-          background: "rgba(40,45,70,0.8)",
+          background: "rgba(94,240,138,0.06)",
           animation: "pulse 1.5s ease-in-out infinite",
         }}
       />
@@ -136,7 +123,7 @@ function SkeletonRow() {
           width: "80px",
           height: "14px",
           borderRadius: "4px",
-          background: "rgba(40,45,70,0.8)",
+          background: "rgba(94,240,138,0.06)",
           animation: "pulse 1.5s ease-in-out infinite",
         }}
       />
@@ -144,9 +131,6 @@ function SkeletonRow() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// File row — desktop table row
-// ---------------------------------------------------------------------------
 interface FileRowProps {
   file: ClientFileMetadata;
   index: number;
@@ -156,17 +140,14 @@ interface FileRowProps {
 
 function FileRow({ file, index, onDownload, downloading }: FileRowProps) {
   const isDownloading = downloading === file.id;
-  const rowBg = index % 2 === 0 ? "rgba(17,19,34,0.7)" : "rgba(14,16,32,0.9)";
-
   return (
     <tr
       key={file.id}
       data-ocid={`files.item.${index + 1}`}
-      style={{ borderBottom: "1px solid #1C1F33", background: rowBg }}
+      style={{ animation: "typewriter-fade-in 0.4s ease forwards" }}
     >
       <td
         style={{
-          padding: "14px 12px",
           color: "#EEF0F8",
           fontWeight: 600,
           fontSize: "14px",
@@ -184,7 +165,6 @@ function FileRow({ file, index, onDownload, downloading }: FileRowProps) {
       </td>
       <td
         style={{
-          padding: "14px 12px",
           color: "#7A7D90",
           fontSize: "14px",
           wordBreak: "break-word",
@@ -195,35 +175,31 @@ function FileRow({ file, index, onDownload, downloading }: FileRowProps) {
       </td>
       <td
         style={{
-          padding: "14px 12px",
           color: "#7A7D90",
           fontSize: "14px",
           whiteSpace: "nowrap",
+          fontFamily: "monospace",
         }}
       >
         {formatTimestamp(file.uploadedAt)}
       </td>
-      <td style={{ padding: "14px 12px" }}>
+      <td>
         <button
           type="button"
           data-ocid={`files.download_button.${index + 1}`}
           onClick={() => onDownload(file)}
           disabled={isDownloading}
+          className={isDownloading ? "matrix-btn-outline" : "matrix-btn"}
           style={{
-            background: isDownloading ? "rgba(94,240,138,0.15)" : "#5EF08A",
-            color: isDownloading ? "rgba(94,240,138,0.5)" : "#061209",
-            border: "none",
-            borderRadius: "6px",
             padding: "10px 14px",
             minHeight: "44px",
-            fontWeight: 600,
             fontSize: "13px",
             cursor: isDownloading ? "not-allowed" : "pointer",
             display: "inline-flex",
             alignItems: "center",
             gap: "6px",
             whiteSpace: "nowrap",
-            transition: "background 0.2s, color 0.2s",
+            opacity: isDownloading ? 0.6 : 1,
           }}
         >
           {isDownloading ? (
@@ -246,26 +222,20 @@ function FileRow({ file, index, onDownload, downloading }: FileRowProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// File card — mobile stacked layout
-// ---------------------------------------------------------------------------
 function FileCard({ file, index, onDownload, downloading }: FileRowProps) {
   const isDownloading = downloading === file.id;
-
   return (
     <div
       data-ocid={`files.card.${index + 1}`}
+      className="matrix-card"
       style={{
-        borderRadius: "10px",
-        border: "1px solid #1C1F33",
-        background: "rgba(17,19,34,0.7)",
         padding: "18px",
         display: "flex",
         flexDirection: "column",
         gap: "10px",
+        animation: "typewriter-fade-in 0.4s ease forwards",
       }}
     >
-      {/* File name */}
       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
         <FileDown size={15} style={{ flexShrink: 0, color: "#5EF08A" }} />
         <span
@@ -280,8 +250,6 @@ function FileCard({ file, index, onDownload, downloading }: FileRowProps) {
           {file.fileName}
         </span>
       </div>
-
-      {/* Label */}
       {file.fileLabel && (
         <p
           style={{
@@ -294,8 +262,6 @@ function FileCard({ file, index, onDownload, downloading }: FileRowProps) {
           {file.fileLabel}
         </p>
       )}
-
-      {/* Date row + download button */}
       <div
         style={{
           display: "flex",
@@ -305,7 +271,13 @@ function FileCard({ file, index, onDownload, downloading }: FileRowProps) {
           flexWrap: "wrap",
         }}
       >
-        <span style={{ fontSize: "12px", color: "#7A7D90" }}>
+        <span
+          style={{
+            fontSize: "12px",
+            color: "#7A7D90",
+            fontFamily: "monospace",
+          }}
+        >
           {formatTimestamp(file.uploadedAt)}
         </span>
         <button
@@ -313,20 +285,16 @@ function FileCard({ file, index, onDownload, downloading }: FileRowProps) {
           data-ocid={`files.card.download_button.${index + 1}`}
           onClick={() => onDownload(file)}
           disabled={isDownloading}
+          className={isDownloading ? "matrix-btn-outline" : "matrix-btn"}
           style={{
-            background: isDownloading ? "rgba(94,240,138,0.15)" : "#5EF08A",
-            color: isDownloading ? "rgba(94,240,138,0.5)" : "#061209",
-            border: "none",
-            borderRadius: "6px",
             padding: "10px 14px",
             minHeight: "44px",
-            fontWeight: 600,
             fontSize: "13px",
             cursor: isDownloading ? "not-allowed" : "pointer",
             display: "inline-flex",
             alignItems: "center",
             gap: "6px",
-            transition: "background 0.2s, color 0.2s",
+            opacity: isDownloading ? 0.6 : 1,
           }}
         >
           {isDownloading ? (
@@ -349,45 +317,39 @@ function FileCard({ file, index, onDownload, downloading }: FileRowProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main page
-// ---------------------------------------------------------------------------
 export default function PortalFilesPage() {
   const { session } = useSession();
   const clientEmail = session?.email ?? "";
   const { actor, isFetching } = useActor();
-
   const [files, setFiles] = useState<ClientFileMetadata[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey is an intentional refresh trigger
   useEffect(() => {
     if (!actor || isFetching || !clientEmail) return;
     let cancelled = false;
-
     async function load() {
       try {
         const result = await (actor as backendInterface).getFilesForClient(
           clientEmail,
           clientEmail,
         );
-        if (!cancelled) {
-          setFiles(Array.isArray(result) ? result : []);
-        }
+        if (!cancelled) setFiles(Array.isArray(result) ? result : []);
       } catch {
         if (!cancelled) setLoadError(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
-
     load();
     return () => {
       cancelled = true;
     };
-  }, [actor, isFetching, clientEmail]);
+  }, [actor, isFetching, clientEmail, refreshKey]);
 
   async function handleDownload(file: ClientFileMetadata) {
     if (!actor || !clientEmail) return;
@@ -397,7 +359,6 @@ export default function PortalFilesPage() {
         clientEmail,
         file.id,
       );
-
       if (result && typeof result === "object" && "ok" in result) {
         window.open(result.ok as string, "_blank", "noopener,noreferrer");
       } else if (result && typeof result === "object" && "err" in result) {
@@ -424,11 +385,11 @@ export default function PortalFilesPage() {
     }
   }
 
-  const sectionCard: React.CSSProperties = {
-    background: "rgba(17,19,34,0.7)",
+  const sectionCard: CSSProperties = {
+    background: "rgba(10,11,20,0.9)",
     borderRadius: "8px",
     padding: "24px",
-    border: "1px solid #1C1F33",
+    border: "1px solid rgba(94,240,138,0.15)",
     width: "100%",
     boxSizing: "border-box",
   };
@@ -437,10 +398,8 @@ export default function PortalFilesPage() {
     <PortalLayout pageTitle="Files">
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @keyframes typewriter-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
 
       <div
@@ -452,24 +411,82 @@ export default function PortalFilesPage() {
           gap: "20px",
         }}
       >
-        {/* Page header */}
-        <div data-ocid="files.page-header">
-          <h1
+        <div
+          data-ocid="files.page-header"
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: "12px",
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <h1 style={{ margin: "0 0 4px" }}>
+              <TypewriterText
+                text="Your Files"
+                className="matrix-heading"
+                style={{ fontSize: "22px", fontWeight: 700 }}
+                speed={45}
+              />
+            </h1>
+            <p style={{ margin: 0, fontSize: "14px", color: "#7A7D90" }}>
+              Files and assets delivered to you by the Imperidome team.
+            </p>
+          </div>
+          <button
+            type="button"
+            data-ocid="files.refresh_button"
+            onClick={() => {
+              setLoading(true);
+              setLoadError(false);
+              setRefreshKey((prev) => prev + 1);
+            }}
+            className="matrix-btn-outline"
             style={{
-              margin: "0 0 4px",
-              fontSize: "22px",
-              fontWeight: 700,
-              color: "#EEF0F8",
+              padding: "9px 16px",
+              minHeight: "40px",
+              fontSize: "13px",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              whiteSpace: "nowrap",
+              cursor: "pointer",
             }}
           >
-            Your Files
-          </h1>
-          <p style={{ margin: 0, fontSize: "14px", color: "#7A7D90" }}>
-            Files and assets delivered to you by the Imperidome team.
-          </p>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M1 4v6h6"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M23 20v-6h-6"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            Refresh
+          </button>
         </div>
 
-        {/* Loading state */}
         {loading && (
           <div data-ocid="files.loading_state" style={sectionCard}>
             <div
@@ -486,7 +503,9 @@ export default function PortalFilesPage() {
                 size={16}
                 style={{ animation: "spin 0.8s linear infinite" }}
               />
-              Loading your files…
+              <span style={{ fontFamily: "monospace" }}>
+                Loading your files…
+              </span>
             </div>
             {[1, 2, 3].map((i) => (
               <SkeletonRow key={i} />
@@ -494,7 +513,6 @@ export default function PortalFilesPage() {
           </div>
         )}
 
-        {/* Error state */}
         {!loading && loadError && (
           <div
             data-ocid="files.error_state"
@@ -511,7 +529,6 @@ export default function PortalFilesPage() {
           </div>
         )}
 
-        {/* Empty state */}
         {!loading && !loadError && files.length === 0 && (
           <div
             data-ocid="files.empty_state"
@@ -527,7 +544,7 @@ export default function PortalFilesPage() {
                 height: "56px",
                 borderRadius: "50%",
                 background: "rgba(94,240,138,0.08)",
-                border: "1px solid rgba(94,240,138,0.15)",
+                border: "1px solid rgba(94,240,138,0.2)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -542,6 +559,7 @@ export default function PortalFilesPage() {
                 fontSize: "16px",
                 fontWeight: 600,
                 color: "#EEF0F8",
+                fontFamily: "monospace",
               }}
             >
               No files yet
@@ -561,10 +579,8 @@ export default function PortalFilesPage() {
           </div>
         )}
 
-        {/* File list — desktop table */}
         {!loading && !loadError && files.length > 0 && (
           <>
-            {/* Desktop table */}
             <div
               data-ocid="files.table"
               className="hidden sm:block"
@@ -572,30 +588,19 @@ export default function PortalFilesPage() {
             >
               <div style={{ overflowX: "auto" }}>
                 <table
-                  style={{
-                    width: "100%",
-                    borderCollapse: "collapse",
-                    minWidth: "560px",
-                  }}
+                  className="matrix-table"
+                  style={{ width: "100%", minWidth: "560px" }}
                 >
                   <thead>
-                    <tr style={{ borderBottom: "2px solid #1C1F33" }}>
+                    <tr>
                       {["File Name", "Label / Description", "Uploaded", ""].map(
                         (h) => (
-                          <th
-                            key={h}
-                            style={{
-                              textAlign: "left",
-                              padding: "10px 12px",
-                              color: "#7A7D90",
-                              fontWeight: 600,
-                              fontSize: "12px",
-                              letterSpacing: "0.04em",
-                              textTransform: "uppercase",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {h}
+                          <th key={h}>
+                            {h ? (
+                              <TypewriterText text={h} as="span" speed={40} />
+                            ) : (
+                              ""
+                            )}
                           </th>
                         ),
                       )}
@@ -615,8 +620,6 @@ export default function PortalFilesPage() {
                 </table>
               </div>
             </div>
-
-            {/* Mobile card list */}
             <div
               data-ocid="files.card_list"
               className="sm:hidden"
@@ -636,7 +639,6 @@ export default function PortalFilesPage() {
         )}
       </div>
 
-      {/* Toast */}
       {toast && <Toast toast={toast} onDismiss={() => setToast(null)} />}
     </PortalLayout>
   );

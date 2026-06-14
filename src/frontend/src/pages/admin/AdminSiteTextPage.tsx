@@ -2,6 +2,7 @@ import {
   ChevronDown,
   ChevronUp,
   Globe,
+  GripVertical,
   Images,
   Info,
   Link,
@@ -14,7 +15,10 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { MarqueeLogo, backendInterface } from "../../backend";
+import type { CSSProperties, FocusEvent } from "react";
+import type { MarqueeLogo, backendInterface } from "../../backend.d";
+import TypewriterText from "../../components/TypewriterText";
+import { ADMIN_EMAIL_KEY } from "../../constants";
 import { useActor } from "../../hooks/useActor";
 import { getSession } from "../../hooks/useSession";
 import {
@@ -29,7 +33,7 @@ const BORDER = "1px solid #1C1F33";
 
 function getAdminEmail(): string {
   const s = getSession();
-  return s?.email ?? localStorage.getItem("imperidome_admin_email") ?? "";
+  return s?.email ?? localStorage.getItem(ADMIN_EMAIL_KEY) ?? "";
 }
 
 // ── Social Media Links editor ──────────────────────────────────────────────
@@ -66,15 +70,10 @@ function SocialLinksPanel({
   actor,
 }: {
   actor: {
-    updateSiteText: (
-      k: string,
-      v: string,
-      adminEmail: string,
-    ) => Promise<boolean>;
+    updateSiteText: (k: string, v: string) => Promise<boolean>;
   } | null;
 }) {
   const { textMap, updateText } = useSiteTextStore();
-  const adminEmail = getAdminEmail();
 
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
@@ -93,15 +92,25 @@ function SocialLinksPanel({
 
   const handleSave = async (key: string) => {
     if (!actor) return;
+    if (!getAdminEmail()) {
+      setErrors((e) => ({ ...e, [key]: "Admin session not found." }));
+      return;
+    }
     setSaving((s) => ({ ...s, [key]: true }));
     setErrors((e) => ({ ...e, [key]: "" }));
     try {
-      await actor.updateSiteText(key, drafts[key] ?? "", adminEmail);
+      const success = await actor.updateSiteText(key, drafts[key] ?? "");
+      if (!success) {
+        throw new Error("Save rejected by backend.");
+      }
       updateText(key, drafts[key] ?? "");
       broadcastSiteTextInvalidation();
       setSaved((s) => ({ ...s, [key]: true }));
       setTimeout(() => setSaved((s) => ({ ...s, [key]: false })), 2000);
-    } catch {
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.error(err);
+      }
       setErrors((e) => ({ ...e, [key]: "Save failed. Try again." }));
     } finally {
       setSaving((s) => ({ ...s, [key]: false }));
@@ -295,15 +304,10 @@ function GoogleScriptPanel({
   actor,
 }: {
   actor: {
-    updateSiteText: (
-      k: string,
-      v: string,
-      adminEmail: string,
-    ) => Promise<boolean>;
+    updateSiteText: (k: string, v: string) => Promise<boolean>;
   } | null;
 }) {
   const { textMap, updateText } = useSiteTextStore();
-  const adminEmail = getAdminEmail();
   const KEY = "google_script_url";
 
   const [draft, setDraft] = useState("");
@@ -320,7 +324,10 @@ function GoogleScriptPanel({
     setSaving(true);
     setErrMsg("");
     try {
-      await actor.updateSiteText(KEY, draft, adminEmail);
+      const success = await actor.updateSiteText(KEY, draft);
+      if (!success) {
+        throw new Error("Save rejected by backend.");
+      }
       updateText(KEY, draft);
       broadcastSiteTextInvalidation();
       setSaved(true);
@@ -535,15 +542,10 @@ function HomepageVideoPanel({
   actor,
 }: {
   actor: {
-    updateSiteText: (
-      k: string,
-      v: string,
-      adminEmail: string,
-    ) => Promise<boolean>;
+    updateSiteText: (k: string, v: string) => Promise<boolean>;
   } | null;
 }) {
   const { textMap, updateText } = useSiteTextStore();
-  const adminEmail = getAdminEmail();
   const KEY = "homepage_video_url";
 
   const [draft, setDraft] = useState("");
@@ -560,7 +562,10 @@ function HomepageVideoPanel({
     setSaving(true);
     setErrMsg("");
     try {
-      await actor.updateSiteText(KEY, draft, adminEmail);
+      const success = await actor.updateSiteText(KEY, draft);
+      if (!success) {
+        throw new Error("Save rejected by backend.");
+      }
       updateText(KEY, draft);
       broadcastSiteTextInvalidation();
       setSaved(true);
@@ -865,15 +870,10 @@ function ShowcaseVideosPanel({
   actor,
 }: {
   actor: {
-    updateSiteText: (
-      k: string,
-      v: string,
-      adminEmail: string,
-    ) => Promise<boolean>;
+    updateSiteText: (k: string, v: string) => Promise<boolean>;
   } | null;
 }) {
   const { textMap, updateText } = useSiteTextStore();
-  const adminEmail = getAdminEmail();
 
   // Local state: key → draft value
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -905,7 +905,10 @@ function ShowcaseVideosPanel({
     setSaving((s) => ({ ...s, [key]: true }));
     setErrors((e) => ({ ...e, [key]: "" }));
     try {
-      await actor.updateSiteText(key, drafts[key] ?? "", adminEmail);
+      const success = await actor.updateSiteText(key, drafts[key] ?? "");
+      if (!success) {
+        throw new Error("Save rejected by backend.");
+      }
       updateText(key, drafts[key] ?? "");
       broadcastSiteTextInvalidation();
       setSaved((s) => ({ ...s, [key]: true }));
@@ -1114,8 +1117,6 @@ function ShowcaseVideosPanel({
 // ── Logo Marquee management panel ───────────────────────────────────────
 
 function LogoMarqueePanel({ actor }: { actor: backendInterface | null }) {
-  const adminEmail = getAdminEmail();
-
   const [logos, setLogos] = useState<MarqueeLogo[]>([]);
   const [loadingLogos, setLoadingLogos] = useState(false);
   const [logoError, setLogoError] = useState("");
@@ -1126,10 +1127,20 @@ function LogoMarqueePanel({ actor }: { actor: backendInterface | null }) {
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState("");
   const [addSuccess, setAddSuccess] = useState(false);
+  const [addUploading, setAddUploading] = useState(false);
 
   // Per-item operation state
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [reordering, setReordering] = useState(false);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+
+  // Inline edit state
+  const [editingLogoId, setEditingLogoId] = useState<string | null>(null);
+  const [editUrl, setEditUrl] = useState("");
+  const [editLabel, setEditLabel] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [editUploading, setEditUploading] = useState(false);
 
   useEffect(() => {
     if (!actor) return;
@@ -1140,8 +1151,8 @@ function LogoMarqueePanel({ actor }: { actor: backendInterface | null }) {
       .getMarqueeLogos()
       .then((result) => {
         if (cancelled) return;
-        const sorted = [...result].sort(
-          (x, y) => Number(x.order) - Number(y.order),
+        const sorted = [...result].sort((x, y) =>
+          x.order > y.order ? 1 : x.order < y.order ? -1 : 0,
         );
         setLogos(sorted);
       })
@@ -1161,12 +1172,8 @@ function LogoMarqueePanel({ actor }: { actor: backendInterface | null }) {
     setAdding(true);
     setAddError("");
     try {
-      const res = await actor.addMarqueeLogo(
-        addUrl.trim(),
-        addLabel.trim(),
-        adminEmail,
-      );
-      if (res.__kind__ === "ok") {
+      const res = await actor.addMarqueeLogo(addUrl.trim(), addLabel.trim());
+      if ("ok" in res) {
         setAddUrl("");
         setAddLabel("");
         setAddSuccess(true);
@@ -1174,12 +1181,16 @@ function LogoMarqueePanel({ actor }: { actor: backendInterface | null }) {
         actor
           .getMarqueeLogos()
           .then((result) => {
-            const sorted = [...result].sort(
-              (x, y) => Number(x.order) - Number(y.order),
+            const sorted = [...result].sort((x, y) =>
+              x.order > y.order ? 1 : x.order < y.order ? -1 : 0,
             );
             setLogos(sorted);
           })
-          .catch(() => {});
+          .catch((err) => {
+            if (import.meta.env.DEV) {
+              console.warn("getMarqueeLogos refresh failed:", err);
+            }
+          });
       } else {
         setAddError(res.err);
       }
@@ -1190,12 +1201,48 @@ function LogoMarqueePanel({ actor }: { actor: backendInterface | null }) {
     }
   };
 
+  const handleAddUpload = async (file: File) => {
+    setAddUploading(true);
+    setAddError("");
+    try {
+      const bytes = await file.arrayBuffer();
+      const blob = await (
+        window as {
+          __icpBlobStorage?: {
+            ExternalBlob?: {
+              fromBytes?: (
+                data: Uint8Array,
+                mime: string,
+              ) => Promise<{ url: string }>;
+            };
+          };
+        }
+      ).__icpBlobStorage?.ExternalBlob?.fromBytes?.(
+        new Uint8Array(bytes),
+        file.type,
+      );
+      if (blob?.url) setAddUrl(blob.url);
+      else setAddError("Upload failed — no URL returned.");
+    } catch {
+      setAddError("Upload failed. Check object storage configuration.");
+    } finally {
+      setAddUploading(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!actor) return;
     setDeletingId(id);
     try {
-      await actor.deleteMarqueeLogo(id, adminEmail);
-      setLogos((prev) => prev.filter((l) => l.id !== id));
+      const result = await actor.deleteMarqueeLogo(id);
+      if ("err" in result) {
+        const errMsg =
+          (result as unknown as { err: string }).err ||
+          "Failed to delete logo.";
+        setLogoError(errMsg);
+      } else {
+        setLogos((prev) => prev.filter((l) => l.id !== id));
+      }
     } catch {
       setLogoError("Failed to delete logo.");
     } finally {
@@ -1205,6 +1252,7 @@ function LogoMarqueePanel({ actor }: { actor: backendInterface | null }) {
 
   const handleMove = async (index: number, direction: "up" | "down") => {
     if (!actor) return;
+    const previousLogos = [...logos];
     const newLogos = [...logos];
     const swapIdx = direction === "up" ? index - 1 : index + 1;
     if (swapIdx < 0 || swapIdx >= newLogos.length) return;
@@ -1212,15 +1260,109 @@ function LogoMarqueePanel({ actor }: { actor: backendInterface | null }) {
     setLogos(newLogos);
     setReordering(true);
     try {
-      await actor.reorderMarqueeLogos(
-        newLogos.map((l) => l.id),
-        adminEmail,
-      );
+      await actor.reorderMarqueeLogos(newLogos.map((l) => l.id));
     } catch {
-      setLogoError("Failed to save order.");
+      setLogos(previousLogos);
+      setLogoError("Failed to reorder logos — please try again");
     } finally {
       setReordering(false);
     }
+  };
+
+  const handleEditOpen = (logo: MarqueeLogo) => {
+    setEditingLogoId(logo.id);
+    setEditUrl(logo.logoUrl);
+    setEditLabel(logo.logoLabel);
+    setEditError("");
+  };
+
+  const handleEditCancel = () => {
+    setEditingLogoId(null);
+    setEditUrl("");
+    setEditLabel("");
+    setEditError("");
+  };
+
+  const handleEditUpload = async (file: File) => {
+    setEditUploading(true);
+    setEditError("");
+    try {
+      const bytes = await file.arrayBuffer();
+      const blob = await (
+        window as {
+          __icpBlobStorage?: {
+            ExternalBlob?: {
+              fromBytes?: (
+                data: Uint8Array,
+                mime: string,
+              ) => Promise<{ url: string }>;
+            };
+          };
+        }
+      ).__icpBlobStorage?.ExternalBlob?.fromBytes?.(
+        new Uint8Array(bytes),
+        file.type,
+      );
+      if (blob?.url) setEditUrl(blob.url);
+      else setEditError("Upload failed — no URL returned.");
+    } catch {
+      setEditError("Upload failed. Check object storage configuration.");
+    } finally {
+      setEditUploading(false);
+    }
+  };
+
+  const handleEditSave = async (logoId: string) => {
+    if (!actor || !editUrl.trim()) return;
+    setEditSaving(true);
+    setEditError("");
+    try {
+      const res = await actor.updateMarqueeLogo(
+        logoId,
+        editUrl.trim(),
+        editLabel.trim(),
+      );
+      if ("ok" in res) {
+        setLogos((prev) =>
+          prev.map((l) =>
+            l.id === logoId
+              ? { ...l, logoUrl: editUrl.trim(), logoLabel: editLabel.trim() }
+              : l,
+          ),
+        );
+        setEditingLogoId(null);
+        setEditUrl("");
+        setEditLabel("");
+      } else {
+        setEditError(res.err);
+      }
+    } catch {
+      setEditError("Save failed. Try again.");
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  // shared input style helper
+  const inputStyle: CSSProperties = {
+    flex: 1,
+    background: "rgba(10,10,10,0.9)",
+    border: "1px solid #1C1F33",
+    color: "#EEF0F8",
+    borderRadius: "8px",
+    padding: "9px 12px",
+    fontSize: "13px",
+    outline: "none",
+    transition: "border-color 0.15s",
+  };
+
+  const focusStyle = (e: FocusEvent<HTMLInputElement>) => {
+    e.currentTarget.style.borderColor = NEON;
+    e.currentTarget.style.boxShadow = "0 0 0 2px rgba(57,255,20,0.12)";
+  };
+  const blurStyle = (e: FocusEvent<HTMLInputElement>) => {
+    e.currentTarget.style.borderColor = "#1C1F33";
+    e.currentTarget.style.boxShadow = "none";
   };
 
   return (
@@ -1360,164 +1502,525 @@ function LogoMarqueePanel({ actor }: { actor: backendInterface | null }) {
                   data-ocid="admin.logo_marquee.list"
                 >
                   {logos.map((logo, idx) => (
-                    <div
-                      key={logo.id}
-                      data-ocid={`admin.logo_marquee.item.${idx + 1}`}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "12px",
-                        padding: "10px 14px",
-                        background: "rgba(10,10,10,0.6)",
-                        border: "1px solid #1C1F33",
-                        borderRadius: "8px",
-                      }}
-                    >
-                      {/* Thumbnail */}
+                    <div key={logo.id}>
+                      {/* Row */}
                       <div
+                        data-ocid={`admin.logo_marquee.item.${idx + 1}`}
+                        draggable={true}
+                        onDragStart={(e) => {
+                          e.dataTransfer.effectAllowed = "move";
+                          setDragIndex(idx);
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "move";
+                        }}
+                        onDragEnd={() => setDragIndex(null)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (dragIndex === null || dragIndex === idx) {
+                            setDragIndex(null);
+                            return;
+                          }
+                          const previousLogos = [...logos];
+                          const newLogos = [...logos];
+                          const [moved] = newLogos.splice(dragIndex, 1);
+                          newLogos.splice(idx, 0, moved);
+                          if (!actor) {
+                            setLogoError(
+                              "Not connected — please refresh the page",
+                            );
+                            return;
+                          }
+                          setLogos(newLogos);
+                          setDragIndex(null);
+                          actor
+                            ?.reorderMarqueeLogos(newLogos.map((l) => l.id))
+                            .then((res) => {
+                              if (!("ok" in res)) {
+                                setLogos(previousLogos);
+                                setLogoError(
+                                  "Failed to reorder logos. Order has been restored.",
+                                );
+                              }
+                            })
+                            .catch(() => {
+                              setLogos(previousLogos);
+                              setLogoError(
+                                "Failed to reorder logos. Order has been restored.",
+                              );
+                            });
+                        }}
                         style={{
-                          width: "64px",
-                          height: "32px",
-                          flexShrink: 0,
-                          background: "rgba(255,255,255,0.04)",
-                          borderRadius: "4px",
-                          overflow: "hidden",
                           display: "flex",
                           alignItems: "center",
-                          justifyContent: "center",
+                          gap: "12px",
+                          padding: "10px 14px",
+                          background: "rgba(10,10,10,0.6)",
+                          border:
+                            editingLogoId === logo.id
+                              ? `1px solid ${NEON}`
+                              : "1px solid #1C1F33",
+                          borderRadius:
+                            editingLogoId === logo.id ? "8px 8px 0 0" : "8px",
+                          transition: "border-color 0.15s",
+                          opacity: dragIndex === idx ? 0.4 : 1,
+                          cursor: "grab",
                         }}
                       >
-                        <img
-                          src={logo.logoUrl}
-                          alt={logo.logoLabel || "Logo"}
+                        {/* Drag handle */}
+                        <GripVertical
+                          size={16}
                           style={{
-                            maxHeight: "28px",
-                            maxWidth: "60px",
-                            objectFit: "contain",
-                          }}
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
+                            color: "#6b7280",
+                            marginRight: 0,
+                            flexShrink: 0,
+                            cursor: "grab",
                           }}
                         />
-                      </div>
-
-                      {/* Label */}
-                      <span
-                        style={{
-                          flex: 1,
-                          fontSize: "13px",
-                          color: "#EEF0F8",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                          minWidth: 0,
-                        }}
-                      >
-                        {logo.logoLabel || (
-                          <span style={{ color: MUTED }}>No label</span>
-                        )}
-                      </span>
-
-                      {/* Up / Down reorder */}
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: "2px",
-                        }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => handleMove(idx, "up")}
-                          disabled={idx === 0 || reordering}
-                          data-ocid={`admin.logo_marquee.move_up.${idx + 1}`}
-                          title="Move up"
+                        {/* Thumbnail */}
+                        <div
                           style={{
-                            padding: "2px 5px",
-                            border: "1px solid #1C1F33",
+                            width: "64px",
+                            height: "32px",
+                            flexShrink: 0,
+                            background: "rgba(255,255,255,0.04)",
                             borderRadius: "4px",
-                            background: "transparent",
-                            color: idx === 0 ? "rgba(122,125,144,0.3)" : MUTED,
-                            cursor:
-                              idx === 0 || reordering
-                                ? "not-allowed"
-                                : "pointer",
+                            overflow: "hidden",
                             display: "flex",
                             alignItems: "center",
-                            lineHeight: 1,
+                            justifyContent: "center",
                           }}
                         >
-                          <ChevronUp size={12} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleMove(idx, "down")}
-                          disabled={idx === logos.length - 1 || reordering}
-                          data-ocid={`admin.logo_marquee.move_down.${idx + 1}`}
-                          title="Move down"
-                          style={{
-                            padding: "2px 5px",
-                            border: "1px solid #1C1F33",
-                            borderRadius: "4px",
-                            background: "transparent",
-                            color:
-                              idx === logos.length - 1
-                                ? "rgba(122,125,144,0.3)"
-                                : MUTED,
-                            cursor:
-                              idx === logos.length - 1 || reordering
-                                ? "not-allowed"
-                                : "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            lineHeight: 1,
-                          }}
-                        >
-                          <ChevronDown size={12} />
-                        </button>
-                      </div>
-
-                      {/* Delete */}
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(logo.id)}
-                        disabled={deletingId === logo.id}
-                        data-ocid={`admin.logo_marquee.delete_button.${idx + 1}`}
-                        title="Remove logo"
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "4px",
-                          padding: "6px 10px",
-                          borderRadius: "6px",
-                          border: "1px solid #374151",
-                          background: "transparent",
-                          color: deletingId === logo.id ? MUTED : "#f87171",
-                          fontSize: "12px",
-                          fontWeight: 500,
-                          cursor:
-                            deletingId === logo.id ? "not-allowed" : "pointer",
-                          flexShrink: 0,
-                          transition: "border-color 0.15s, color 0.15s",
-                        }}
-                        onMouseEnter={(e) => {
-                          if (deletingId !== logo.id)
-                            e.currentTarget.style.borderColor = "#f87171";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = "#374151";
-                        }}
-                      >
-                        {deletingId === logo.id ? (
-                          <Loader2
-                            size={12}
-                            style={{ animation: "spin 1s linear infinite" }}
+                          <img
+                            src={logo.logoUrl}
+                            alt={logo.logoLabel || "Logo"}
+                            style={{
+                              maxHeight: "28px",
+                              maxWidth: "60px",
+                              objectFit: "contain",
+                            }}
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                            }}
                           />
-                        ) : (
-                          <Trash2 size={12} />
-                        )}
-                        Remove
-                      </button>
+                        </div>
+
+                        {/* Label */}
+                        <span
+                          style={{
+                            flex: 1,
+                            fontSize: "13px",
+                            color: "#EEF0F8",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            minWidth: 0,
+                          }}
+                        >
+                          {logo.logoLabel || (
+                            <span style={{ color: MUTED }}>No label</span>
+                          )}
+                        </span>
+
+                        {/* Edit button */}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            editingLogoId === logo.id
+                              ? handleEditCancel()
+                              : handleEditOpen(logo)
+                          }
+                          data-ocid={`admin.logo_marquee.edit_button.${idx + 1}`}
+                          title="Edit logo"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            padding: "6px 10px",
+                            borderRadius: "6px",
+                            border:
+                              editingLogoId === logo.id
+                                ? `1px solid ${NEON}`
+                                : "1px solid #374151",
+                            background:
+                              editingLogoId === logo.id
+                                ? "rgba(57,255,20,0.08)"
+                                : "transparent",
+                            color: editingLogoId === logo.id ? NEON : MUTED,
+                            fontSize: "12px",
+                            fontWeight: 500,
+                            cursor: "pointer",
+                            flexShrink: 0,
+                            transition:
+                              "border-color 0.15s, color 0.15s, background 0.15s",
+                          }}
+                        >
+                          {editingLogoId === logo.id ? "✕ Cancel" : "✎ Edit"}
+                        </button>
+
+                        {/* Up / Down reorder */}
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "2px",
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleMove(idx, "up")}
+                            disabled={idx === 0 || reordering}
+                            data-ocid={`admin.logo_marquee.move_up.${idx + 1}`}
+                            title="Move up"
+                            style={{
+                              padding: "2px 5px",
+                              border: "1px solid #1C1F33",
+                              borderRadius: "4px",
+                              background: "transparent",
+                              color:
+                                idx === 0 ? "rgba(122,125,144,0.3)" : MUTED,
+                              cursor:
+                                idx === 0 || reordering
+                                  ? "not-allowed"
+                                  : "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              lineHeight: 1,
+                            }}
+                          >
+                            <ChevronUp size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleMove(idx, "down")}
+                            disabled={idx === logos.length - 1 || reordering}
+                            data-ocid={`admin.logo_marquee.move_down.${idx + 1}`}
+                            title="Move down"
+                            style={{
+                              padding: "2px 5px",
+                              border: "1px solid #1C1F33",
+                              borderRadius: "4px",
+                              background: "transparent",
+                              color:
+                                idx === logos.length - 1
+                                  ? "rgba(122,125,144,0.3)"
+                                  : MUTED,
+                              cursor:
+                                idx === logos.length - 1 || reordering
+                                  ? "not-allowed"
+                                  : "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              lineHeight: 1,
+                            }}
+                          >
+                            <ChevronDown size={12} />
+                          </button>
+                        </div>
+
+                        {/* Delete */}
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(logo.id)}
+                          disabled={deletingId === logo.id}
+                          data-ocid={`admin.logo_marquee.delete_button.${idx + 1}`}
+                          title="Remove logo"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            padding: "6px 10px",
+                            borderRadius: "6px",
+                            border: "1px solid #374151",
+                            background: "transparent",
+                            color: deletingId === logo.id ? MUTED : "#f87171",
+                            fontSize: "12px",
+                            fontWeight: 500,
+                            cursor:
+                              deletingId === logo.id
+                                ? "not-allowed"
+                                : "pointer",
+                            flexShrink: 0,
+                            transition: "border-color 0.15s, color 0.15s",
+                          }}
+                          onMouseEnter={(e) => {
+                            if (deletingId !== logo.id)
+                              e.currentTarget.style.borderColor = "#f87171";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = "#374151";
+                          }}
+                        >
+                          {deletingId === logo.id ? (
+                            <Loader2
+                              size={12}
+                              style={{ animation: "spin 1s linear infinite" }}
+                            />
+                          ) : (
+                            <Trash2 size={12} />
+                          )}
+                          Remove
+                        </button>
+                      </div>
+
+                      {/* Inline edit form */}
+                      {editingLogoId === logo.id && (
+                        <div
+                          style={{
+                            padding: "16px",
+                            background: "rgba(57,255,20,0.03)",
+                            border: `1px solid ${NEON}`,
+                            borderTop: "none",
+                            borderRadius: "0 0 8px 8px",
+                          }}
+                          data-ocid={`admin.logo_marquee.edit_form.${idx + 1}`}
+                        >
+                          <p
+                            style={{
+                              color: NEON,
+                              fontSize: "11px",
+                              fontWeight: 700,
+                              letterSpacing: "0.06em",
+                              textTransform: "uppercase",
+                              marginBottom: "12px",
+                              margin: "0 0 12px",
+                            }}
+                          >
+                            Edit Logo
+                          </p>
+
+                          {/* Edit URL field: upload + paste fallback */}
+                          <div style={{ marginBottom: "10px" }}>
+                            <label
+                              htmlFor={`editLogoImage-${logo.id}`}
+                              style={{
+                                display: "block",
+                                color: MUTED,
+                                fontSize: "11px",
+                                fontWeight: 600,
+                                letterSpacing: "0.04em",
+                                marginBottom: "6px",
+                                textTransform: "uppercase",
+                              }}
+                            >
+                              Logo Image
+                            </label>
+                            {/* Upload button */}
+                            <input
+                              type="file"
+                              id={`editLogoImage-${logo.id}`}
+                              style={{ display: "none" }}
+                              accept="image/*"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                await handleEditUpload(file);
+                                e.target.value = "";
+                              }}
+                            />
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: "8px",
+                                alignItems: "center",
+                                marginBottom: "8px",
+                              }}
+                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  document
+                                    .getElementById(`editLogoImage-${logo.id}`)
+                                    ?.click()
+                                }
+                                disabled={editUploading || editSaving}
+                                data-ocid={`admin.logo_marquee.edit_upload_button.${idx + 1}`}
+                                style={{
+                                  padding: "7px 14px",
+                                  borderRadius: "7px",
+                                  border: `1px solid ${NEON}`,
+                                  background: "rgba(57,255,20,0.07)",
+                                  color: NEON,
+                                  fontSize: "12px",
+                                  fontWeight: 600,
+                                  cursor:
+                                    editUploading || editSaving
+                                      ? "not-allowed"
+                                      : "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "5px",
+                                  flexShrink: 0,
+                                  transition: "background 0.15s",
+                                }}
+                              >
+                                {editUploading ? (
+                                  <Loader2
+                                    size={12}
+                                    style={{
+                                      animation: "spin 1s linear infinite",
+                                    }}
+                                  />
+                                ) : (
+                                  "↑ Upload Image"
+                                )}
+                              </button>
+                              <span style={{ color: MUTED, fontSize: "11px" }}>
+                                or paste a URL below
+                              </span>
+                            </div>
+                            {/* Paste URL fallback */}
+                            <input
+                              type="url"
+                              placeholder="Logo image URL (https://…)"
+                              value={editUrl}
+                              onChange={(e) => setEditUrl(e.target.value)}
+                              data-ocid={`admin.logo_marquee.edit_url_input.${idx + 1}`}
+                              style={{
+                                ...inputStyle,
+                                width: "100%",
+                                boxSizing: "border-box",
+                              }}
+                              onFocus={focusStyle}
+                              onBlur={blurStyle}
+                            />
+                            {/* Thumbnail preview */}
+                            {editUrl && (
+                              <img
+                                src={editUrl}
+                                alt="Preview"
+                                style={{
+                                  maxWidth: "80px",
+                                  maxHeight: "80px",
+                                  marginTop: "8px",
+                                  borderRadius: "4px",
+                                  border: "1px solid #1C1F33",
+                                  objectFit: "contain",
+                                  background: "rgba(255,255,255,0.04)",
+                                }}
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none";
+                                }}
+                              />
+                            )}
+                          </div>
+
+                          {/* Edit label field */}
+                          <div style={{ marginBottom: "12px" }}>
+                            <label
+                              htmlFor={`editLogoLabel-${logo.id}`}
+                              style={{
+                                display: "block",
+                                color: MUTED,
+                                fontSize: "11px",
+                                fontWeight: 600,
+                                letterSpacing: "0.04em",
+                                marginBottom: "6px",
+                                textTransform: "uppercase",
+                              }}
+                            >
+                              Label
+                            </label>
+                            <input
+                              type="text"
+                              id={`editLogoLabel-${logo.id}`}
+                              placeholder="Label (optional)"
+                              value={editLabel}
+                              onChange={(e) => setEditLabel(e.target.value)}
+                              data-ocid={`admin.logo_marquee.edit_label_input.${idx + 1}`}
+                              style={{
+                                ...inputStyle,
+                                width: "100%",
+                                boxSizing: "border-box",
+                              }}
+                              onFocus={focusStyle}
+                              onBlur={blurStyle}
+                            />
+                          </div>
+
+                          {/* Error */}
+                          {editError && (
+                            <p
+                              style={{
+                                color: "#f87171",
+                                fontSize: "12px",
+                                margin: "0 0 10px",
+                              }}
+                              data-ocid={`admin.logo_marquee.edit_error_state.${idx + 1}`}
+                            >
+                              {editError}
+                            </p>
+                          )}
+
+                          {/* Save / Cancel */}
+                          <div style={{ display: "flex", gap: "8px" }}>
+                            <button
+                              type="button"
+                              onClick={() => handleEditSave(logo.id)}
+                              disabled={editSaving || !editUrl.trim()}
+                              data-ocid={`admin.logo_marquee.edit_save_button.${idx + 1}`}
+                              style={{
+                                padding: "8px 18px",
+                                borderRadius: "7px",
+                                border: "none",
+                                background:
+                                  editSaving || !editUrl.trim()
+                                    ? "rgba(94,240,138,0.4)"
+                                    : "#5EF08A",
+                                color: "#0A0B14",
+                                fontSize: "13px",
+                                fontWeight: 700,
+                                cursor:
+                                  editSaving || !editUrl.trim()
+                                    ? "not-allowed"
+                                    : "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "5px",
+                                transition: "background 0.15s",
+                              }}
+                            >
+                              {editSaving ? (
+                                <Loader2
+                                  size={13}
+                                  style={{
+                                    animation: "spin 1s linear infinite",
+                                  }}
+                                />
+                              ) : (
+                                "✓ Save"
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleEditCancel}
+                              data-ocid={`admin.logo_marquee.edit_cancel_button.${idx + 1}`}
+                              style={{
+                                padding: "8px 14px",
+                                borderRadius: "7px",
+                                border: "1px solid #374151",
+                                background: "transparent",
+                                color: MUTED,
+                                fontSize: "13px",
+                                fontWeight: 500,
+                                cursor: "pointer",
+                                transition: "border-color 0.15s, color 0.15s",
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.borderColor = "#EEF0F8";
+                                e.currentTarget.style.color = "#EEF0F8";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.borderColor = "#374151";
+                                e.currentTarget.style.color = MUTED;
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1542,7 +2045,67 @@ function LogoMarqueePanel({ actor }: { actor: backendInterface | null }) {
                 >
                   Add Logo
                 </p>
-                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+
+                {/* Upload button + paste fallback row */}
+                <div style={{ marginBottom: "10px" }}>
+                  <input
+                    type="file"
+                    id="addLogoUploadInput"
+                    style={{ display: "none" }}
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      await handleAddUpload(file);
+                      e.target.value = "";
+                    }}
+                  />
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "8px",
+                      alignItems: "center",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() =>
+                        document.getElementById("addLogoUploadInput")?.click()
+                      }
+                      disabled={addUploading || adding}
+                      data-ocid="admin.logo_marquee.upload_button"
+                      style={{
+                        padding: "7px 14px",
+                        borderRadius: "7px",
+                        border: `1px solid ${NEON}`,
+                        background: "rgba(57,255,20,0.07)",
+                        color: NEON,
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        cursor:
+                          addUploading || adding ? "not-allowed" : "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px",
+                        flexShrink: 0,
+                        transition: "background 0.15s",
+                      }}
+                    >
+                      {addUploading ? (
+                        <Loader2
+                          size={12}
+                          style={{ animation: "spin 1s linear infinite" }}
+                        />
+                      ) : (
+                        "↑ Upload Image"
+                      )}
+                    </button>
+                    <span style={{ color: MUTED, fontSize: "11px" }}>
+                      or paste a URL below
+                    </span>
+                  </div>
+                  {/* URL input (paste fallback) */}
                   <input
                     type="url"
                     placeholder="Logo image URL (https://…)"
@@ -1550,7 +2113,8 @@ function LogoMarqueePanel({ actor }: { actor: backendInterface | null }) {
                     onChange={(e) => setAddUrl(e.target.value)}
                     data-ocid="admin.logo_marquee.url_input"
                     style={{
-                      flex: "1 1 240px",
+                      width: "100%",
+                      boxSizing: "border-box",
                       background: "rgba(10,10,10,0.9)",
                       border: "1px solid #1C1F33",
                       color: "#EEF0F8",
@@ -1570,6 +2134,30 @@ function LogoMarqueePanel({ actor }: { actor: backendInterface | null }) {
                       e.currentTarget.style.boxShadow = "none";
                     }}
                   />
+                  {/* Thumbnail preview */}
+                  {addUrl && (
+                    <img
+                      src={addUrl}
+                      alt="Preview"
+                      style={{
+                        maxWidth: "80px",
+                        maxHeight: "80px",
+                        marginTop: "8px",
+                        borderRadius: "4px",
+                        border: "1px solid #1C1F33",
+                        objectFit: "contain",
+                        background: "rgba(255,255,255,0.04)",
+                        display: "block",
+                      }}
+                      onError={(e) => {
+                        e.currentTarget.style.display = "none";
+                      }}
+                    />
+                  )}
+                </div>
+
+                {/* Label + Add button row */}
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                   <input
                     type="text"
                     placeholder="Label (optional)"
@@ -1603,7 +2191,7 @@ function LogoMarqueePanel({ actor }: { actor: backendInterface | null }) {
                   <button
                     type="button"
                     onClick={handleAdd}
-                    disabled={adding || !addUrl.trim()}
+                    disabled={adding || addUploading || !addUrl.trim()}
                     data-ocid="admin.logo_marquee.add_button"
                     style={{
                       padding: "9px 20px",
@@ -1611,14 +2199,16 @@ function LogoMarqueePanel({ actor }: { actor: backendInterface | null }) {
                       border: "none",
                       background: addSuccess
                         ? "rgba(57,255,20,0.15)"
-                        : adding || !addUrl.trim()
+                        : adding || addUploading || !addUrl.trim()
                           ? "rgba(94,240,138,0.4)"
                           : "#5EF08A",
                       color: addSuccess ? NEON : "#0A0B14",
                       fontSize: "13px",
                       fontWeight: 700,
                       cursor:
-                        adding || !addUrl.trim() ? "not-allowed" : "pointer",
+                        adding || addUploading || !addUrl.trim()
+                          ? "not-allowed"
+                          : "pointer",
                       whiteSpace: "nowrap",
                       transition: "background 0.15s, color 0.15s",
                       display: "inline-flex",
@@ -1660,6 +2250,219 @@ function LogoMarqueePanel({ actor }: { actor: backendInterface | null }) {
   );
 }
 
+// ── Platform Configuration ─────────────────────────────────────────────────
+type PlatformConfigActor = {
+  getSiteBaseUrl(): Promise<string>;
+  getLogoUrl(): Promise<string>;
+  setSiteBaseUrl(
+    url: string,
+  ): Promise<{ __kind__: "ok"; ok: null } | { __kind__: "err"; err: string }>;
+  setLogoUrl(
+    url: string,
+  ): Promise<{ __kind__: "ok"; ok: null } | { __kind__: "err"; err: string }>;
+};
+
+function PlatformConfigPanel({
+  actor,
+}: { actor: (backendInterface & PlatformConfigActor) | null }) {
+  const [siteUrl, setSiteUrlVal] = useState("");
+  const [logoUrl, setLogoUrlVal] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [isError, setIsError] = useState(false);
+
+  useEffect(() => {
+    if (!actor) return;
+    (actor as PlatformConfigActor)
+      .getSiteBaseUrl()
+      .then(setSiteUrlVal)
+      .catch(() => {});
+    (actor as PlatformConfigActor)
+      .getLogoUrl()
+      .then(setLogoUrlVal)
+      .catch(() => {});
+  }, [actor]);
+
+  const siteUrlWarn = siteUrl.length > 0 && !siteUrl.startsWith("https://");
+  const logoUrlWarn = logoUrl.length > 0 && !logoUrl.startsWith("https://");
+
+  const handleSave = async () => {
+    if (!actor) return;
+    setSaving(true);
+    setStatus(null);
+    setIsError(false);
+    try {
+      const r1 = await (actor as PlatformConfigActor).setSiteBaseUrl(siteUrl);
+      if (r1.__kind__ === "err") throw new Error(r1.err);
+      const r2 = await (actor as PlatformConfigActor).setLogoUrl(logoUrl);
+      if (r2.__kind__ === "err") throw new Error(r2.err);
+      setStatus("Saved!");
+      setTimeout(() => setStatus(null), 3000);
+    } catch (err) {
+      setIsError(true);
+      setStatus(err instanceof Error ? err.message : "Save failed. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputStyle: CSSProperties = {
+    width: "100%",
+    background: "#0D0F1E",
+    border: BORDER,
+    borderRadius: "8px",
+    padding: "10px 14px",
+    color: "#EEF0F8",
+    fontSize: "14px",
+    outline: "none",
+    boxSizing: "border-box",
+  };
+
+  return (
+    <div style={{ marginBottom: "48px" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          marginBottom: "6px",
+        }}
+      >
+        <h2
+          style={{
+            color: "#EEF0F8",
+            fontSize: "18px",
+            fontWeight: 700,
+            margin: 0,
+          }}
+        >
+          Platform Configuration
+        </h2>
+      </div>
+      <p style={{ color: MUTED, fontSize: "14px", marginBottom: "20px" }}>
+        Set the canonical site URL and logo URL for this deployment. These
+        values are used in emails, links, and notifications.
+      </p>
+      <div style={{ border: BORDER, borderRadius: "12px", overflow: "hidden" }}>
+        <div
+          style={{
+            padding: "14px 20px",
+            background: "rgba(14,16,32,1)",
+            borderBottom: BORDER,
+          }}
+        >
+          <span
+            style={{
+              color: "#EEF0F8",
+              fontSize: "13px",
+              fontWeight: 700,
+              letterSpacing: "0.04em",
+            }}
+          >
+            Site &amp; Logo URLs
+          </span>
+        </div>
+        <div
+          style={{
+            padding: "20px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "16px",
+          }}
+        >
+          <div>
+            <label
+              htmlFor="platform-site-url"
+              style={{
+                display: "block",
+                color: MUTED,
+                fontSize: "12px",
+                marginBottom: "6px",
+                letterSpacing: "0.06em",
+                textTransform: "uppercase" as const,
+              }}
+            >
+              Site Base URL
+            </label>
+            <input
+              id="platform-site-url"
+              type="text"
+              value={siteUrl}
+              onChange={(e) => setSiteUrlVal(e.target.value)}
+              placeholder="https://yourdomain.com"
+              style={inputStyle}
+            />
+            {siteUrlWarn && (
+              <p
+                style={{ color: "#f59e0b", fontSize: "12px", marginTop: "4px" }}
+              >
+                URL should start with https://
+              </p>
+            )}
+          </div>
+          <div>
+            <label
+              htmlFor="platform-logo-url"
+              style={{
+                display: "block",
+                color: MUTED,
+                fontSize: "12px",
+                marginBottom: "6px",
+                letterSpacing: "0.06em",
+                textTransform: "uppercase" as const,
+              }}
+            >
+              Logo URL
+            </label>
+            <input
+              id="platform-logo-url"
+              type="text"
+              value={logoUrl}
+              onChange={(e) => setLogoUrlVal(e.target.value)}
+              placeholder="https://yourdomain.com/logo.png"
+              style={inputStyle}
+            />
+            {logoUrlWarn && (
+              <p
+                style={{ color: "#f59e0b", fontSize: "12px", marginTop: "4px" }}
+              >
+                URL should start with https://
+              </p>
+            )}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              style={{
+                background: "#5EF08A",
+                color: "#0a0a0a",
+                border: "none",
+                borderRadius: "8px",
+                padding: "10px 20px",
+                fontWeight: 700,
+                fontSize: "14px",
+                cursor: saving ? "not-allowed" : "pointer",
+                opacity: saving ? 0.6 : 1,
+              }}
+            >
+              {saving ? "Saving\u2026" : "Save Configuration"}
+            </button>
+            {status && (
+              <span
+                style={{ fontSize: "13px", color: isError ? "#f87171" : NEON }}
+              >
+                {status}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminSiteTextPage() {
   const { actor, isFetching } = useActor();
   const { textMap, fetchAllSiteText, updateText } = useSiteTextStore();
@@ -1673,7 +2476,7 @@ export default function AdminSiteTextPage() {
     setLoading(true);
     setError(null);
     try {
-      await fetchAllSiteText(actor as Parameters<typeof fetchAllSiteText>[0]);
+      await fetchAllSiteText(actor as backendInterface);
     } catch {
       setError("Failed to load site text overrides.");
     } finally {
@@ -1689,11 +2492,10 @@ export default function AdminSiteTextPage() {
     if (!actor) return;
     setResettingKey(key);
     try {
-      await (actor as backendInterface).updateSiteText(
-        key,
-        "",
-        getAdminEmail(),
-      );
+      const success = await (actor as backendInterface).updateSiteText(key, "");
+      if (!success) {
+        throw new Error("Reset rejected by backend.");
+      }
       updateText(key, "");
       broadcastSiteTextInvalidation();
     } catch {
@@ -1730,22 +2532,28 @@ export default function AdminSiteTextPage() {
             }}
           >
             <Type size={20} color={NEON} />
-            <h1
+            <TypewriterText
+              text="Site Text Overrides"
+              as="h1"
+              speed={55}
               style={{
-                color: "#EEF0F8",
+                color: "#5EF08A",
                 fontSize: "20px",
                 fontWeight: 700,
                 margin: 0,
+                fontFamily: "'Courier New', monospace",
               }}
-            >
-              Site Text Overrides
-            </h1>
+            />
           </div>
           <p style={{ color: MUTED, fontSize: "14px", margin: 0 }}>
             All text currently overriding the site defaults. Resetting a key
             restores the original hardcoded text.
           </p>
         </div>
+
+        <PlatformConfigPanel
+          actor={actor as (backendInterface & PlatformConfigActor) | null}
+        />
 
         {/* SEO tip callout */}
         <div

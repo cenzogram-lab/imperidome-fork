@@ -1,6 +1,7 @@
 import { Eye, EyeOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { backendInterface } from "../backend";
+import TypewriterText from "../components/TypewriterText";
 import { useActor } from "../hooks/useActor";
 import { hashPassword } from "../lib/hashPassword";
 
@@ -155,15 +156,23 @@ export default function ResetPasswordPage() {
                 fontSize: "22px",
                 fontWeight: 700,
                 marginBottom: "12px",
+                fontFamily: "'Courier New', monospace",
               }}
             >
-              Password Updated
+              <TypewriterText text="Password Updated" speed={50} />
             </h2>
             <p
-              style={{ color: DARK.body, fontSize: "14px", lineHeight: "1.6" }}
+              style={{
+                color: DARK.body,
+                fontSize: "14px",
+                lineHeight: "1.6",
+                fontFamily: "'Courier New', monospace",
+              }}
             >
-              Your password has been updated. You'll be redirected to sign in
-              shortly.
+              <TypewriterText
+                text="Your password has been updated. You'll be redirected to sign in shortly."
+                speed={20}
+              />
             </p>
           </div>
         )}
@@ -173,9 +182,14 @@ export default function ResetPasswordPage() {
           <div data-ocid="reset_password.token_error_state">
             <h2
               className="text-center mb-4"
-              style={{ color: DARK.heading, fontSize: "22px", fontWeight: 700 }}
+              style={{
+                color: DARK.heading,
+                fontSize: "22px",
+                fontWeight: 700,
+                fontFamily: "'Courier New', monospace",
+              }}
             >
-              Link Expired
+              <TypewriterText text="Link Expired" speed={50} />
             </h2>
             <div
               style={{
@@ -213,9 +227,14 @@ export default function ResetPasswordPage() {
           <div data-ocid="reset_password.error_state">
             <h2
               className="text-center mb-4"
-              style={{ color: DARK.heading, fontSize: "22px", fontWeight: 700 }}
+              style={{
+                color: DARK.heading,
+                fontSize: "22px",
+                fontWeight: 700,
+                fontFamily: "'Courier New', monospace",
+              }}
             >
-              Something Went Wrong
+              <TypewriterText text="Something Went Wrong" speed={50} />
             </h2>
             <div
               style={{
@@ -256,9 +275,14 @@ export default function ResetPasswordPage() {
           <>
             <h2
               className="text-center mb-6"
-              style={{ color: DARK.heading, fontSize: "22px", fontWeight: 700 }}
+              style={{
+                color: DARK.heading,
+                fontSize: "22px",
+                fontWeight: 700,
+                fontFamily: "'Courier New', monospace",
+              }}
             >
-              Set New Password
+              <TypewriterText text="Set New Password" speed={50} />
             </h2>
 
             {actorLoading && (
@@ -302,10 +326,13 @@ export default function ResetPasswordPage() {
                   htmlFor="rp-new-password"
                   style={{
                     display: "block",
-                    color: DARK.heading,
+                    color: DARK.accent,
                     fontWeight: 600,
-                    fontSize: "14px",
+                    fontSize: "12px",
                     marginBottom: "6px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    fontFamily: "'Courier New', monospace",
                   }}
                 >
                   New Password
@@ -350,10 +377,13 @@ export default function ResetPasswordPage() {
                   htmlFor="rp-confirm-password"
                   style={{
                     display: "block",
-                    color: DARK.heading,
+                    color: DARK.accent,
                     fontWeight: 600,
-                    fontSize: "14px",
+                    fontSize: "12px",
                     marginBottom: "6px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    fontFamily: "'Courier New', monospace",
                   }}
                 >
                   Confirm Password
@@ -411,7 +441,11 @@ export default function ResetPasswordPage() {
                   transition: "background-color 0.15s",
                 }}
               >
-                {isLoading ? "Updating…" : "Update Password"}
+                <TypewriterText
+                  text={isLoading ? "Updating…" : "Update Password"}
+                  speed={30}
+                  key={isLoading ? "updating" : "idle"}
+                />
               </button>
             </form>
 

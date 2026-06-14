@@ -6,20 +6,17 @@ import {
   Eye,
   EyeOff,
   Key,
+  Trash2,
   Zap,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import type { PushSubscription } from "../../backend.d";
 import InstructionModal from "../../components/InstructionModal";
 import type { InstructionStep } from "../../components/InstructionModal";
+import TypewriterText from "../../components/TypewriterText";
 import { useActor } from "../../hooks/useActor";
-import { getSession } from "../../hooks/useSession";
 import AdminLayout from "./AdminLayout";
-
-function getAdminEmail(): string {
-  const s = getSession();
-  return s?.email ?? localStorage.getItem("imperidome_admin_email") ?? "";
-}
 
 interface SaveStatus {
   type: "idle" | "saving" | "success" | "error";
@@ -67,10 +64,26 @@ export default function AdminNotificationSettings() {
     null,
   );
   const [subLoading, setSubLoading] = useState(true);
+  const [removingSubscription, setRemovingSubscription] = useState(false);
+  const [removeSubError, setRemoveSubError] = useState<string | null>(null);
+  const [subscriptionLoadError, setSubscriptionLoadError] = useState(false);
+
+  // Reminder lead days setting
+  const [reminderLeadDays, setReminderLeadDays] = useState<number>(5);
+  const [reminderLeadDaysInput, setReminderLeadDaysInput] =
+    useState<string>("5");
+  const [reminderLeadDaysSaving, setReminderLeadDaysSaving] = useState(false);
+  const [reminderLeadDaysSaveMsg, setReminderLeadDaysSaveMsg] = useState<
+    string | null
+  >(null);
+
+  // Send reminders state (BUG-013)
+  const [sendingReminders, setSendingReminders] = useState(false);
+  const [remindersSentMsg, setRemindersSentMsg] = useState<string | null>(null);
+  const [remindersSentSuccess, setRemindersSentSuccess] = useState(false);
 
   useEffect(() => {
     if (!actor || isFetching) return;
-    const adminEmail = getAdminEmail();
 
     // Fetch VAPID public key
     setKeyLoading(true);
@@ -83,14 +96,34 @@ export default function AdminNotificationSettings() {
     // Fetch subscription status
     setSubLoading(true);
     actor
-      .getPushSubscription(adminEmail)
+      .getPushSubscription()
       .then((result) => {
         if ("ok" in result) {
           setSubscription(result.ok ?? null);
+          setSubscriptionLoadError(false);
         }
       })
-      .catch(() => setSubscription(null))
+      .catch(() => {
+        setSubscription(null);
+        setSubscriptionLoadError(true);
+      })
       .finally(() => setSubLoading(false));
+
+    // Fetch reminder lead days
+    try {
+      actor
+        .getReminderLeadDays()
+        .then((days) => {
+          const daysNum = Number(days);
+          setReminderLeadDays(daysNum);
+          setReminderLeadDaysInput(String(daysNum));
+        })
+        .catch(() => {
+          /* leave default */
+        });
+    } catch {
+      // leave default
+    }
   }, [actor, isFetching]);
 
   async function handleCopyKey() {
@@ -100,7 +133,7 @@ export default function AdminNotificationSettings() {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  async function handleSaveVapidKeys(e: React.FormEvent) {
+  async function handleSaveVapidKeys(e: FormEvent) {
     e.preventDefault();
     if (!actor) return;
     if (!newPublicKey.trim() || !newPrivateKey.trim()) {
@@ -113,11 +146,10 @@ export default function AdminNotificationSettings() {
     setSaveStatus({ type: "saving" });
     try {
       const result = await actor.setVapidKeys(
-        getAdminEmail(),
         newPrivateKey.trim(),
         newPublicKey.trim(),
       );
-      if ("ok" in result) {
+      if ("ok" in result || "okAlreadyAdvanced" in result) {
         setSaveStatus({
           type: "success",
           message: "VAPID keys updated successfully.",
@@ -132,11 +164,85 @@ export default function AdminNotificationSettings() {
             "err" in result ? String(result.err) : "Failed to update keys.",
         });
       }
+      setTimeout(() => setSaveStatus({ type: "idle" }), 4000);
     } catch (err) {
       setSaveStatus({
         type: "error",
         message: `Failed to update VAPID keys: ${err instanceof Error ? err.message : "Unknown error"}`,
       });
+      setTimeout(() => setSaveStatus({ type: "idle" }), 4000);
+    }
+  }
+
+  async function handleSaveReminderLeadDays() {
+    if (!actor) return;
+    const days = Number.parseInt(reminderLeadDaysInput, 10);
+    if (Number.isNaN(days) || days < 1 || days > 30) {
+      setReminderLeadDaysSaveMsg("Please enter a number between 1 and 30.");
+      return;
+    }
+    setReminderLeadDaysSaving(true);
+    setReminderLeadDaysSaveMsg(null);
+    try {
+      const result = await actor.setReminderLeadDays(BigInt(days));
+      if ("ok" in result) {
+        setReminderLeadDays(days);
+        setReminderLeadDaysSaveMsg("Saved.");
+      } else if ("err" in result) {
+        setReminderLeadDaysSaveMsg(result.err);
+      }
+    } catch {
+      setReminderLeadDaysSaveMsg("Failed to save.");
+    } finally {
+      setReminderLeadDaysSaving(false);
+    }
+  }
+
+  async function handleSendReminders() {
+    if (!actor) return;
+    setSendingReminders(true);
+    setRemindersSentMsg(null);
+    setRemindersSentSuccess(false);
+    try {
+      const result = await actor.sendUpcomingBillingReminders();
+      if ("ok" in result) {
+        setRemindersSentSuccess(true);
+        setRemindersSentMsg("Reminders sent successfully.");
+      } else if ("err" in result) {
+        setRemindersSentSuccess(false);
+        setRemindersSentMsg((result as { err: string }).err);
+      }
+    } catch (e) {
+      setRemindersSentSuccess(false);
+      setRemindersSentMsg(
+        e instanceof Error ? e.message : "Failed to send reminders.",
+      );
+    } finally {
+      setSendingReminders(false);
+    }
+  }
+
+  async function handleRemoveSubscription() {
+    if (!actor) return;
+    setRemovingSubscription(true);
+    setRemoveSubError(null);
+    try {
+      const result = await actor.removePushSubscription();
+      if ("ok" in result || "okAlreadyAdvanced" in result) {
+        setSubscription(null);
+      } else {
+        setRemoveSubError(
+          "err" in result
+            ? String(result.err)
+            : "Failed to remove subscription.",
+        );
+      }
+    } catch (err) {
+      setRemoveSubError(
+        err instanceof Error ? err.message : "Failed to remove subscription.",
+      );
+    } finally {
+      setRemovingSubscription(false);
     }
   }
 
@@ -144,7 +250,14 @@ export default function AdminNotificationSettings() {
     <AdminLayout pageTitle="Notification Settings">
       <div className="max-w-2xl space-y-8">
         {/* ── Page header ────────────────────────────────────────────────────── */}
-        <div className="flex items-center gap-4 p-5 rounded-xl border bg-white/3 border-white/10">
+        <div
+          style={{
+            background: "rgba(10,11,20,0.85)",
+            border: "1px solid rgba(94,240,138,0.2)",
+            borderRadius: "12px",
+          }}
+          className="flex items-center gap-4 p-5"
+        >
           <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-amber-500/15">
             <Bell size={20} className="text-amber-400" />
           </div>
@@ -159,11 +272,21 @@ export default function AdminNotificationSettings() {
         </div>
 
         {/* ── Current VAPID Public Key ────────────────────────────────────────── */}
-        <div className="rounded-xl border border-white/10 bg-white/3 overflow-hidden">
+        <div
+          style={{
+            background: "rgba(10,11,20,0.85)",
+            border: "1px solid rgba(94,240,138,0.2)",
+            borderRadius: "12px",
+          }}
+          className="overflow-hidden"
+        >
           <div className="p-5 border-b border-white/10 flex items-center gap-3">
             <Key size={16} className="text-[#5EF08A] shrink-0" />
             <h2 className="text-white font-semibold text-sm">
-              Current VAPID Public Key
+              <TypewriterText
+                className="matrix-heading"
+                text="Current VAPID Public Key"
+              />
             </h2>
           </div>
           <div className="p-5 space-y-3">
@@ -206,11 +329,21 @@ export default function AdminNotificationSettings() {
         </div>
 
         {/* ── Update VAPID Keys ────────────────────────────────────────────────── */}
-        <div className="rounded-xl border border-white/10 bg-white/3 overflow-hidden">
+        <div
+          style={{
+            background: "rgba(10,11,20,0.85)",
+            border: "1px solid rgba(94,240,138,0.2)",
+            borderRadius: "12px",
+          }}
+          className="overflow-hidden"
+        >
           <div className="p-5 border-b border-white/10 flex items-center gap-3">
-            <Key size={16} className="text-amber-400 shrink-0" />
+            <Key size={16} className="text-[#5EF08A] shrink-0" />
             <h2 className="text-white font-semibold text-sm">
-              Update VAPID Keys
+              <TypewriterText
+                className="matrix-heading"
+                text="Update VAPID Keys"
+              />
             </h2>
             <button
               type="button"
@@ -225,7 +358,16 @@ export default function AdminNotificationSettings() {
             <div>
               <label
                 htmlFor="vapid-public"
-                className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2"
+                style={{
+                  color: "#5EF08A",
+                  fontFamily: "'Courier New', monospace",
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.1em",
+                  display: "block",
+                  marginBottom: "8px",
+                }}
               >
                 VAPID Public Key
               </label>
@@ -237,7 +379,18 @@ export default function AdminNotificationSettings() {
                 placeholder="Bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                 autoComplete="off"
                 data-ocid="admin.notifications.public_key.input"
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-[#5EF08A] transition-colors font-mono placeholder:font-sans placeholder:text-gray-600"
+                style={{
+                  background: "rgba(0,0,0,0.6)",
+                  border: "1px solid rgba(94,240,138,0.3)",
+                  color: "#EEF0F8",
+                  borderRadius: "8px",
+                  padding: "10px 14px",
+                  width: "100%",
+                  fontFamily: "'Courier New', monospace",
+                  outline: "none",
+                  fontSize: "13px",
+                  boxSizing: "border-box",
+                }}
               />
               <p className="text-gray-500 text-xs mt-1.5">
                 The URL-safe base64 encoded public key from your VAPID key pair.
@@ -247,7 +400,16 @@ export default function AdminNotificationSettings() {
             <div>
               <label
                 htmlFor="vapid-private"
-                className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2"
+                style={{
+                  color: "#5EF08A",
+                  fontFamily: "'Courier New', monospace",
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.1em",
+                  display: "block",
+                  marginBottom: "8px",
+                }}
               >
                 VAPID Private Key
               </label>
@@ -260,7 +422,18 @@ export default function AdminNotificationSettings() {
                   placeholder="Your VAPID private key"
                   autoComplete="off"
                   data-ocid="admin.notifications.private_key.input"
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 pr-12 text-white text-sm focus:outline-none focus:border-[#5EF08A] transition-colors font-mono placeholder:font-sans placeholder:text-gray-600"
+                  style={{
+                    background: "rgba(0,0,0,0.6)",
+                    border: "1px solid rgba(94,240,138,0.3)",
+                    color: "#EEF0F8",
+                    borderRadius: "8px",
+                    padding: "10px 48px 10px 14px",
+                    width: "100%",
+                    fontFamily: "'Courier New', monospace",
+                    outline: "none",
+                    fontSize: "13px",
+                    boxSizing: "border-box",
+                  }}
                 />
                 <button
                   type="button"
@@ -310,13 +483,34 @@ export default function AdminNotificationSettings() {
                 !newPrivateKey.trim()
               }
               data-ocid="admin.notifications.save.button"
-              className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all ${
-                saveStatus.type === "saving" ||
-                !newPublicKey.trim() ||
-                !newPrivateKey.trim()
-                  ? "bg-white/10 text-gray-500 cursor-not-allowed"
-                  : "bg-[#d4a017] text-[#0A0B14] hover:bg-amber-400 hover:shadow-[0_0_16px_rgba(212,160,23,0.3)]"
-              }`}
+              style={{
+                background:
+                  saveStatus.type === "saving" ||
+                  !newPublicKey.trim() ||
+                  !newPrivateKey.trim()
+                    ? "rgba(94,240,138,0.15)"
+                    : "#5EF08A",
+                color:
+                  saveStatus.type === "saving" ||
+                  !newPublicKey.trim() ||
+                  !newPrivateKey.trim()
+                    ? "#3A3D50"
+                    : "#0A0B14",
+                fontWeight: 700,
+                border: "none",
+                borderRadius: "8px",
+                padding: "10px 24px",
+                fontSize: "14px",
+                cursor:
+                  saveStatus.type === "saving" ||
+                  !newPublicKey.trim() ||
+                  !newPrivateKey.trim()
+                    ? "not-allowed"
+                    : "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
             >
               <Zap size={14} />
               {saveStatus.type === "saving" ? "Saving…" : "Save VAPID Keys"}
@@ -324,12 +518,218 @@ export default function AdminNotificationSettings() {
           </form>
         </div>
 
-        {/* ── Subscription Status ─────────────────────────────────────────────── */}
-        <div className="rounded-xl border border-white/10 bg-white/3 overflow-hidden">
+        {/* ── Billing Reminder Lead Days ────────────────────────────────────── */}
+        <div
+          style={{
+            background: "rgba(10,11,20,0.85)",
+            border: "1px solid rgba(94,240,138,0.2)",
+            borderRadius: "12px",
+          }}
+          className="overflow-hidden"
+        >
           <div className="p-5 border-b border-white/10 flex items-center gap-3">
             <Bell size={16} className="text-[#5EF08A] shrink-0" />
             <h2 className="text-white font-semibold text-sm">
-              Subscription Status
+              <TypewriterText
+                className="matrix-heading"
+                text="Billing Reminder Schedule"
+              />
+            </h2>
+          </div>
+          <div className="p-5 space-y-4">
+            <p className="text-gray-400 text-xs">
+              Set how many days before a client's next billing date the
+              automated reminder email is sent.
+            </p>
+            <div>
+              <label
+                htmlFor="reminder-lead-days"
+                style={{
+                  color: "#5EF08A",
+                  fontFamily: "'Courier New', monospace",
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.1em",
+                  display: "block",
+                  marginBottom: "8px",
+                }}
+              >
+                Days before billing to send reminder
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  id="reminder-lead-days"
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={reminderLeadDaysInput}
+                  onChange={(e) => setReminderLeadDaysInput(e.target.value)}
+                  data-ocid="admin.notifications.reminder_lead_days.input"
+                  style={{
+                    background: "rgba(0,0,0,0.6)",
+                    border: "1px solid rgba(94,240,138,0.3)",
+                    color: "#EEF0F8",
+                    borderRadius: "8px",
+                    padding: "10px 14px",
+                    width: "96px",
+                    fontFamily: "'Courier New', monospace",
+                    outline: "none",
+                    fontSize: "13px",
+                    boxSizing: "border-box",
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={reminderLeadDaysSaving}
+                  onClick={handleSaveReminderLeadDays}
+                  data-ocid="admin.notifications.reminder_lead_days.save_button"
+                  style={{
+                    background: reminderLeadDaysSaving
+                      ? "rgba(94,240,138,0.15)"
+                      : "#5EF08A",
+                    color: reminderLeadDaysSaving ? "#3A3D50" : "#0A0B14",
+                    fontWeight: 700,
+                    border: "none",
+                    borderRadius: "8px",
+                    padding: "10px 20px",
+                    fontSize: "14px",
+                    cursor: reminderLeadDaysSaving ? "not-allowed" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <Zap size={14} />
+                  {reminderLeadDaysSaving ? "Saving…" : "Save"}
+                </button>
+              </div>
+              {reminderLeadDaysSaveMsg && (
+                <p
+                  data-ocid={
+                    reminderLeadDaysSaveMsg === "Saved."
+                      ? "admin.notifications.reminder_lead_days.success_state"
+                      : "admin.notifications.reminder_lead_days.error_state"
+                  }
+                  style={{
+                    marginTop: "8px",
+                    fontSize: "0.75rem",
+                    color:
+                      reminderLeadDaysSaveMsg === "Saved."
+                        ? "#5EF08A"
+                        : "#f87171",
+                  }}
+                >
+                  {reminderLeadDaysSaveMsg}
+                </p>
+              )}
+            </div>
+            <p className="text-gray-500 text-xs">
+              Current setting:{" "}
+              <span className="text-white font-semibold">
+                {reminderLeadDays} day{reminderLeadDays !== 1 ? "s" : ""}
+              </span>
+              . Valid range is 1–30 days.
+            </p>
+
+            {/* ── Send Reminders Now ──────────────────────────────────── */}
+            <div className="pt-4 border-t border-white/8 space-y-3">
+              <div>
+                <p
+                  style={{
+                    color: "#5EF08A",
+                    fontFamily: "'Courier New', monospace",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.1em",
+                    marginBottom: "8px",
+                  }}
+                >
+                  Manual Trigger
+                </p>
+                <p className="text-gray-400 text-xs mb-3">
+                  Send billing reminder emails immediately to all clients whose
+                  next billing date falls within the lead window above.
+                </p>
+                <button
+                  type="button"
+                  disabled={sendingReminders}
+                  onClick={handleSendReminders}
+                  data-ocid="admin.notifications.send_reminders.button"
+                  style={{
+                    background: sendingReminders
+                      ? "rgba(94,240,138,0.15)"
+                      : "#5EF08A",
+                    color: sendingReminders ? "#3A3D50" : "#0A0B14",
+                    fontWeight: 700,
+                    border: "none",
+                    borderRadius: "8px",
+                    padding: "10px 20px",
+                    fontSize: "14px",
+                    cursor: sendingReminders ? "not-allowed" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <Zap size={14} />
+                  {sendingReminders ? "Sending…" : "Send Reminders Now"}
+                </button>
+              </div>
+              {remindersSentMsg && (
+                <div
+                  data-ocid={
+                    remindersSentSuccess
+                      ? "admin.notifications.send_reminders.success_state"
+                      : "admin.notifications.send_reminders.error_state"
+                  }
+                  className={`flex items-center gap-2 p-3 rounded-lg ${
+                    remindersSentSuccess
+                      ? "bg-[#5EF08A]/10 border border-[#5EF08A]/20"
+                      : "bg-red-500/10 border border-red-500/20"
+                  }`}
+                >
+                  {remindersSentSuccess ? (
+                    <CheckCircle2
+                      size={14}
+                      className="text-[#5EF08A] shrink-0"
+                    />
+                  ) : (
+                    <AlertTriangle
+                      size={14}
+                      className="text-red-400 shrink-0"
+                    />
+                  )}
+                  <p
+                    className={`text-xs font-medium ${
+                      remindersSentSuccess ? "text-[#5EF08A]" : "text-red-400"
+                    }`}
+                  >
+                    {remindersSentMsg}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Subscription Status ─────────────────────────────────────────────── */}
+        <div
+          style={{
+            background: "rgba(10,11,20,0.85)",
+            border: "1px solid rgba(94,240,138,0.2)",
+            borderRadius: "12px",
+          }}
+          className="overflow-hidden"
+        >
+          <div className="p-5 border-b border-white/10 flex items-center gap-3">
+            <Bell size={16} className="text-[#5EF08A] shrink-0" />
+            <h2 className="text-white font-semibold text-sm">
+              <TypewriterText
+                className="matrix-heading"
+                text="Subscription Status"
+              />
             </h2>
           </div>
           <div className="p-5">
@@ -342,10 +742,33 @@ export default function AdminNotificationSettings() {
               >
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-[#5EF08A]/8 border border-[#5EF08A]/20">
                   <CheckCircle2 size={14} className="text-[#5EF08A] shrink-0" />
-                  <p className="text-[#5EF08A] text-xs font-medium">
+                  <p className="text-[#5EF08A] text-xs font-medium flex-1">
                     Active push subscription found
                   </p>
+                  <button
+                    type="button"
+                    data-ocid="admin.notifications.subscription.delete_button"
+                    onClick={handleRemoveSubscription}
+                    disabled={removingSubscription}
+                    aria-label="Remove push subscription"
+                    className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-red-500/30 bg-red-500/8 text-red-400 text-xs font-semibold hover:bg-red-500/15 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Trash2 size={11} />
+                    {removingSubscription ? "Removing…" : "Remove"}
+                  </button>
                 </div>
+                {removeSubError && (
+                  <div
+                    data-ocid="admin.notifications.subscription.error_state"
+                    className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20"
+                  >
+                    <AlertTriangle
+                      size={14}
+                      className="text-red-400 shrink-0"
+                    />
+                    <p className="text-red-400 text-xs">{removeSubError}</p>
+                  </div>
+                )}
                 <div className="p-3 rounded-lg bg-white/3 border border-white/8">
                   <p className="text-gray-500 text-xs mb-1 font-bold uppercase tracking-wider">
                     Endpoint
@@ -355,6 +778,16 @@ export default function AdminNotificationSettings() {
                     {subscription.endpoint.length > 80 ? "…" : ""}
                   </p>
                 </div>
+              </div>
+            ) : subscriptionLoadError ? (
+              <div
+                data-ocid="admin.notifications.subscription.error_state"
+                className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20"
+              >
+                <AlertTriangle size={14} className="text-red-400 shrink-0" />
+                <p className="text-red-400 text-xs">
+                  Failed to load subscription status
+                </p>
               </div>
             ) : (
               <div

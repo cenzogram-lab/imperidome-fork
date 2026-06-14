@@ -1,18 +1,18 @@
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { ArrowLeft, CheckCircle, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import type {
   Order,
   QuestionDefinition,
   Questionnaire,
   backendInterface,
-} from "../../backend";
+} from "../../backend.d";
+import TypewriterText from "../../components/TypewriterText";
 import { useActor } from "../../hooks/useActor";
+import { useSession } from "../../hooks/useSession";
 import PortalLayout from "./PortalLayout";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 interface QuestionnaireAnswers {
   businessName: string;
   industry: string;
@@ -29,7 +29,6 @@ const PAGES_OPTIONS = [
   "Blog",
   "Other",
 ] as const;
-
 const TOTAL_STEPS = 5;
 
 function emptyAnswers(): QuestionnaireAnswers {
@@ -52,25 +51,20 @@ function calcProgress(answers: QuestionnaireAnswers): number {
   return Math.round((filled / TOTAL_STEPS) * 100);
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-function Skeleton({ style }: { style?: React.CSSProperties }) {
+function Skeleton({ style }: { style?: CSSProperties }) {
   return (
     <div
       style={{
-        background: "#E2E8F0",
+        background: "rgba(94,240,138,0.05)",
         borderRadius: "6px",
         animation: "pulse 1.5s ease-in-out infinite",
+        border: "1px solid rgba(94,240,138,0.1)",
         ...style,
       }}
     />
   );
 }
 
-// ---------------------------------------------------------------------------
-// Dynamic field renderer for a single QuestionDefinition
-// ---------------------------------------------------------------------------
 interface DynamicFieldProps {
   question: QuestionDefinition;
   value: string | string[];
@@ -96,14 +90,17 @@ function DynamicField({
         display: "block",
         fontSize: "17px",
         fontWeight: 700,
-        color: "#EEF0F8",
         marginBottom: "16px",
       }}
     >
-      {questionLabel}
+      <TypewriterText
+        text={questionLabel}
+        className="matrix-heading"
+        speed={35}
+      />
       {required && (
         <span
-          style={{ color: "#F87171", marginLeft: "4px" }}
+          style={{ color: "#EF4444", marginLeft: "4px" }}
           aria-hidden="true"
         >
           *
@@ -115,20 +112,20 @@ function DynamicField({
   const errorEl = fieldError ? (
     <div
       data-ocid="questionnaires.field.error_state"
-      style={{ marginTop: "6px", fontSize: "13px", color: "#F87171" }}
+      style={{ marginTop: "6px", fontSize: "13px", color: "#EF4444" }}
     >
       {fieldError}
     </div>
   ) : null;
 
-  if (inputType === "text") {
+  if (inputType === "text")
     return (
       <div data-ocid={`questionnaires.dyn-${id}.panel`}>
         {labelEl}
         <input
           id={`dyn-${id}`}
           type="text"
-          className="form-input"
+          className="matrix-input"
           data-ocid={`questionnaires.dyn-${id}.input`}
           value={typeof value === "string" ? value : ""}
           disabled={disabled}
@@ -138,15 +135,14 @@ function DynamicField({
         {errorEl}
       </div>
     );
-  }
 
-  if (inputType === "textarea") {
+  if (inputType === "textarea")
     return (
       <div data-ocid={`questionnaires.dyn-${id}.panel`}>
         {labelEl}
         <textarea
           id={`dyn-${id}`}
-          className="form-input"
+          className="matrix-input"
           data-ocid={`questionnaires.dyn-${id}.textarea`}
           rows={4}
           value={typeof value === "string" ? value : ""}
@@ -155,14 +151,8 @@ function DynamicField({
           style={{
             width: "100%",
             padding: "10px 14px",
-            borderRadius: "8px",
-            border: "1px solid rgba(255,255,255,0.1)",
-            fontSize: "15px",
-            color: "#EEF0F8",
-            outline: "none",
             fontFamily: "inherit",
             boxSizing: "border-box",
-            background: "rgba(14,16,32,0.9)",
             resize: "vertical",
           }}
           onChange={(e) => onChange(id, e.target.value)}
@@ -170,16 +160,15 @@ function DynamicField({
         {errorEl}
       </div>
     );
-  }
 
-  if (inputType === "date") {
+  if (inputType === "date")
     return (
       <div data-ocid={`questionnaires.dyn-${id}.panel`}>
         {labelEl}
         <input
           id={`dyn-${id}`}
           type="date"
-          className="form-input"
+          className="matrix-input"
           data-ocid={`questionnaires.dyn-${id}.input`}
           value={typeof value === "string" ? value : ""}
           disabled={disabled}
@@ -189,15 +178,14 @@ function DynamicField({
         {errorEl}
       </div>
     );
-  }
 
-  if (inputType === "select") {
+  if (inputType === "select")
     return (
       <div data-ocid={`questionnaires.dyn-${id}.panel`}>
         {labelEl}
         <select
           id={`dyn-${id}`}
-          className="form-input"
+          className="matrix-input"
           data-ocid={`questionnaires.dyn-${id}.select`}
           value={typeof value === "string" ? value : ""}
           disabled={disabled}
@@ -214,24 +202,20 @@ function DynamicField({
         {errorEl}
       </div>
     );
-  }
 
   if (inputType === "checkbox") {
     const selected: string[] = Array.isArray(value) ? value : [];
     return (
       <div data-ocid={`questionnaires.dyn-${id}.panel`}>
-        <p
-          style={{
-            fontSize: "17px",
-            fontWeight: 700,
-            color: "#EEF0F8",
-            margin: "0 0 16px",
-          }}
-        >
-          {questionLabel}
+        <p style={{ fontSize: "17px", fontWeight: 700, margin: "0 0 16px" }}>
+          <TypewriterText
+            text={questionLabel}
+            className="matrix-heading"
+            speed={35}
+          />
           {required && (
             <span
-              style={{ color: "#F87171", marginLeft: "4px" }}
+              style={{ color: "#EF4444", marginLeft: "4px" }}
               aria-hidden="true"
             >
               *
@@ -244,7 +228,7 @@ function DynamicField({
             return (
               <label
                 key={opt}
-                className={`checkbox-label${checked ? " checked" : ""}`}
+                className={`matrix-checkbox-label${checked ? " checked" : ""}`}
                 data-ocid={`questionnaires.dyn-${id}.${opt.toLowerCase().replace(/\s+/g, "-")}.checkbox`}
               >
                 <input
@@ -261,7 +245,7 @@ function DynamicField({
                     width: "18px",
                     height: "18px",
                     cursor: "pointer",
-                    accentColor: "#39FF14",
+                    accentColor: "#5EF08A",
                     flexShrink: 0,
                   }}
                 />
@@ -275,14 +259,13 @@ function DynamicField({
     );
   }
 
-  // Fallback: render as text
   return (
     <div data-ocid={`questionnaires.dyn-${id}.panel`}>
       {labelEl}
       <input
         id={`dyn-${id}`}
         type="text"
-        className="form-input"
+        className="matrix-input"
         data-ocid={`questionnaires.dyn-${id}.input`}
         value={typeof value === "string" ? value : ""}
         disabled={disabled}
@@ -294,16 +277,14 @@ function DynamicField({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main Component
-// ---------------------------------------------------------------------------
 export default function PortalQuestionnaireFormPage() {
   const params = useParams({ strict: false }) as { orderId?: string };
   const orderId = params.orderId ?? "";
   const navigate = useNavigate();
+  const { session } = useSession();
+  const userEmail = session?.email ?? "";
   const { actor, isFetching } = useActor();
 
-  // tierCode is derived from the matched questionnaire or order record
   const [tierCode, setTierCode] = useState<string>("");
   const [questionnaire, setQuestionnaire] = useState<
     Questionnaire | null | undefined
@@ -314,9 +295,6 @@ export default function PortalQuestionnaireFormPage() {
   const [submitError, setSubmitError] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [loadError, setLoadError] = useState(false);
-
-  // Dynamic questions state
-  // null = not fetched yet, [] = fetched but empty (use hardcoded fallback)
   const [dynamicQuestions, setDynamicQuestions] = useState<
     QuestionDefinition[] | null
   >(null);
@@ -326,21 +304,18 @@ export default function PortalQuestionnaireFormPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
 
-  // Load existing questionnaire (if any) and order tier_code
   useEffect(() => {
-    if (!actor || isFetching || !orderId) return;
+    if (!actor || !userEmail || isFetching || !orderId) return;
     let cancelled = false;
     async function load() {
       try {
         const [qs, ords] = await Promise.all([
-          actor!.getMyQuestionnaires(),
-          actor!.getMyOrders(),
+          (actor as backendInterface).getMyQuestionnaires(),
+          (actor as backendInterface).getMyOrders(),
         ]);
         if (cancelled) return;
-
         const matched = qs.find((q) => String(q.order_id) === orderId) ?? null;
         setQuestionnaire(matched);
-
         let code = matched?.tier_code ?? "";
         if (!code) {
           const order: Order | undefined = ords.find(
@@ -349,13 +324,14 @@ export default function PortalQuestionnaireFormPage() {
           code = order?.tier_code ?? "";
         }
         setTierCode(code);
-
         if (matched?.answers && !matched.submitted) {
           try {
             const parsed = JSON.parse(matched.answers) as QuestionnaireAnswers;
             setAnswers(parsed);
           } catch {
-            // ignore parse error — keep empty
+            setSubmitError(
+              "Your saved progress could not be loaded. You may need to re-enter your answers.",
+            );
           }
         }
       } catch {
@@ -366,11 +342,10 @@ export default function PortalQuestionnaireFormPage() {
     return () => {
       cancelled = true;
     };
-  }, [actor, isFetching, orderId]);
+  }, [actor, isFetching, orderId, userEmail]);
 
-  // Fetch dynamic question definitions once tierCode is known
   useEffect(() => {
-    if (!actor || isFetching || !tierCode) return;
+    if (!actor || !userEmail || isFetching || !tierCode) return;
     let cancelled = false;
     async function fetchQuestions() {
       setIsLoadingQuestions(true);
@@ -382,14 +357,8 @@ export default function PortalQuestionnaireFormPage() {
         const sorted = [...defs].sort(
           (a, b) => Number(a.sortOrder) - Number(b.sortOrder),
         );
-        if (sorted.length === 0) {
-          console.info(
-            `[PortalQuestionnaireFormPage] No dynamic questions for "${tierCode}". Using hardcoded fallback.`,
-          );
-        }
         setDynamicQuestions(sorted);
         if (sorted.length > 0) {
-          // Initialize dynamic answer slots
           const init: Record<string, string | string[]> = {};
           for (const q of sorted) {
             init[q.id] = q.inputType === "checkbox" ? [] : "";
@@ -397,12 +366,7 @@ export default function PortalQuestionnaireFormPage() {
           setDynamicAnswers(init);
         }
       } catch {
-        if (!cancelled) {
-          console.warn(
-            "[PortalQuestionnaireFormPage] Failed to fetch dynamic questions. Using hardcoded fallback.",
-          );
-          setDynamicQuestions([]);
-        }
+        if (!cancelled) setDynamicQuestions([]);
       } finally {
         if (!cancelled) setIsLoadingQuestions(false);
       }
@@ -411,20 +375,20 @@ export default function PortalQuestionnaireFormPage() {
     return () => {
       cancelled = true;
     };
-  }, [actor, isFetching, tierCode]);
+  }, [actor, isFetching, tierCode, userEmail]);
 
   const isLoading =
     isFetching ||
     isLoadingQuestions ||
     (questionnaire === undefined && !loadError && !!orderId);
-
-  // Use dynamic questions when backend returned a non-empty array
+  const hasUnconfiguredTier =
+    dynamicQuestions !== null &&
+    dynamicQuestions.length === 0 &&
+    !isLoading &&
+    !loadError;
   const useDynamic = dynamicQuestions !== null && dynamicQuestions.length > 0;
   const totalStepsDisplay = useDynamic ? dynamicQuestions!.length : TOTAL_STEPS;
 
-  // ---------------------------------------------------------------------------
-  // Dynamic answers handler
-  // ---------------------------------------------------------------------------
   function handleDynamicChange(id: string, value: string | string[]) {
     setDynamicAnswers((prev) => ({ ...prev, [id]: value }));
     if (fieldErrors[id]) {
@@ -436,21 +400,12 @@ export default function PortalQuestionnaireFormPage() {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Step navigation
-  // ---------------------------------------------------------------------------
   function handleNext() {
-    if (currentStep < totalStepsDisplay) {
-      setCurrentStep((s) => s + 1);
-    }
+    if (currentStep < totalStepsDisplay) setCurrentStep((s) => s + 1);
   }
 
-  // ---------------------------------------------------------------------------
-  // Submit — dynamic path
-  // ---------------------------------------------------------------------------
   async function handleDynamicSubmit() {
-    if (!actor || !dynamicQuestions) return;
-
+    if (!actor || !userEmail || !dynamicQuestions) return;
     const errors: Record<string, string> = {};
     for (const q of dynamicQuestions) {
       if (!q.required) continue;
@@ -460,32 +415,28 @@ export default function PortalQuestionnaireFormPage() {
         val === null ||
         (typeof val === "string" && !val.trim()) ||
         (Array.isArray(val) && val.length === 0);
-      if (isEmpty) {
-        errors[q.id] = `"${q.questionLabel}" is required.`;
-      }
+      if (isEmpty) errors[q.id] = `"${q.questionLabel}" is required.`;
     }
-
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       setSubmitError("Please fill in all required fields before submitting.");
       return;
     }
-
     setIsSubmitting(true);
     setSubmitError("");
-
     try {
-      // Serialize checkbox arrays to comma-separated strings
       const serialized: Record<string, string> = {};
       for (const [key, val] of Object.entries(dynamicAnswers)) {
         serialized[key] = Array.isArray(val) ? val.join(", ") : val;
       }
-
       const result = await (actor as backendInterface).submitQuestionnaire(
         tierCode,
         JSON.stringify(serialized),
       );
-      void result;
+      if (result === 0n) {
+        setSubmitError("Submission failed. Please try again.");
+        return;
+      }
       setSubmitted(true);
     } catch {
       setSubmitError(
@@ -496,35 +447,37 @@ export default function PortalQuestionnaireFormPage() {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Submit — hardcoded fallback path (original logic, unchanged)
-  // ---------------------------------------------------------------------------
   async function handleHardcodedSubmit() {
-    if (!actor) return;
-
+    if (!actor || !userEmail) return;
+    if (!tierCode || tierCode.trim() === "") {
+      setSubmitError(
+        "Unable to determine your service tier. Please contact support.",
+      );
+      return;
+    }
     const missing: string[] = [];
     if (!answers.businessName.trim()) missing.push("Business Name");
     if (!answers.industry.trim()) missing.push("Industry or Business Type");
     if (!answers.primaryGoal.trim()) missing.push("Primary Goal");
     if (answers.pages.length === 0) missing.push("Pages You Need");
     if (!answers.launchDate.trim()) missing.push("Preferred Launch Date");
-
     if (missing.length > 0) {
       setSubmitError(
         `Please fill in all required fields before submitting: ${missing.join(", ")}.`,
       );
       return;
     }
-
     setIsSubmitting(true);
     setSubmitError("");
-
     try {
       const result = await (actor as backendInterface).submitQuestionnaire(
         tierCode,
         JSON.stringify(answers),
       );
-      void result;
+      if (result === 0n) {
+        setSubmitError("Submission failed. Please try again.");
+        return;
+      }
       setSubmitted(true);
     } catch {
       setSubmitError(
@@ -547,36 +500,31 @@ export default function PortalQuestionnaireFormPage() {
     ? Math.round((currentStep / totalStepsDisplay) * 100)
     : calcProgress(answers);
 
-  // ---------------------------------------------------------------------------
-  // Submitted success screen
-  // ---------------------------------------------------------------------------
   if (submitted) {
     return (
       <PortalLayout pageTitle="Questionnaire">
         <div
           data-ocid="questionnaires.success_state"
+          className="matrix-card"
           style={{
-            background: "rgba(14,16,32,1)",
-            borderRadius: "12px",
             padding: "48px 24px",
-            border: "1px solid #39FF14",
+            border: "1px solid rgba(94,240,138,0.5)",
             textAlign: "center",
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
             gap: "16px",
+            boxShadow: "0 0 24px rgba(94,240,138,0.1)",
           }}
         >
-          <CheckCircle size={48} color="#39FF14" />
-          <h2
-            style={{
-              margin: 0,
-              fontSize: "22px",
-              fontWeight: 700,
-              color: "#EEF0F8",
-            }}
-          >
-            Questionnaire Submitted!
+          <CheckCircle size={48} color="#5EF08A" />
+          <h2 style={{ margin: 0 }}>
+            <TypewriterText
+              text="Questionnaire Submitted!"
+              className="matrix-heading"
+              style={{ fontSize: "22px", fontWeight: 700 }}
+              speed={40}
+            />
           </h2>
           <p
             style={{
@@ -593,18 +541,9 @@ export default function PortalQuestionnaireFormPage() {
           <button
             type="button"
             data-ocid="questionnaires.back-to-questionnaires.button"
-            onClick={() => navigate({ to: "/portal/questionnaires" as any })}
-            style={{
-              marginTop: "8px",
-              padding: "10px 24px",
-              borderRadius: "8px",
-              background: "#39FF14",
-              color: "#061209",
-              fontWeight: 700,
-              fontSize: "14px",
-              border: "none",
-              cursor: "pointer",
-            }}
+            onClick={() => navigate({ to: "/portal/questionnaires" })}
+            className="matrix-btn"
+            style={{ marginTop: "8px", padding: "10px 24px" }}
           >
             Back to Questionnaires
           </button>
@@ -613,63 +552,22 @@ export default function PortalQuestionnaireFormPage() {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
   return (
     <PortalLayout pageTitle="Questionnaire">
       <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
-        }
-        .form-input {
-          width: 100%;
-          padding: 10px 14px;
-          min-height: 44px;
-          border: 1px solid rgba(255,255,255,0.1);
-          font-size: 15px;
-          color: #EEF0F8;
-          outline: none;
-          font-family: inherit;
-          box-sizing: border-box;
-          background: rgba(14,16,32,0.9);
-        }
-        .form-input:focus {
-          border-color: #39FF14;
-          box-shadow: 0 0 0 3px rgba(57,255,20,0.12);
-        }
-        .checkbox-label {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 10px 14px;
-          min-height: 44px;
-          border: 1px solid rgba(255,255,255,0.08);
-          cursor: pointer;
-          font-size: 15px;
-          color: #EEF0F8;
-          font-weight: 500;
-          transition: background 0.15s, border-color 0.15s;
-          user-select: none;
-          background: rgba(14,16,32,0.6);
-        }
-        .checkbox-label:hover {
-          background: rgba(57,255,20,0.06);
-          border-color: rgba(57,255,20,0.4);
-        }
-        .checkbox-label.checked {
-          background: rgba(57,255,20,0.08);
-          border-color: #39FF14;
-        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .matrix-input { width: 100%; padding: 10px 14px; min-height: 44px; border: 1px solid rgba(94,240,138,0.2); border-radius: 6px; font-size: 15px; color: #EEF0F8; outline: none; font-family: inherit; box-sizing: border-box; background: rgba(7,8,16,0.8); transition: border-color 0.2s, box-shadow 0.2s; }
+        .matrix-input:focus { border-color: #5EF08A; box-shadow: 0 0 0 3px rgba(94,240,138,0.12); }
+        .matrix-checkbox-label { display: flex; align-items: center; gap: 10px; padding: 10px 14px; min-height: 44px; border: 1px solid rgba(94,240,138,0.15); border-radius: 6px; cursor: pointer; font-size: 15px; color: #EEF0F8; font-weight: 500; transition: background 0.15s, border-color 0.15s; user-select: none; background: rgba(7,8,16,0.6); }
+        .matrix-checkbox-label:hover { background: rgba(94,240,138,0.06); border-color: rgba(94,240,138,0.4); }
+        .matrix-checkbox-label.checked { background: rgba(94,240,138,0.08); border-color: #5EF08A; }
       `}</style>
 
       <div style={{ maxWidth: "640px" }}>
-        {/* Back link */}
         <button
           type="button"
           data-ocid="questionnaires.back.button"
-          onClick={() => navigate({ to: "/portal/questionnaires" as any })}
+          onClick={() => navigate({ to: "/portal/questionnaires" })}
           style={{
             display: "flex",
             alignItems: "center",
@@ -687,44 +585,25 @@ export default function PortalQuestionnaireFormPage() {
           Back to Questionnaires
         </button>
 
-        {/* Tier name label */}
         {!isLoading && !loadError && tierCode && (
           <div
             data-ocid="questionnaires.tier.label"
+            className="matrix-badge"
             style={{
               display: "inline-flex",
               alignItems: "center",
               gap: "8px",
               marginBottom: "16px",
-              padding: "6px 14px",
-              borderRadius: "999px",
-              background: "rgba(57,255,20,0.08)",
-              border: "1px solid rgba(57,255,20,0.3)",
             }}
           >
-            <span
-              style={{
-                fontSize: "12px",
-                fontWeight: 700,
-                color: "#39FF14",
-                textTransform: "uppercase",
-                letterSpacing: "0.07em",
-              }}
-            >
-              {tierCode} Brief
-            </span>
+            {tierCode} Brief
           </div>
         )}
 
-        {/* Loading */}
         {isLoading && (
           <div
-            style={{
-              background: "rgba(17,19,34,0.7)",
-              borderRadius: "8px",
-              padding: "32px",
-              border: "1px solid #1C1F33",
-            }}
+            className="matrix-card"
+            style={{ padding: "32px" }}
             data-ocid="questionnaires.form.loading_state"
           >
             <Skeleton
@@ -737,40 +616,47 @@ export default function PortalQuestionnaireFormPage() {
           </div>
         )}
 
-        {/* Error */}
         {loadError && (
           <div
             data-ocid="questionnaires.form.error_state"
+            className="matrix-card"
             style={{
-              background: "rgba(153,27,27,0.15)",
-              borderRadius: "8px",
-              padding: "20px",
-              border: "1px solid rgba(153,27,27,0.4)",
+              border: "1px solid rgba(239,68,68,0.4)",
               color: "#FCA5A5",
               fontSize: "14px",
+              padding: "20px",
             }}
           >
             Could not load questionnaire data. Please go back and try again.
           </div>
         )}
 
-        {/* Form */}
-        {!isLoading && !loadError && (
+        {!isLoading && !loadError && hasUnconfiguredTier && (
           <div
+            data-ocid="questionnaires.form.unconfigured_state"
+            className="matrix-card"
             style={{
-              background: "rgba(17,19,34,0.7)",
-              backdropFilter: "blur(12px)",
-              borderRadius: "12px",
-              border: "1px solid #1C1F33",
-              overflow: "hidden",
+              border: "1px solid rgba(239,68,68,0.4)",
+              color: "#FCA5A5",
+              fontSize: "14px",
+              padding: "20px",
             }}
+          >
+            This questionnaire is not yet available. Please contact us for
+            assistance.
+          </div>
+        )}
+
+        {!isLoading && !loadError && !hasUnconfiguredTier && (
+          <div
+            className="matrix-card"
+            style={{ overflow: "hidden" }}
             data-ocid="questionnaires.form.panel"
           >
-            {/* Header */}
             <div
               style={{
                 padding: "24px 28px 20px",
-                borderBottom: "1px solid #1C1F33",
+                borderBottom: "1px solid rgba(94,240,138,0.15)",
               }}
             >
               <div
@@ -788,6 +674,7 @@ export default function PortalQuestionnaireFormPage() {
                     fontWeight: 600,
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
+                    fontFamily: "monospace",
                   }}
                 >
                   Question {currentStep} of {totalStepsDisplay}
@@ -795,19 +682,19 @@ export default function PortalQuestionnaireFormPage() {
                 <span
                   style={{
                     fontSize: "13px",
-                    color: "#39FF14",
+                    color: "#5EF08A",
                     fontWeight: 700,
+                    fontFamily: "monospace",
                   }}
                 >
                   {progress}% complete
                 </span>
               </div>
-              {/* Progress bar */}
               <div
                 style={{
                   height: "6px",
                   width: "100%",
-                  background: "rgba(255,255,255,0.08)",
+                  background: "rgba(94,240,138,0.1)",
                   borderRadius: "999px",
                   overflow: "hidden",
                 }}
@@ -816,17 +703,16 @@ export default function PortalQuestionnaireFormPage() {
                   style={{
                     height: "100%",
                     width: `${(currentStep / totalStepsDisplay) * 100}%`,
-                    background: "#39FF14",
+                    background: "#5EF08A",
                     borderRadius: "999px",
                     transition: "width 0.4s ease",
+                    boxShadow: "0 0 8px rgba(94,240,138,0.5)",
                   }}
                 />
               </div>
             </div>
 
-            {/* Question content */}
             <div style={{ padding: "28px" }}>
-              {/* ── DYNAMIC QUESTIONS (when backend has questions configured) ── */}
               {useDynamic && dynamicQuestions![currentStep - 1] && (
                 <DynamicField
                   question={dynamicQuestions![currentStep - 1]}
@@ -844,28 +730,26 @@ export default function PortalQuestionnaireFormPage() {
                 />
               )}
 
-              {/* ── HARDCODED FALLBACK (when backend returns empty for this tier) ── */}
               {!useDynamic && (
                 <>
-                  {/* Step 1 — Business Name */}
                   {currentStep === 1 && (
                     <div data-ocid="questionnaires.step1.panel">
                       <label
                         htmlFor="businessName"
-                        style={{
-                          display: "block",
-                          fontSize: "17px",
-                          fontWeight: 700,
-                          color: "#EEF0F8",
-                          marginBottom: "16px",
-                        }}
+                        aria-label="Business Name"
+                        style={{ display: "block", marginBottom: "16px" }}
                       >
-                        Business Name
+                        <TypewriterText
+                          text="Business Name"
+                          className="matrix-heading"
+                          style={{ fontSize: "17px", fontWeight: 700 }}
+                          speed={40}
+                        />
                       </label>
                       <input
                         id="businessName"
                         type="text"
-                        className="form-input"
+                        className="matrix-input"
                         data-ocid="questionnaires.businessname.input"
                         value={answers.businessName}
                         onChange={(e) =>
@@ -878,26 +762,24 @@ export default function PortalQuestionnaireFormPage() {
                       />
                     </div>
                   )}
-
-                  {/* Step 2 — Industry */}
                   {currentStep === 2 && (
                     <div data-ocid="questionnaires.step2.panel">
                       <label
                         htmlFor="industry"
-                        style={{
-                          display: "block",
-                          fontSize: "17px",
-                          fontWeight: 700,
-                          color: "#EEF0F8",
-                          marginBottom: "16px",
-                        }}
+                        aria-label="Industry or Business Type"
+                        style={{ display: "block", marginBottom: "16px" }}
                       >
-                        Industry or Business Type
+                        <TypewriterText
+                          text="Industry or Business Type"
+                          className="matrix-heading"
+                          style={{ fontSize: "17px", fontWeight: 700 }}
+                          speed={35}
+                        />
                       </label>
                       <input
                         id="industry"
                         type="text"
-                        className="form-input"
+                        className="matrix-input"
                         data-ocid="questionnaires.industry.input"
                         value={answers.industry}
                         onChange={(e) =>
@@ -910,25 +792,23 @@ export default function PortalQuestionnaireFormPage() {
                       />
                     </div>
                   )}
-
-                  {/* Step 3 — Primary Goal */}
                   {currentStep === 3 && (
                     <div data-ocid="questionnaires.step3.panel">
                       <label
                         htmlFor="primaryGoal"
-                        style={{
-                          display: "block",
-                          fontSize: "17px",
-                          fontWeight: 700,
-                          color: "#EEF0F8",
-                          marginBottom: "16px",
-                        }}
+                        aria-label="Primary Goal for Your Website"
+                        style={{ display: "block", marginBottom: "16px" }}
                       >
-                        Primary Goal for Your Website
+                        <TypewriterText
+                          text="Primary Goal for Your Website"
+                          className="matrix-heading"
+                          style={{ fontSize: "17px", fontWeight: 700 }}
+                          speed={35}
+                        />
                       </label>
                       <textarea
                         id="primaryGoal"
-                        className="form-input"
+                        className="matrix-input"
                         data-ocid="questionnaires.primarygoal.textarea"
                         rows={4}
                         value={answers.primaryGoal}
@@ -938,36 +818,20 @@ export default function PortalQuestionnaireFormPage() {
                             primaryGoal: e.target.value,
                           }))
                         }
-                        placeholder="Describe the main purpose of your website — e.g. generate leads, sell products, showcase your portfolio"
-                        style={{
-                          width: "100%",
-                          padding: "10px 14px",
-                          borderRadius: "8px",
-                          border: "1px solid rgba(255,255,255,0.1)",
-                          fontSize: "15px",
-                          color: "#EEF0F8",
-                          outline: "none",
-                          fontFamily: "inherit",
-                          boxSizing: "border-box",
-                          background: "rgba(14,16,32,0.9)",
-                          resize: "vertical",
-                        }}
+                        placeholder="Describe the main purpose of your website"
+                        style={{ resize: "vertical", fontFamily: "inherit" }}
                       />
                     </div>
                   )}
-
-                  {/* Step 4 — Pages You Need */}
                   {currentStep === 4 && (
                     <div data-ocid="questionnaires.step4.panel">
-                      <p
-                        style={{
-                          fontSize: "17px",
-                          fontWeight: 700,
-                          color: "#EEF0F8",
-                          margin: "0 0 16px",
-                        }}
-                      >
-                        Pages You Need
+                      <p style={{ margin: "0 0 16px" }}>
+                        <TypewriterText
+                          text="Pages You Need"
+                          className="matrix-heading"
+                          style={{ fontSize: "17px", fontWeight: 700 }}
+                          speed={40}
+                        />
                       </p>
                       <div
                         style={{
@@ -981,25 +845,25 @@ export default function PortalQuestionnaireFormPage() {
                           return (
                             <label
                               key={page}
-                              className={`checkbox-label${checked ? " checked" : ""}`}
+                              className={`matrix-checkbox-label${checked ? " checked" : ""}`}
                               data-ocid={`questionnaires.pages.${page.toLowerCase()}.checkbox`}
                             >
                               <input
                                 type="checkbox"
                                 checked={checked}
-                                onChange={() => {
+                                onChange={() =>
                                   setAnswers((a) => ({
                                     ...a,
                                     pages: checked
                                       ? a.pages.filter((p) => p !== page)
                                       : [...a.pages, page],
-                                  }));
-                                }}
+                                  }))
+                                }
                                 style={{
                                   width: "18px",
                                   height: "18px",
                                   cursor: "pointer",
-                                  accentColor: "#39FF14",
+                                  accentColor: "#5EF08A",
                                   flexShrink: 0,
                                 }}
                               />
@@ -1010,26 +874,24 @@ export default function PortalQuestionnaireFormPage() {
                       </div>
                     </div>
                   )}
-
-                  {/* Step 5 — Launch Date */}
                   {currentStep === 5 && (
                     <div data-ocid="questionnaires.step5.panel">
                       <label
                         htmlFor="launchDate"
-                        style={{
-                          display: "block",
-                          fontSize: "17px",
-                          fontWeight: 700,
-                          color: "#EEF0F8",
-                          marginBottom: "16px",
-                        }}
+                        aria-label="Preferred Launch Date"
+                        style={{ display: "block", marginBottom: "16px" }}
                       >
-                        Preferred Launch Date
+                        <TypewriterText
+                          text="Preferred Launch Date"
+                          className="matrix-heading"
+                          style={{ fontSize: "17px", fontWeight: 700 }}
+                          speed={38}
+                        />
                       </label>
                       <input
                         id="launchDate"
                         type="date"
-                        className="form-input"
+                        className="matrix-input"
                         data-ocid="questionnaires.launchdate.input"
                         value={answers.launchDate}
                         onChange={(e) =>
@@ -1045,25 +907,23 @@ export default function PortalQuestionnaireFormPage() {
                 </>
               )}
 
-              {/* Error */}
               {submitError && (
                 <div
                   data-ocid="questionnaires.form.error_state"
                   style={{
                     marginTop: "16px",
                     padding: "12px 16px",
-                    background: "rgba(153,27,27,0.15)",
+                    background: "rgba(239,68,68,0.1)",
                     borderRadius: "8px",
                     color: "#FCA5A5",
                     fontSize: "14px",
-                    border: "1px solid rgba(153,27,27,0.4)",
+                    border: "1px solid rgba(239,68,68,0.3)",
                   }}
                 >
                   {submitError}
                 </div>
               )}
 
-              {/* Actions */}
               <div
                 style={{
                   display: "flex",
@@ -1078,39 +938,26 @@ export default function PortalQuestionnaireFormPage() {
                     data-ocid="questionnaires.back-step.button"
                     onClick={() => setCurrentStep((s) => s - 1)}
                     disabled={isSubmitting}
+                    className="matrix-btn-outline"
                     style={{
                       padding: "10px 20px",
-                      borderRadius: "8px",
-                      border: "1px solid rgba(255,255,255,0.1)",
-                      background: "rgba(14,16,32,0.6)",
-                      color: "#7A7D90",
-                      fontWeight: 600,
-                      fontSize: "14px",
-                      cursor: "pointer",
                       display: "flex",
                       alignItems: "center",
                       gap: "6px",
                     }}
                   >
-                    <ArrowLeft size={15} />
-                    Back
+                    <ArrowLeft size={15} /> Back
                   </button>
                 )}
-
                 {currentStep < totalStepsDisplay ? (
                   <button
                     type="button"
                     data-ocid="questionnaires.save-continue.button"
                     onClick={handleNext}
+                    className="matrix-btn"
                     style={{
                       padding: "10px 24px",
                       minHeight: "44px",
-                      background: "#39FF14",
-                      color: "#061209",
-                      fontWeight: 700,
-                      fontSize: "14px",
-                      border: "none",
-                      cursor: "pointer",
                       display: "flex",
                       alignItems: "center",
                       gap: "8px",
@@ -1124,16 +971,11 @@ export default function PortalQuestionnaireFormPage() {
                     data-ocid="questionnaires.submit.button"
                     onClick={handleSubmit}
                     disabled={isSubmitting}
+                    className="matrix-btn"
                     style={{
                       padding: "10px 24px",
                       minHeight: "44px",
-                      background: isSubmitting
-                        ? "rgba(57,255,20,0.4)"
-                        : "#39FF14",
-                      color: "#061209",
-                      fontWeight: 700,
-                      fontSize: "14px",
-                      border: "none",
+                      opacity: isSubmitting ? 0.6 : 1,
                       cursor: isSubmitting ? "not-allowed" : "pointer",
                       display: "flex",
                       alignItems: "center",

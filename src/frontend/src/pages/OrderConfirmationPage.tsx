@@ -9,6 +9,8 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { Footer } from "../components/Footer";
 import { Navbar } from "../components/Navbar";
+import TypewriterText from "../components/TypewriterText";
+import { PENDING_ORDER_KEY } from "../constants";
 import { useActor } from "../hooks/useActor";
 
 const SESSION_KEY = "imperidome_order_confirmation_shown";
@@ -21,16 +23,12 @@ interface SessionMeta {
   [key: string]: unknown;
 }
 
-/** Safely parse verifyAndRecordPurchase's ok string.
- *  Returns structured metadata if the string is valid JSON, otherwise null. */
 function parseSessionMeta(ok: string): SessionMeta | null {
   try {
     const parsed = JSON.parse(ok);
-    if (parsed && typeof parsed === "object") {
-      return parsed as SessionMeta;
-    }
+    if (parsed && typeof parsed === "object") return parsed as SessionMeta;
   } catch {
-    // Plain success message — not JSON
+    /* plain message */
   }
   return null;
 }
@@ -43,154 +41,206 @@ export default function OrderConfirmationPage() {
     "pending" | "done" | "error"
   >("pending");
   const hasFiredRef = useRef(false);
+  const [contactEmail, setContactEmail] = useState<string>(
+    "support@imperidome.com",
+  );
 
   useEffect(() => {
-    // Parse session_id directly from URL query parameters (Stripe appends this on redirect)
+    if (!actor) return;
+    actor
+      .getAdminContactEmail()
+      .then(setContactEmail)
+      .catch(() => {});
+  }, [actor]);
+
+  useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get("session_id");
-
     if (!sessionId) {
       navigate({ to: "/" });
       return;
     }
-
-    // Idempotency guard: don't call verifyAndRecordPurchase again on refresh
     const alreadyShown = sessionStorage.getItem(SESSION_KEY);
     if (alreadyShown) {
       setRecordStatus("done");
       return;
     }
-
     hasFiredRef.current = true;
-
     const tryRecord = async () => {
       if (!actor || isFetching) return;
       try {
-        // Pass sessionId as the primary key; email/name/services are best-effort
-        // — the backend extracts authoritative data from Stripe.
+        let pendingCustomerName = "";
+        let pendingCustomerEmail = "";
+        let pendingServices: string[] = [];
+        try {
+          const stored = localStorage.getItem(PENDING_ORDER_KEY);
+          if (stored) {
+            const parsed = JSON.parse(stored) as {
+              customerName?: string;
+              customerEmail?: string;
+              services?: unknown;
+              items?: Array<{ price?: unknown }>;
+              totalAmount?: unknown;
+            };
+            pendingCustomerName = parsed.customerName ?? "";
+            pendingCustomerEmail = parsed.customerEmail ?? "";
+            pendingServices = Array.isArray(parsed.services)
+              ? (parsed.services as string[])
+              : [];
+          }
+        } catch {
+          // fall back to empty strings
+        }
         const result = await actor.verifyAndRecordPurchase(
           sessionId,
-          "",
-          "",
-          [],
+          pendingCustomerName,
+          pendingCustomerEmail,
+          pendingServices,
         );
-
+        localStorage.removeItem(PENDING_ORDER_KEY);
         if ("err" in result) {
           setRecordStatus("error");
         } else {
-          // Guard fires only after a confirmed successful response
           sessionStorage.setItem(SESSION_KEY, "true");
-          // Derive display data from the ok string returned by the backend
           const meta = parseSessionMeta(result.ok);
           if (
             meta?.services &&
             Array.isArray(meta.services) &&
             meta.services.length > 0
-          ) {
+          )
             setPurchasedItems(meta.services as string[]);
-          } else if (meta?.customerName) {
-            // Minimal display: at least show that an order was recorded
-            setPurchasedItems([]);
-          }
+          else if (meta?.customerName) setPurchasedItems([]);
           setRecordStatus("done");
+
+          // NEW-C-1: After deposit session completes, auto-initiate the pending
+          // subscription checkout for Custom Site + hosting plan combinations.
+          try {
+            const pendingSub = localStorage.getItem(
+              "imperidome_pending_subscription",
+            );
+            if (pendingSub) {
+              const sub = JSON.parse(pendingSub) as {
+                itemName?: string;
+                itemPrice?: unknown;
+                customerEmail?: string;
+              };
+              localStorage.removeItem("imperidome_pending_subscription");
+              if (sub.itemName && actor) {
+                const subPrice = Number(sub.itemPrice ?? 0);
+                const subEmail = sub.customerEmail ?? pendingCustomerEmail;
+                const subResult = await actor.createCheckoutSession(
+                  [
+                    {
+                      productName: `[subscription] ${sub.itemName} | Monthly Hosting`,
+                      productDescription: `${sub.itemName} — Monthly Hosting Plan`,
+                      quantity: BigInt(1),
+                      currency: "usd",
+                      priceInCents: BigInt(Math.round(subPrice * 100)),
+                    },
+                  ],
+                  subEmail,
+                  `${window.location.origin}/order-confirmation?session_id={CHECKOUT_SESSION_ID}`,
+                  `${window.location.origin}/`,
+                  "",
+                );
+                if ("ok" in subResult) {
+                  window.location.href = subResult.ok;
+                }
+              }
+            }
+          } catch {
+            // If subscription initiation fails, silently continue — the user
+            // can initiate the subscription separately. Do not block the
+            // deposit confirmation page.
+          }
         }
       } catch {
         setRecordStatus("error");
       }
     };
-
     tryRecord();
   }, [actor, isFetching, navigate]);
 
   // Error state
   if (recordStatus === "error") {
     return (
-      <div className="min-h-screen bg-white flex flex-col">
+      <div className="min-h-screen bg-slate-900 flex flex-col">
         <Navbar />
         <div className="h-[68px]" aria-hidden="true" />
         <main
-          className="flex-1 flex items-center justify-center px-4 py-16"
-          style={{ backgroundColor: "#FEF2F2" }}
+          className="flex-1 flex items-center justify-center px-4 py-16 bg-slate-900"
           data-ocid="order_confirmation.error_page"
         >
           <div
-            className="w-full bg-white"
-            style={{
-              maxWidth: 600,
-              borderRadius: 8,
-              padding: 40,
-              boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
-              border: "1px solid #FECACA",
-            }}
+            className="w-full bg-slate-800 border border-slate-700 rounded-xl"
+            style={{ maxWidth: 600, borderRadius: 8, padding: 40 }}
             data-ocid="order_confirmation.error_card"
           >
-            {/* Error icon */}
             <div className="flex justify-center mb-6">
               <AlertCircle
                 size={72}
                 strokeWidth={1.5}
-                color="#DC2626"
+                color="#F87171"
                 data-ocid="order_confirmation.error_icon"
               />
             </div>
-
-            {/* Error heading */}
             <h2
-              className="text-center font-bold mb-3"
-              style={{ color: "#1B2D4F", fontSize: 28 }}
-            >
-              Something Went Wrong
-            </h2>
-
-            {/* Error subheadline */}
-            <p
-              className="text-center font-semibold mb-6"
-              style={{ color: "#DC2626", fontSize: 17 }}
-            >
-              We could not verify or record your purchase.
-            </p>
-
-            {/* Error body */}
-            <p
-              className="text-center mb-8"
-              style={{ color: "#6B7280", fontSize: 15, lineHeight: 1.6 }}
-            >
-              There was an error processing your order confirmation. Your
-              payment may have gone through, but our system was unable to record
-              it automatically. Please do not attempt to pay again.
-            </p>
-
-            {/* Contact block */}
-            <div
-              className="rounded-lg border"
+              className="text-center font-bold mb-3 text-white"
               style={{
-                borderColor: "#FECACA",
-                backgroundColor: "#FFF5F5",
-                padding: "24px 28px",
+                fontSize: 28,
+                fontFamily: "'Plus Jakarta Sans', monospace",
+              }}
+            >
+              <TypewriterText text="Something Went Wrong" speed={45} />
+            </h2>
+            <p
+              className="text-center font-semibold mb-6 text-[#F87171]"
+              style={{ fontSize: 17 }}
+            >
+              <TypewriterText
+                text="We could not verify or record your purchase."
+                speed={35}
+              />
+            </p>
+            <p
+              className="text-center mb-8 text-[#7A7D90]"
+              style={{ fontSize: 15, lineHeight: 1.6 }}
+            >
+              <TypewriterText
+                text="There was an error processing your order confirmation. Your payment may have gone through, but our system was unable to record it automatically. Please do not attempt to pay again."
+                speed={20}
+              />
+            </p>
+            <div
+              className="rounded-lg border p-6"
+              style={{
+                borderColor: "rgba(248,113,113,0.3)",
+                backgroundColor: "rgba(248,113,113,0.08)",
               }}
               data-ocid="order_confirmation.error_contact_block"
             >
-              <p
-                className="font-bold mb-2"
-                style={{ color: "#1B2D4F", fontSize: 16 }}
-              >
-                Contact us immediately to resolve this:
+              <p className="font-bold mb-2 text-white" style={{ fontSize: 16 }}>
+                <TypewriterText
+                  text="Contact us immediately to resolve this:"
+                  speed={40}
+                />
               </p>
               <p
-                className="mb-3"
-                style={{ color: "#374151", fontSize: 15, lineHeight: 1.65 }}
+                className="mb-3 text-[#9DA0B3]"
+                style={{ fontSize: 15, lineHeight: 1.65 }}
               >
-                Email us with your order details (name, email, and the product
-                you purchased) and we will manually verify your payment and set
-                up your account.
+                <TypewriterText
+                  text="Email us with your order details (name, email, and the product you purchased) and we will manually verify your payment and set up your account."
+                  speed={18}
+                />
               </p>
               <a
-                href="mailto:vincenzo@imperidome.com"
-                className="font-bold"
-                style={{ color: "#DC2626", fontSize: 15 }}
+                href={`mailto:${contactEmail}`}
+                className="font-bold text-[#F87171]"
+                style={{ fontSize: 15 }}
                 data-ocid="order_confirmation.error_contact_email"
               >
-                vincenzo@imperidome.com
+                {contactEmail}
               </a>
             </div>
           </div>
@@ -200,25 +250,19 @@ export default function OrderConfirmationPage() {
     );
   }
 
-  // Loading / pending state while verifying
+  // Loading / pending state
   if (recordStatus === "pending") {
     return (
-      <div className="min-h-screen bg-white flex flex-col">
+      <div className="min-h-screen bg-slate-900 flex flex-col">
         <Navbar />
         <div className="h-[68px]" aria-hidden="true" />
         <main
-          className="flex-1 flex items-center justify-center px-4 py-16"
-          style={{ backgroundColor: "#EFF6FF" }}
+          className="flex-1 flex items-center justify-center px-4 py-16 bg-slate-900"
           data-ocid="order_confirmation.pending_page"
         >
           <div
-            className="w-full bg-white text-center"
-            style={{
-              maxWidth: 600,
-              borderRadius: 8,
-              padding: 40,
-              boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
-            }}
+            className="w-full matrix-card text-center"
+            style={{ maxWidth: 600, borderRadius: 8, padding: 40 }}
             data-ocid="order_confirmation.pending_card"
           >
             <div
@@ -226,23 +270,29 @@ export default function OrderConfirmationPage() {
               style={{
                 width: 56,
                 height: 56,
-                border: "3px solid #DBEAFE",
-                borderTop: "3px solid #3B82F6",
+                border: "3px solid #1C1F33",
+                borderTop: "3px solid #22C55E",
                 borderRadius: "50%",
                 animation: "spin 0.9s linear infinite",
               }}
             />
             <p
-              className="font-semibold"
-              style={{ color: "#1B2D4F", fontSize: 18 }}
+              className="font-semibold text-white"
+              style={{
+                fontSize: 18,
+                fontFamily: "'Plus Jakarta Sans', monospace",
+              }}
             >
-              Verifying your payment…
+              <TypewriterText text="Verifying your payment…" speed={50} />
             </p>
             <p
-              className="mt-2"
-              style={{ color: "#6B7280", fontSize: 14, lineHeight: 1.6 }}
+              className="mt-2 text-[#7A7D90]"
+              style={{ fontSize: 14, lineHeight: 1.6 }}
             >
-              Please wait while we confirm your Stripe session.
+              <TypewriterText
+                text="Please wait while we confirm your Stripe session."
+                speed={35}
+              />
             </p>
             <style>
               {"@keyframes spin { to { transform: rotate(360deg); } }"}
@@ -254,71 +304,66 @@ export default function OrderConfirmationPage() {
     );
   }
 
-  // Success state — only renders when recordStatus === "done"
+  // Success state
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className="min-h-screen bg-slate-900 flex flex-col">
       <Navbar />
       <div className="h-[68px]" aria-hidden="true" />
 
       <main
-        className="flex-1 flex items-center justify-center px-4 py-16"
-        style={{ backgroundColor: "#EFF6FF" }}
+        className="flex-1 flex items-center justify-center px-4 py-16 bg-slate-900"
         data-ocid="order_confirmation.page"
       >
         <div
-          className="w-full bg-white"
-          style={{
-            maxWidth: 600,
-            borderRadius: 8,
-            padding: 40,
-            boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
-          }}
+          className="w-full bg-slate-800 border border-slate-700 rounded-xl"
+          style={{ maxWidth: 600, borderRadius: 8, padding: 40 }}
           data-ocid="order_confirmation.card"
         >
-          {/* Green checkmark icon */}
           <div className="flex justify-center mb-6">
             <CheckCircle
               size={72}
               strokeWidth={1.5}
-              color="#166534"
+              color="#22C55E"
               data-ocid="order_confirmation.success_state"
             />
           </div>
 
-          {/* Heading */}
           <h2
-            className="text-center font-bold mb-3"
-            style={{ color: "#1B2D4F", fontSize: 28 }}
+            className="text-center font-bold mb-3 text-white"
+            style={{
+              fontSize: 28,
+              fontFamily: "'Plus Jakarta Sans', monospace",
+            }}
           >
-            You Are In the Queue.
+            <TypewriterText text="You Are In the Queue." speed={45} />
           </h2>
-
-          {/* Subheadline */}
           <p
-            className="text-center font-semibold mb-6"
-            style={{ color: "#166534", fontSize: 17 }}
+            className="text-center font-semibold mb-6 text-[#22C55E]"
+            style={{ fontSize: 17 }}
           >
-            Payment received. Your build slot is secured.
+            <TypewriterText
+              text="Payment received. Your build slot is secured."
+              speed={35}
+            />
           </p>
 
-          {/* Purchased items summary — shown only if metadata contains services */}
           {purchasedItems.length > 0 && (
             <div
               className="mb-6 rounded-lg border"
               style={{
-                borderColor: "#D1FAE5",
-                backgroundColor: "#F0FDF4",
+                borderColor: "rgba(34,197,94,0.3)",
+                backgroundColor: "rgba(34,197,94,0.05)",
                 padding: "16px 20px",
               }}
               data-ocid="order_confirmation.items_summary"
             >
               <p
-                className="font-semibold mb-2"
+                className="font-semibold mb-2 text-[#22C55E]"
                 style={{
-                  color: "#166534",
                   fontSize: 13,
                   textTransform: "uppercase",
                   letterSpacing: "0.06em",
+                  fontFamily: "'Plus Jakarta Sans', monospace",
                 }}
               >
                 Order Summary
@@ -327,10 +372,10 @@ export default function OrderConfirmationPage() {
                 {purchasedItems.map((item) => (
                   <li
                     key={item}
-                    className="flex items-center gap-2"
-                    style={{ color: "#1B2D4F", fontSize: 15 }}
+                    className="flex items-center gap-2 text-[#EEF0F8]"
+                    style={{ fontSize: 15 }}
                   >
-                    <span style={{ color: "#166534" }}>✓</span>
+                    <span className="text-[#22C55E]">✓</span>
                     {item}
                   </li>
                 ))}
@@ -338,53 +383,51 @@ export default function OrderConfirmationPage() {
             </div>
           )}
 
-          {/* Body */}
           <p
-            className="text-center mb-8"
-            style={{ color: "#6B7280", fontSize: 15, lineHeight: 1.6 }}
+            className="text-center mb-8 text-[#7A7D90]"
+            style={{ fontSize: 15, lineHeight: 1.6 }}
           >
-            Your order has been received. Log in to your portal to complete your
-            site brief — your build won&rsquo;t start until we have it.
+            <TypewriterText
+              text="Your order has been received. Log in to your portal to complete your site brief — your build won't start until we have it."
+              speed={20}
+            />
           </p>
 
-          {/* Next Step Card */}
           <div
             className="mb-8 rounded-lg border"
             style={{
-              borderColor: "#BFDBFE",
-              backgroundColor: "#EFF6FF",
+              borderColor: "rgba(34,197,94,0.2)",
+              backgroundColor: "rgba(34,197,94,0.05)",
               padding: "24px 28px",
             }}
             data-ocid="order_confirmation.next_step_card"
           >
             <div className="flex items-center gap-2 mb-3">
-              <ClipboardList size={20} color="#3B82C4" />
+              <ClipboardList size={20} color="#22C55E" />
               <h3
-                className="font-bold"
-                style={{ color: "#1B2D4F", fontSize: 17 }}
+                className="font-bold text-white"
+                style={{
+                  fontSize: 17,
+                  fontFamily: "'Plus Jakarta Sans', monospace",
+                }}
               >
-                Complete Your Site Brief
+                <TypewriterText text="Complete Your Site Brief" speed={50} />
               </h3>
             </div>
             <p
-              className="mb-6"
-              style={{ color: "#374151", fontSize: 15, lineHeight: 1.65 }}
+              className="mb-6 text-[#9DA0B3]"
+              style={{ fontSize: 15, lineHeight: 1.65 }}
             >
-              Log in to your Client Portal to complete your site questionnaire.
-              Your build will not start until we receive your brief — this is
-              your chance to tell us exactly what you need.
+              <TypewriterText
+                text="Log in to your Client Portal to complete your site questionnaire. Your build will not start until we receive your brief — this is your chance to tell us exactly what you need."
+                speed={20}
+              />
             </p>
-
-            {/* Primary CTA — full-width prominent */}
             <button
               type="button"
               onClick={() => navigate({ to: "/portal/dashboard" })}
-              className="w-full flex items-center justify-center gap-2 rounded-lg font-bold text-white transition-opacity hover:opacity-90"
-              style={{
-                backgroundColor: "#166534",
-                fontSize: 16,
-                padding: "14px 24px",
-              }}
+              className="w-full flex items-center justify-center gap-2 rounded-lg font-bold text-[#0A0B14] transition-opacity hover:opacity-90 bg-green-600 text-white font-bold rounded-lg hover:bg-green-500"
+              style={{ fontSize: 16, padding: "14px 24px" }}
               data-ocid="order_confirmation.primary_button"
             >
               <LogIn size={18} />
@@ -392,7 +435,6 @@ export default function OrderConfirmationPage() {
             </button>
           </div>
 
-          {/* Build Status */}
           <div
             className="flex flex-col items-center gap-2"
             data-ocid="order_confirmation.build_status"
@@ -400,29 +442,29 @@ export default function OrderConfirmationPage() {
             <div
               className="inline-flex items-center gap-2 rounded-full px-4 py-1.5"
               style={{
-                backgroundColor: "#FEF3C7",
-                border: "1px solid #FDE68A",
+                backgroundColor: "rgba(251,191,36,0.1)",
+                border: "1px solid rgba(251,191,36,0.3)",
               }}
             >
-              <Clock size={14} color="#92400E" />
+              <Clock size={14} color="#F59E0B" />
               <span
-                className="font-semibold"
-                style={{ color: "#92400E", fontSize: 13 }}
+                className="font-semibold text-[#F59E0B]"
+                style={{ fontSize: 13 }}
               >
-                Build Status: Waiting for Questionnaire
+                <TypewriterText
+                  text="Build Status: Waiting for Questionnaire"
+                  speed={40}
+                />
               </span>
             </div>
             <p
-              className="text-center"
-              style={{
-                color: "#9CA3AF",
-                fontSize: 13,
-                lineHeight: 1.6,
-                maxWidth: 420,
-              }}
+              className="text-center text-[#7A7D90]"
+              style={{ fontSize: 13, lineHeight: 1.6, maxWidth: 420 }}
             >
-              Once submitted, our team will review your brief within 24–48 hours
-              and confirm your start date.
+              <TypewriterText
+                text="Once submitted, our team will review your brief within 24–48 hours and confirm your start date."
+                speed={25}
+              />
             </p>
           </div>
         </div>

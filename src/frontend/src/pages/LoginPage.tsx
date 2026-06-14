@@ -1,6 +1,10 @@
+import { useNavigate } from "@tanstack/react-router";
 import { Eye, EyeOff, RefreshCw, Shield } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { backendInterface } from "../backend";
+import type { CSSProperties, FormEvent } from "react";
+import type { backendInterface } from "../backend.d";
+import { ImperidomeBackground } from "../components/ImperidomeBackground";
+import TypewriterText from "../components/TypewriterText";
 import { useActor } from "../hooks/useActor";
 import { saveSession } from "../hooks/useSession";
 import { hashPassword } from "../lib/hashPassword";
@@ -24,8 +28,6 @@ const DARK = {
   infoBorder: "1px solid rgba(94,240,138,0.2)",
 } as const;
 
-const ADMIN_EMAIL = "vincenzo@imperidome.com";
-const ADMIN_EMAIL_SHORT = "vincenzo@imperidome";
 const OTP_RESEND_COOLDOWN = 60; // seconds
 
 interface PendingAdminSession {
@@ -35,6 +37,7 @@ interface PendingAdminSession {
 }
 
 export default function LoginPage() {
+  const navigate = useNavigate();
   const { actor, isFetching: actorLoading } = useActor();
 
   // ─── Login step state ──────────────────────────────────────────────────────
@@ -64,6 +67,7 @@ export default function LoginPage() {
     setResendCooldown(OTP_RESEND_COOLDOWN);
     if (cooldownRef.current) clearInterval(cooldownRef.current);
     cooldownRef.current = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
       setResendCooldown((prev) => {
         if (prev <= 1) {
           if (cooldownRef.current) clearInterval(cooldownRef.current);
@@ -74,7 +78,7 @@ export default function LoginPage() {
     }, 1000);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
 
@@ -85,7 +89,9 @@ export default function LoginPage() {
 
     setIsLoading(true);
     try {
-      console.log("[Login] Attempting login for:", email);
+      if (import.meta.env.DEV) {
+        console.log("[Login] Attempting login for:", email);
+      }
 
       const passwordHash = await hashPassword(password);
       const result = await (actor as backendInterface).login({
@@ -93,42 +99,46 @@ export default function LoginPage() {
         passwordHash,
       });
 
-      console.log("[Login] Backend response:", JSON.stringify(result));
+      if (import.meta.env.DEV) {
+        console.log("[Login] Backend response:", JSON.stringify(result));
+      }
 
       if (result && "ok" in result) {
-        const backendRole: string = result.ok?.role ?? "client";
+        const role: string = result.ok?.role ?? "client";
         const firstName =
           (result.ok?.firstName as string) ||
           email.split("@")[0].replace(/[^a-zA-Z]/g, "") ||
           "User";
 
-        // Frontend safety net: if the logged-in email matches the known admin
-        // account (with or without .com), always override role to "admin".
-        const emailLower = email.toLowerCase().trim();
-        const isAdminEmail =
-          emailLower === ADMIN_EMAIL.toLowerCase() ||
-          emailLower === ADMIN_EMAIL_SHORT.toLowerCase();
-        const role = isAdminEmail ? "admin" : backendRole;
-
-        console.log(
-          "[Login] Success — backendRole:",
-          backendRole,
-          "resolvedRole:",
-          role,
-          "firstName:",
-          firstName,
-        );
+        if (import.meta.env.DEV) {
+          console.log("[Login] Success — role:", role, "firstName:", firstName);
+        }
 
         if (role === "admin") {
           // ── 2FA flow: request OTP before granting admin session ──────────
           setPendingSession({ email, firstName, role });
           try {
-            await (actor as backendInterface).generateAdminOTP(email);
-            console.log("[Login] OTP sent to admin email");
+            const otpResult = await (
+              actor as backendInterface
+            ).generateAdminOTP(email);
+            if ("err" in otpResult) {
+              setError(
+                otpResult.err ||
+                  "Failed to send verification code. Please try again.",
+              );
+              return;
+            }
+            if (import.meta.env.DEV) {
+              console.log("[Login] OTP sent to admin email");
+            }
           } catch (otpErr) {
-            console.error("[Login] generateAdminOTP failed:", otpErr);
+            if (import.meta.env.DEV) {
+              console.error("[Login] generateAdminOTP failed:", otpErr);
+            }
             setError("Failed to send verification code. Please try again.");
             return;
+          } finally {
+            setIsLoading(false);
           }
           setOtpStep(true);
           startResendCooldown();
@@ -137,21 +147,25 @@ export default function LoginPage() {
 
         // Non-admin: skip 2FA, proceed directly
         saveSession({ email, firstName, role });
-        window.location.href = "/portal/dashboard";
+        navigate({ to: "/portal" });
         return;
       }
 
-      console.warn("[Login] Backend returned error:", result);
+      if (import.meta.env.DEV) {
+        console.warn("[Login] Backend returned error:", result);
+      }
       setError("Email or password is incorrect. Please try again.");
     } catch (err) {
-      console.error("[Login] Exception during login:", err);
+      if (import.meta.env.DEV) {
+        console.error("[Login] Exception during login:", err);
+      }
       setError("Email or password is incorrect. Please try again.");
     } finally {
       setIsLoading(false);
     }
   }
 
-  async function handleVerifyOtp(e: React.FormEvent) {
+  async function handleVerifyOtp(e: FormEvent) {
     e.preventDefault();
     setOtpError("");
 
@@ -167,18 +181,24 @@ export default function LoginPage() {
         pendingSession.email,
         otp.trim(),
       );
-      console.log("[Login] verifyAdminOTP result:", result);
+      if (import.meta.env.DEV) {
+        console.log("[Login] verifyAdminOTP result:", result);
+      }
 
-      if (result === "verified") {
+      if ("ok" in result) {
         // Complete admin session setup
         saveSession(pendingSession);
-        window.location.href = "/admin/dashboard";
+        navigate({ to: "/admin" });
         return;
       }
 
-      setOtpError("Incorrect verification code. Please try again.");
+      setOtpError(
+        result.err || "Incorrect verification code. Please try again.",
+      );
     } catch (err) {
-      console.error("[Login] verifyAdminOTP exception:", err);
+      if (import.meta.env.DEV) {
+        console.error("[Login] verifyAdminOTP exception:", err);
+      }
       setOtpError("Verification failed. Please try again.");
     } finally {
       setOtpLoading(false);
@@ -188,11 +208,21 @@ export default function LoginPage() {
   async function handleResendOtp() {
     if (!actor || !pendingSession || resendCooldown > 0) return;
     try {
-      await (actor as backendInterface).generateAdminOTP(pendingSession.email);
+      const resendResult = await (actor as backendInterface).generateAdminOTP(
+        pendingSession.email,
+      );
+      if ("err" in resendResult) {
+        setOtpError(
+          resendResult.err || "Failed to resend code. Please try again.",
+        );
+        return;
+      }
       startResendCooldown();
       setOtpError("");
     } catch (err) {
-      console.error("[Login] Resend OTP failed:", err);
+      if (import.meta.env.DEV) {
+        console.error("[Login] Resend OTP failed:", err);
+      }
       setOtpError("Failed to resend code. Please try again.");
     }
   }
@@ -208,7 +238,7 @@ export default function LoginPage() {
 
   const isButtonDisabled = isLoading || actorLoading || !actor;
 
-  const inputStyle: React.CSSProperties = {
+  const inputStyle: CSSProperties = {
     width: "100%",
     border: DARK.inputBorder,
     borderRadius: "6px",
@@ -220,7 +250,7 @@ export default function LoginPage() {
     boxSizing: "border-box",
   };
 
-  const cardStyle: React.CSSProperties = {
+  const cardStyle: CSSProperties = {
     background: DARK.cardBg,
     backdropFilter: "blur(12px)",
     WebkitBackdropFilter: "blur(12px)",
@@ -229,6 +259,8 @@ export default function LoginPage() {
     width: "100%",
     maxWidth: "440px",
     border: DARK.cardBorder,
+    position: "relative",
+    zIndex: 10,
   };
 
   // ─── 2FA Screen ────────────────────────────────────────────────────────────
@@ -236,8 +268,9 @@ export default function LoginPage() {
     return (
       <div
         style={{ backgroundColor: DARK.pageBg, minHeight: "100vh" }}
-        className="flex items-center justify-center px-4 py-12"
+        className="relative flex items-center justify-center px-4 py-12"
       >
+        <ImperidomeBackground />
         <div style={cardStyle}>
           {/* Wordmark */}
           <div className="text-center mb-6">
@@ -371,7 +404,11 @@ export default function LoginPage() {
                 marginBottom: "12px",
               }}
             >
-              {otpLoading ? "Verifying…" : "Verify & Sign In"}
+              <TypewriterText
+                text={otpLoading ? "Verifying…" : "Verify & Sign In"}
+                speed={30}
+                key={otpLoading ? "verifying" : "verify"}
+              />
             </button>
           </form>
 
@@ -435,8 +472,9 @@ export default function LoginPage() {
   return (
     <div
       style={{ backgroundColor: DARK.pageBg, minHeight: "100vh" }}
-      className="flex items-center justify-center px-4 py-12"
+      className="relative flex items-center justify-center px-4 py-12"
     >
+      <ImperidomeBackground />
       <div style={cardStyle}>
         {/* Wordmark */}
         <div className="text-center mb-6">

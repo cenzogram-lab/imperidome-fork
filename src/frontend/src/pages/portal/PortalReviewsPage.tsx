@@ -1,14 +1,15 @@
 import { Loader2, Star } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { Review } from "../../backend";
+import type { FormEvent } from "react";
+import type { Review, backendInterface } from "../../backend.d";
+import TypewriterText from "../../components/TypewriterText";
 import { useActor } from "../../hooks/useActor";
 import { useSession } from "../../hooks/useSession";
 import PortalLayout from "./PortalLayout";
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 function formatTimestamp(ts: bigint): string {
+  if (ts === 0n) return "—";
+  if (Number.isNaN(Number(ts))) return "—";
   const ms = Number(ts) / 1_000_000;
   return new Date(ms).toLocaleDateString("en-US", {
     month: "long",
@@ -17,9 +18,6 @@ function formatTimestamp(ts: bigint): string {
   });
 }
 
-// ---------------------------------------------------------------------------
-// Star display (read-only)
-// ---------------------------------------------------------------------------
 function StarDisplay({ rating }: { rating: bigint }) {
   const n = Number(rating);
   return (
@@ -30,7 +28,7 @@ function StarDisplay({ rating }: { rating: bigint }) {
           aria-hidden="true"
           style={{
             fontSize: "20px",
-            color: i <= n ? "#F59E0B" : "rgba(255,255,255,0.15)",
+            color: i <= n ? "#F59E0B" : "rgba(94,240,138,0.15)",
             lineHeight: 1,
           }}
         >
@@ -40,9 +38,10 @@ function StarDisplay({ rating }: { rating: bigint }) {
       <span
         style={{
           fontSize: "13px",
-          color: "#7A7D90",
+          color: "#5EF08A",
           marginLeft: "6px",
           fontWeight: 600,
+          fontFamily: "monospace",
         }}
       >
         {n} / 5
@@ -51,17 +50,12 @@ function StarDisplay({ rating }: { rating: bigint }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Interactive star selector
-// ---------------------------------------------------------------------------
-interface StarSelectorProps {
-  value: number;
-  onChange: (n: number) => void;
-  disabled: boolean;
-}
-function StarSelector({ value, onChange, disabled }: StarSelectorProps) {
+function StarSelector({
+  value,
+  onChange,
+  disabled,
+}: { value: number; onChange: (n: number) => void; disabled: boolean }) {
   const [hovered, setHovered] = useState(0);
-
   return (
     <div
       style={{ display: "flex", gap: "6px" }}
@@ -88,7 +82,7 @@ function StarSelector({ value, onChange, disabled }: StarSelectorProps) {
               minWidth: "44px",
               minHeight: "44px",
               lineHeight: 1,
-              color: filled ? "#F59E0B" : "rgba(255,255,255,0.2)",
+              color: filled ? "#F59E0B" : "rgba(94,240,138,0.15)",
               transition: "color 0.15s, transform 0.1s",
               transform:
                 hovered === i && !disabled ? "scale(1.15)" : "scale(1)",
@@ -102,38 +96,22 @@ function StarSelector({ value, onChange, disabled }: StarSelectorProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Status badge
-// ---------------------------------------------------------------------------
 function StatusBadge({ status }: { status: string }) {
-  const cfg: Record<string, { label: string; bg: string; color: string }> = {
-    pending: {
-      label: "Pending Review",
-      bg: "rgba(234,179,8,0.15)",
-      color: "#EAB308",
-    },
-    approved: {
-      label: "Approved",
-      bg: "rgba(34,197,94,0.15)",
-      color: "#22C55E",
-    },
-    rejected: {
-      label: "Not Approved",
-      bg: "rgba(239,68,68,0.15)",
-      color: "#EF4444",
-    },
-  };
-
   const s = status.toLowerCase();
-  const c = cfg[s] ?? {
-    label: status,
-    bg: "rgba(255,255,255,0.08)",
-    color: "#7A7D90",
-  };
-
+  if (s === "approved")
+    return (
+      <span className="matrix-badge" style={{ fontSize: "12px" }}>
+        Approved
+      </span>
+    );
+  if (s === "rejected")
+    return (
+      <span className="matrix-badge-red" style={{ fontSize: "12px" }}>
+        Not Approved
+      </span>
+    );
   return (
     <span
-      data-ocid="reviews.status-badge"
       style={{
         display: "inline-block",
         padding: "3px 12px",
@@ -141,19 +119,16 @@ function StatusBadge({ status }: { status: string }) {
         fontSize: "12px",
         fontWeight: 700,
         letterSpacing: "0.04em",
-        background: c.bg,
-        color: c.color,
-        border: `1px solid ${c.color}40`,
+        background: "rgba(234,179,8,0.1)",
+        color: "#EAB308",
+        border: "1px solid rgba(234,179,8,0.3)",
       }}
     >
-      {c.label}
+      Pending Review
     </span>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Toast
-// ---------------------------------------------------------------------------
 interface ToastState {
   message: string;
   type: "success" | "error";
@@ -167,7 +142,6 @@ function Toast({
     const t = setTimeout(onDismiss, 5000);
     return () => clearTimeout(t);
   }, [onDismiss]);
-
   return (
     <div
       data-ocid="reviews.toast"
@@ -180,8 +154,8 @@ function Toast({
         borderRadius: "10px",
         background:
           toast.type === "success"
-            ? "rgba(5,46,22,0.95)"
-            : "rgba(69,10,10,0.95)",
+            ? "rgba(5,46,22,0.97)"
+            : "rgba(69,10,10,0.97)",
         border: `1px solid ${toast.type === "success" ? "rgba(94,240,138,0.4)" : "rgba(239,68,68,0.4)"}`,
         color: toast.type === "success" ? "#86EFAC" : "#FCA5A5",
         fontSize: "14px",
@@ -216,43 +190,32 @@ function Toast({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Submitted review card
-// ---------------------------------------------------------------------------
 function ExistingReviewCard({ review }: { review: Review }) {
   const status = review.status.toLowerCase();
-
   const infoMsg: Record<string, { text: string; color: string }> = {
     pending: {
       text: "Your review is being reviewed by our team. You'll receive an email when it's approved.",
-      color: "#FCD34D",
+      color: "#EAB308",
     },
-    approved: {
-      text: "Your review is live on our website!",
-      color: "#86EFAC",
-    },
+    approved: { text: "Your review is live on our website!", color: "#5EF08A" },
     rejected: {
       text: "Your review was not approved for public display.",
-      color: "#FCA5A5",
+      color: "#EF4444",
     },
   };
-
   const info = infoMsg[status];
-
   return (
     <div
       data-ocid="reviews.existing-review.card"
+      className="matrix-card"
       style={{
-        borderRadius: "12px",
-        border: "1px solid rgba(255,255,255,0.1)",
-        background: "rgba(17,19,34,0.8)",
         padding: "28px",
         display: "flex",
         flexDirection: "column",
         gap: "20px",
+        border: "1px solid rgba(94,240,138,0.2)",
       }}
     >
-      {/* Header */}
       <div
         style={{
           display: "flex",
@@ -263,22 +226,18 @@ function ExistingReviewCard({ review }: { review: Review }) {
         }}
       >
         <div>
-          <h2
-            style={{
-              margin: "0 0 8px",
-              fontSize: "18px",
-              fontWeight: 700,
-              color: "#EEF0F8",
-            }}
-          >
-            Your Review
+          <h2 style={{ margin: "0 0 8px" }}>
+            <TypewriterText
+              text="Your Review"
+              className="matrix-heading"
+              style={{ fontSize: "18px", fontWeight: 700 }}
+              speed={40}
+            />
           </h2>
           <StarDisplay rating={review.rating} />
         </div>
         <StatusBadge status={review.status} />
       </div>
-
-      {/* Review text */}
       <p
         data-ocid="reviews.existing-review.text"
         style={{
@@ -292,43 +251,39 @@ function ExistingReviewCard({ review }: { review: Review }) {
       >
         "{review.reviewText}"
       </p>
-
-      {/* Job title */}
       {review.jobTitle && review.jobTitle.trim() !== "" && (
         <p
           data-ocid="reviews.existing-review.job-title"
           style={{
             margin: 0,
             fontSize: "13px",
-            color: "#7A7D90",
+            color: "#5EF08A",
             fontWeight: 600,
+            fontFamily: "monospace",
           }}
         >
           {review.jobTitle}
         </p>
       )}
-
-      {/* Submitted date */}
       <p
         style={{
           margin: 0,
           fontSize: "12px",
           color: "#7A7D90",
           letterSpacing: "0.02em",
+          fontFamily: "monospace",
         }}
       >
         Submitted {formatTimestamp(review.submittedAt)}
       </p>
-
-      {/* Status message */}
       {info && (
         <div
           data-ocid="reviews.existing-review.status-message"
           style={{
             padding: "12px 16px",
             borderRadius: "8px",
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.08)",
+            background: "rgba(94,240,138,0.04)",
+            border: "1px solid rgba(94,240,138,0.1)",
           }}
         >
           <p
@@ -347,10 +302,12 @@ function ExistingReviewCard({ review }: { review: Review }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Review submission form
-// ---------------------------------------------------------------------------
-interface ReviewFormProps {
+function ReviewForm({
+  clientEmail,
+  actor,
+  onSubmitted,
+  onToast,
+}: {
   clientEmail: string;
   actor: {
     submitReview: (
@@ -360,27 +317,18 @@ interface ReviewFormProps {
       jobTitle: string,
     ) => Promise<{ ok: string } | { err: string }>;
   };
-  onSubmitted: (review: Review) => void;
+  onSubmitted: () => void;
   onToast: (msg: string, type: "success" | "error") => void;
-}
-
-function ReviewForm({
-  clientEmail,
-  actor,
-  onSubmitted,
-  onToast,
-}: ReviewFormProps) {
+}) {
   const [rating, setRating] = useState(0);
   const [reviewText, setReviewText] = useState("");
   const [jobTitle, setJobTitle] = useState("");
   const [submitting, setSubmitting] = useState(false);
-
   const canSubmit = rating >= 1 && reviewText.trim().length > 0 && !submitting;
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
-
     setSubmitting(true);
     try {
       const result = await actor.submitReview(
@@ -389,24 +337,15 @@ function ReviewForm({
         reviewText.trim(),
         jobTitle.trim(),
       );
-
       if ("ok" in result) {
-        // Construct the review object so the parent can display it immediately
-        const newReview: Review = {
-          id: result.ok,
-          clientEmail,
-          clientName: "",
-          rating: BigInt(rating),
-          reviewText: reviewText.trim(),
-          jobTitle: jobTitle.trim(),
-          status: "pending",
-          submittedAt: BigInt(Date.now()) * BigInt(1_000_000),
-        };
         onToast(
           "Review submitted! We'll notify you when it's approved.",
           "success",
         );
-        onSubmitted(newReview);
+        setRating(0);
+        setReviewText("");
+        setJobTitle("");
+        onSubmitted();
       } else {
         onToast(
           result.err || "Failed to submit review. Please try again.",
@@ -420,27 +359,26 @@ function ReviewForm({
     }
   }
 
+  const inputFocusStyle = {
+    borderColor: "rgba(94,240,138,0.5)",
+    boxShadow: "0 0 0 2px rgba(94,240,138,0.1)",
+  };
+  const inputBlurStyle = { borderColor: "rgba(94,240,138,0.15)" };
+
   return (
     <div
       data-ocid="reviews.form.card"
-      style={{
-        borderRadius: "12px",
-        border: "1px solid rgba(255,255,255,0.1)",
-        background: "rgba(17,19,34,0.8)",
-        padding: "28px",
-      }}
+      className="matrix-card"
+      style={{ padding: "28px", border: "1px solid rgba(94,240,138,0.15)" }}
     >
-      {/* Page heading */}
       <div style={{ marginBottom: "28px" }}>
-        <h2
-          style={{
-            margin: "0 0 6px",
-            fontSize: "20px",
-            fontWeight: 700,
-            color: "#EEF0F8",
-          }}
-        >
-          Leave a Review
+        <h2 style={{ margin: "0 0 6px" }}>
+          <TypewriterText
+            text="Leave a Review"
+            className="matrix-heading"
+            style={{ fontSize: "20px", fontWeight: 700 }}
+            speed={40}
+          />
         </h2>
         <p
           style={{
@@ -453,10 +391,8 @@ function ReviewForm({
           Share your experience working with Imperidome
         </p>
       </div>
-
       <form onSubmit={handleSubmit} noValidate>
         <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-          {/* Star rating */}
           <div data-ocid="reviews.form.rating-section">
             <p
               id="rating-label"
@@ -464,9 +400,10 @@ function ReviewForm({
                 margin: "0 0 10px",
                 fontSize: "13px",
                 fontWeight: 600,
-                color: "#B0B3C6",
+                color: "#5EF08A",
                 textTransform: "uppercase",
                 letterSpacing: "0.06em",
+                fontFamily: "monospace",
               }}
             >
               Your Rating <span style={{ color: "#EF4444" }}>*</span>
@@ -493,8 +430,6 @@ function ReviewForm({
               </p>
             )}
           </div>
-
-          {/* Testimonial textarea */}
           <div data-ocid="reviews.form.text-section">
             <label
               htmlFor="review-text"
@@ -502,10 +437,11 @@ function ReviewForm({
                 display: "block",
                 fontSize: "13px",
                 fontWeight: 600,
-                color: "#B0B3C6",
+                color: "#5EF08A",
                 marginBottom: "10px",
                 textTransform: "uppercase",
                 letterSpacing: "0.06em",
+                fontFamily: "monospace",
               }}
             >
               Your Review <span style={{ color: "#EF4444" }}>*</span>
@@ -522,8 +458,8 @@ function ReviewForm({
                 width: "100%",
                 padding: "12px 14px",
                 borderRadius: "8px",
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.12)",
+                background: "rgba(7,8,16,0.8)",
+                border: "1px solid rgba(94,240,138,0.15)",
                 color: "#EEF0F8",
                 fontSize: "15px",
                 lineHeight: "1.6",
@@ -531,14 +467,10 @@ function ReviewForm({
                 outline: "none",
                 fontFamily: "inherit",
                 boxSizing: "border-box",
-                transition: "border-color 0.2s",
+                transition: "border-color 0.2s, box-shadow 0.2s",
               }}
-              onFocus={(e) => {
-                e.target.style.borderColor = "rgba(94,240,138,0.5)";
-              }}
-              onBlur={(e) => {
-                e.target.style.borderColor = "rgba(255,255,255,0.12)";
-              }}
+              onFocus={(e) => Object.assign(e.target.style, inputFocusStyle)}
+              onBlur={(e) => Object.assign(e.target.style, inputBlurStyle)}
             />
             <p
               style={{
@@ -546,13 +478,12 @@ function ReviewForm({
                 fontSize: "12px",
                 color: reviewText.length >= 950 ? "#EAB308" : "#7A7D90",
                 textAlign: "right",
+                fontFamily: "monospace",
               }}
             >
               {reviewText.length} / 1000
             </p>
           </div>
-
-          {/* Job title / company (optional) */}
           <div data-ocid="reviews.form.job-title-section">
             <label
               htmlFor="review-job-title"
@@ -560,10 +491,11 @@ function ReviewForm({
                 display: "block",
                 fontSize: "13px",
                 fontWeight: 600,
-                color: "#B0B3C6",
+                color: "#5EF08A",
                 marginBottom: "10px",
                 textTransform: "uppercase",
                 letterSpacing: "0.06em",
+                fontFamily: "monospace",
               }}
             >
               Job Title / Company
@@ -592,45 +524,34 @@ function ReviewForm({
                 width: "100%",
                 padding: "11px 14px",
                 borderRadius: "8px",
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.12)",
+                background: "rgba(7,8,16,0.8)",
+                border: "1px solid rgba(94,240,138,0.15)",
                 color: "#EEF0F8",
                 fontSize: "15px",
                 outline: "none",
                 fontFamily: "inherit",
                 boxSizing: "border-box",
-                transition: "border-color 0.2s",
+                transition: "border-color 0.2s, box-shadow 0.2s",
               }}
-              onFocus={(e) => {
-                e.target.style.borderColor = "rgba(94,240,138,0.5)";
-              }}
-              onBlur={(e) => {
-                e.target.style.borderColor = "rgba(255,255,255,0.12)";
-              }}
+              onFocus={(e) => Object.assign(e.target.style, inputFocusStyle)}
+              onBlur={(e) => Object.assign(e.target.style, inputBlurStyle)}
             />
           </div>
-
-          {/* Submit */}
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <button
               type="submit"
               data-ocid="reviews.form.submit-button"
               disabled={!canSubmit}
+              className={canSubmit ? "matrix-btn" : "matrix-btn-outline"}
               style={{
                 padding: "12px 28px",
-                borderRadius: "8px",
-                background: canSubmit ? "#5EF08A" : "rgba(94,240,138,0.15)",
-                color: canSubmit ? "#061209" : "rgba(94,240,138,0.4)",
-                fontWeight: 700,
-                fontSize: "15px",
-                border: canSubmit ? "none" : "1px solid rgba(94,240,138,0.2)",
-                cursor: canSubmit ? "pointer" : "not-allowed",
+                minWidth: "160px",
                 display: "flex",
                 alignItems: "center",
-                gap: "8px",
-                transition: "background 0.2s, color 0.2s",
-                minWidth: "160px",
                 justifyContent: "center",
+                gap: "8px",
+                opacity: canSubmit ? 1 : 0.5,
+                cursor: canSubmit ? "pointer" : "not-allowed",
               }}
             >
               {submitting ? (
@@ -651,40 +572,37 @@ function ReviewForm({
           </div>
         </div>
       </form>
-
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        textarea:disabled, input:disabled { opacity: 0.6; cursor: not-allowed; }
-      `}</style>
+      <style>
+        {
+          "@keyframes spin { to { transform: rotate(360deg); } } textarea:disabled, input:disabled { opacity: 0.6; cursor: not-allowed; }"
+        }
+      </style>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main Page
-// ---------------------------------------------------------------------------
 export default function PortalReviewsPage() {
   const { session } = useSession();
   const clientEmail = session?.email ?? "";
   const { actor, isFetching } = useActor();
-
   const [existingReview, setExistingReview] = useState<
     Review | null | undefined
   >(undefined);
   const [loadError, setLoadError] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  // Fetch review on mount
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey is an intentional refresh trigger
   useEffect(() => {
+    // Guard: do not fire until clientEmail is a non-empty string
     if (!actor || isFetching || !clientEmail) return;
     let cancelled = false;
-
     async function load() {
       try {
-        const result = await actor!.getMyReview(clientEmail);
-        if (!cancelled) {
-          setExistingReview(result ?? null);
-        }
+        const result = await (actor as backendInterface).getMyReview(
+          clientEmail,
+        );
+        if (!cancelled) setExistingReview(result ?? null);
       } catch {
         if (!cancelled) {
           setLoadError(true);
@@ -692,18 +610,13 @@ export default function PortalReviewsPage() {
         }
       }
     }
-
     load();
     return () => {
       cancelled = true;
     };
-  }, [actor, isFetching, clientEmail]);
+  }, [actor, isFetching, clientEmail, refreshKey]);
 
   const isLoading = isFetching || existingReview === undefined;
-
-  function showToast(message: string, type: "success" | "error") {
-    setToast({ message, type });
-  }
 
   return (
     <PortalLayout pageTitle="Leave a Review">
@@ -716,31 +629,25 @@ export default function PortalReviewsPage() {
           maxWidth: "680px",
         }}
       >
-        {/* Page header */}
         <div data-ocid="reviews.page-header" style={{ marginBottom: "4px" }}>
-          <h1
-            style={{
-              margin: "0 0 4px",
-              fontSize: "22px",
-              fontWeight: 700,
-              color: "#EEF0F8",
-            }}
-          >
-            Reviews
+          <h1 style={{ margin: "0 0 4px" }}>
+            <TypewriterText
+              text="Reviews"
+              className="matrix-heading"
+              style={{ fontSize: "22px", fontWeight: 700 }}
+              speed={45}
+            />
           </h1>
           <p style={{ margin: 0, fontSize: "14px", color: "#7A7D90" }}>
             Share your feedback or track your submitted review.
           </p>
         </div>
 
-        {/* Loading state */}
         {isLoading && (
           <div
             data-ocid="reviews.loading_state"
+            className="matrix-card"
             style={{
-              borderRadius: "12px",
-              border: "1px solid rgba(255,255,255,0.08)",
-              background: "rgba(17,19,34,0.8)",
               padding: "40px",
               display: "flex",
               alignItems: "center",
@@ -754,11 +661,12 @@ export default function PortalReviewsPage() {
               size={18}
               style={{ animation: "spin 0.8s linear infinite" }}
             />
-            Loading your review status…
+            <span style={{ fontFamily: "monospace" }}>
+              Loading your review status…
+            </span>
           </div>
         )}
 
-        {/* Error state */}
         {!isLoading && loadError && (
           <div
             data-ocid="reviews.error_state"
@@ -776,13 +684,15 @@ export default function PortalReviewsPage() {
           </div>
         )}
 
-        {/* Main content — form or existing review */}
         {!isLoading && !loadError && existingReview === null && (
           <ReviewForm
             clientEmail={clientEmail}
-            actor={actor!}
-            onSubmitted={(review) => setExistingReview(review)}
-            onToast={showToast}
+            actor={actor as backendInterface}
+            onSubmitted={() => {
+              setExistingReview(undefined);
+              setRefreshKey((prev) => prev + 1);
+            }}
+            onToast={(msg, type) => setToast({ message: msg, type })}
           />
         )}
         {!isLoading && !loadError && existingReview != null && (
@@ -790,12 +700,8 @@ export default function PortalReviewsPage() {
         )}
       </div>
 
-      {/* Toast */}
       {toast && <Toast toast={toast} onDismiss={() => setToast(null)} />}
-
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-      `}</style>
+      <style>{"@keyframes spin { to { transform: rotate(360deg); } }"}</style>
     </PortalLayout>
   );
 }

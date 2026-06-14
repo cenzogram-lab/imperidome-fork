@@ -10,20 +10,13 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { backendInterface } from "../../backend";
-import type { GoogleCalendarConfig } from "../../backend.d.ts";
+import type { FormEvent } from "react";
+import type { backendInterface } from "../../backend.d";
+import type { GoogleCalendarConfig } from "../../backend.d";
 import InstructionModal from "../../components/InstructionModal";
 import type { InstructionStep } from "../../components/InstructionModal";
 import { useActor } from "../../hooks/useActor";
-import { getSession } from "../../hooks/useSession";
 import AdminLayout from "./AdminLayout";
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function getAdminEmail(): string {
-  const s = getSession();
-  return s?.email ?? localStorage.getItem("imperidome_admin_email") ?? "";
-}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -41,6 +34,7 @@ export default function AdminGoogleCalendarPage() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>({ type: "idle" });
   const [showClearModal, setShowClearModal] = useState(false);
   const [showCalHelp, setShowCalHelp] = useState(false);
+  const [configLoadError, setConfigLoadError] = useState<string | null>(null);
 
   const CAL_STEPS: InstructionStep[] = [
     { text: 'Go to script.google.com and click "New project".' },
@@ -82,16 +76,19 @@ export default function AdminGoogleCalendarPage() {
   // ── On mount: check configured status and load existing config ────────────
   useEffect(() => {
     if (!actor || isFetching) return;
-
     (actor as backendInterface)
       .isGoogleCalendarConfigured()
       .then((configured) => setIsConfigured(configured))
       .catch(() => setIsConfigured(false));
 
     (actor as backendInterface)
-      .getGoogleCalendarConfig(getAdminEmail())
+      .getGoogleCalendarConfig()
       .then((result) => {
-        if (result.__kind__ === "ok") {
+        if ("err" in result) {
+          setConfigLoadError("Failed to load calendar configuration.");
+          return;
+        }
+        if ("ok" in result) {
           const cfg = result.ok;
           setScriptUrl(cfg.scriptUrl);
           setTitleTemplate(cfg.titleTemplate);
@@ -99,11 +96,15 @@ export default function AdminGoogleCalendarPage() {
           setCalendarId(cfg.calendarId);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setConfigLoadError(
+          "Failed to load calendar config — your existing settings have not been changed",
+        );
+      });
   }, [actor, isFetching]);
 
   // ── Save ──────────────────────────────────────────────────────────────────
-  async function handleSave(e: React.FormEvent) {
+  async function handleSave(e: FormEvent) {
     e.preventDefault();
     if (!actor) return;
 
@@ -124,10 +125,9 @@ export default function AdminGoogleCalendarPage() {
     try {
       const result = await (actor as backendInterface).setGoogleCalendarConfig(
         config,
-        getAdminEmail(),
       );
 
-      if (result.__kind__ === "ok") {
+      if ("ok" in result || "okAlreadyAdvanced" in result) {
         setSaveStatus({
           type: "success",
           message: "Configuration saved successfully.",
@@ -139,9 +139,11 @@ export default function AdminGoogleCalendarPage() {
           message: `Failed to save: ${result.err ?? "Unknown error"}`,
         });
       }
+      setTimeout(() => setSaveStatus({ type: "idle" }), 4000);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       setSaveStatus({ type: "error", message: `Failed to save: ${msg}` });
+      setTimeout(() => setSaveStatus({ type: "idle" }), 4000);
     }
   }
 
@@ -154,9 +156,9 @@ export default function AdminGoogleCalendarPage() {
     try {
       const result = await (
         actor as backendInterface
-      ).clearGoogleCalendarConfig(getAdminEmail());
+      ).clearGoogleCalendarConfig();
 
-      if (result.__kind__ === "ok") {
+      if ("ok" in result || "okAlreadyAdvanced" in result) {
         setIsConfigured(false);
         setScriptUrl("");
         setTitleTemplate("Meeting with [Client Name]");
@@ -169,9 +171,11 @@ export default function AdminGoogleCalendarPage() {
           message: `Failed to clear: ${result.err ?? "Unknown error"}`,
         });
       }
+      setTimeout(() => setSaveStatus({ type: "idle" }), 4000);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       setSaveStatus({ type: "error", message: `Failed to clear: ${msg}` });
+      setTimeout(() => setSaveStatus({ type: "idle" }), 4000);
     }
   }
 
@@ -218,7 +222,14 @@ export default function AdminGoogleCalendarPage() {
 
         {/* ── Setup Instructions (only when not configured) ─────────────────── */}
         {isConfigured === false && (
-          <div className="rounded-xl border border-white/10 bg-white/3 overflow-hidden">
+          <div
+            style={{
+              background: "rgba(10,11,20,0.85)",
+              border: "1px solid rgba(94,240,138,0.2)",
+              borderRadius: "12px",
+              overflow: "hidden",
+            }}
+          >
             <div className="p-5 border-b border-white/10 flex items-center gap-3">
               <Zap size={16} className="text-[#5EF08A] shrink-0" />
               <h2 className="text-white font-semibold text-sm">
@@ -285,6 +296,20 @@ export default function AdminGoogleCalendarPage() {
           </div>
 
           <form onSubmit={handleSave} className="p-5 space-y-5">
+            {configLoadError && (
+              <div
+                style={{
+                  color: "#ef4444",
+                  border: "1px solid #ef4444",
+                  padding: "12px",
+                  marginBottom: "16px",
+                  borderRadius: "4px",
+                  fontSize: "13px",
+                }}
+              >
+                {configLoadError}
+              </div>
+            )}
             {/* Apps Script URL */}
             <div>
               <label

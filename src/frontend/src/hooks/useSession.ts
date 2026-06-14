@@ -10,23 +10,8 @@ const TOKEN_KEY = "imperidome_token";
 const OLD_SESSION_KEY = "imperidome_session";
 const ADMIN_EMAIL_KEY = "imperidome_admin_email";
 
-// Safety net: canonical admin email and its shorthand variant
-const ADMIN_EMAIL = "vincenzo@imperidome.com";
-const ADMIN_EMAIL_SHORT = "vincenzo@imperidome";
-
-/** Normalize and enforce admin role for the known admin email. */
+/** Pass through session data as-is; role is determined entirely by the backend. */
 function normalizeAdminSession(data: ImperidomeSession): ImperidomeSession {
-  const emailLower = (data.email ?? "").toLowerCase().trim();
-  if (
-    emailLower === ADMIN_EMAIL.toLowerCase() ||
-    emailLower === ADMIN_EMAIL_SHORT.toLowerCase()
-  ) {
-    return {
-      ...data,
-      email: ADMIN_EMAIL,
-      role: "admin",
-    };
-  }
   return data;
 }
 
@@ -84,7 +69,6 @@ export function getSession(): ImperidomeSession | null {
 }
 
 export function saveSession(data: ImperidomeSession): void {
-  // Safety net: normalize admin email and force admin role for the known admin account
   const normalized = normalizeAdminSession(data);
   const expiryMs = (normalized.role ?? "").includes("admin")
     ? ADMIN_EXPIRY_MS

@@ -1,3 +1,4 @@
+import { useNavigate } from "@tanstack/react-router";
 import {
   AlertTriangle,
   BadgeDollarSign,
@@ -10,6 +11,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import type { Product } from "../backend.d.ts";
 import { Footer } from "../components/Footer";
+import TypewriterText from "../components/TypewriterText";
 import { useActor } from "../hooks/useActor";
 import { useCartStore } from "../store/useCartStore";
 
@@ -93,6 +95,7 @@ function getProductPrice(product: Product): number {
 }
 
 export default function CheckoutPage() {
+  const navigate = useNavigate();
   const { actor, isFetching } = useActor();
   const items = useCartStore((s) => s.items);
   const [form, setForm] = useState({
@@ -102,6 +105,8 @@ export default function CheckoutPage() {
     notes: "",
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [pricingError, setPricingError] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
@@ -137,8 +142,11 @@ export default function CheckoutPage() {
       let products: Product[] = [];
       try {
         products = await actor.getProducts();
-      } catch {
-        // Non-fatal — fall back to cart prices
+      } catch (err) {
+        console.error("Failed to fetch products:", err);
+        setPricingError(
+          "Unable to verify current pricing. Please refresh before completing your purchase.",
+        );
       }
 
       // Build ShoppingItem[] from cart, using live catalog prices when available
@@ -163,14 +171,48 @@ export default function CheckoutPage() {
       const successUrl = `${window.location.origin}/order-confirmation?session_id={CHECKOUT_SESSION_ID}`;
       const cancelUrl = `${window.location.origin}/checkout`;
 
-      const checkoutUrl = await actor.createCheckoutSession(
-        shoppingItems,
-        successUrl,
-        cancelUrl,
-      );
+      const STRIPE_SESSION_PLACEHOLDER = "{CHECKOUT_SESSION_ID}";
+      for (const url of [successUrl, cancelUrl]) {
+        const m = url.match(/\{[^}]+\}/);
+        if (m && m[0] !== STRIPE_SESSION_PLACEHOLDER) {
+          console.error(
+            "Warning: success/cancel URL contains a potentially malformed Stripe session placeholder. Expected: {CHECKOUT_SESSION_ID}",
+          );
+        }
+      }
 
-      // Redirect to Stripe checkout
-      window.location.href = checkoutUrl;
+      let sessionResult: Awaited<
+        ReturnType<typeof actor.createCheckoutSession>
+      >;
+      try {
+        sessionResult = await actor.createCheckoutSession(
+          shoppingItems,
+          form.email,
+          successUrl,
+          cancelUrl,
+          form.fullName,
+        );
+      } catch (err) {
+        console.error("Checkout session creation failed:", err);
+        setCheckoutError(
+          "Something went wrong. Please try again or contact support.",
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      // Redirect to Stripe checkout or internal pending page
+      if ("ok" in sessionResult) {
+        const url = sessionResult.ok;
+        if (url.startsWith("/portal/subscriptions")) {
+          navigate({ to: url });
+        } else {
+          window.location.href = url;
+        }
+      } else if ("err" in sessionResult) {
+        toast.error(sessionResult.err || "Checkout session creation failed.");
+        setIsLoading(false);
+      }
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "An unexpected error occurred.";
@@ -231,7 +273,7 @@ export default function CheckoutPage() {
                 marginBottom: "20px",
               }}
             >
-              Order Summary
+              <TypewriterText text="Order Summary" speed={35} as="span" />
             </p>
 
             {items.length > 0 ? (
@@ -373,7 +415,7 @@ export default function CheckoutPage() {
                   marginBottom: "14px",
                 }}
               >
-                What&rsquo;s Included
+                <TypewriterText text="What's Included" speed={35} as="span" />
               </p>
               {included.map((item) => (
                 <div
@@ -440,7 +482,7 @@ export default function CheckoutPage() {
                 marginBottom: "24px",
               }}
             >
-              Your Details
+              <TypewriterText text="Your Details" speed={35} as="span" />
             </p>
 
             <div
@@ -514,11 +556,30 @@ export default function CheckoutPage() {
                 />
               </div>
 
+              {/* Error messages */}
+              {pricingError && (
+                <p
+                  className="text-red-500 text-sm mt-2"
+                  data-ocid="checkout.error_state"
+                >
+                  Pricing could not be verified. Please refresh before
+                  continuing.
+                </p>
+              )}
+              {checkoutError && (
+                <div
+                  className="text-red-500 text-sm mb-2"
+                  data-ocid="checkout.error_state"
+                >
+                  {checkoutError}
+                </div>
+              )}
+
               {/* CTA Button */}
               <button
                 type="button"
                 onClick={handlePayment}
-                disabled={isLoading}
+                disabled={isLoading || !!pricingError || !!checkoutError}
                 data-ocid="checkout.primary_button"
                 style={{
                   width: "100%",
@@ -602,7 +663,7 @@ export default function CheckoutPage() {
                       }}
                     >
                       {icon}
-                      {label}
+                      <TypewriterText text={label} speed={30} as="span" />
                     </span>
                   </div>
                 ))}

@@ -74,7 +74,7 @@ module {
   ) : [ClientMessage] {
     messages.map<ClientMessage, ClientMessage>(func(m) {
       if (Text.equal(m.receiverEmail, callerEmail) and
-          (Text.equal(m.senderEmail, otherEmail) or Text.equal(m.receiverEmail, callerEmail))) {
+          Text.equal(m.senderEmail, otherEmail)) {
         { m with isRead = true }
       } else { m }
     })

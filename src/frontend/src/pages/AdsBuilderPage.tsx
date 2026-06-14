@@ -1,3 +1,4 @@
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import {
   AlertCircle,
   Camera,
@@ -10,33 +11,26 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import type React from "react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { EditableText } from "../components/EditableText";
 import { Footer } from "../components/Footer";
 import { useActor } from "../hooks/useActor";
+import { useCartStore } from "../store/useCartStore";
 
-const SEEDANCE_DIRECTIVE = `SYSTEM COMMAND: Seedance 2.0 API Payload. Generate a cinematic commercial based on the provided Director's Brief. Strictly adhere to the Global Wardrobe constraints for character consistency. Apply the requested atmospheric lighting (Luxury/Fast-Paced/Corporate). Lock @Image1 as primary character face, @Image2 as environment reference, and @Image3 as outro logo overlay.`;
-
-const PRICING_SCALE: Record<number, number> = {
+const PRICING_MAP: Record<number, number> = {
   15: 299,
   20: 349,
-  25: 394,
   30: 434,
-  35: 469,
-  40: 499,
-  45: 524,
-  50: 544,
-  55: 559,
   60: 569,
 };
-
-// Stripe checkout URLs — replace with live links when ready
-const STRIPE_CHECKOUT_URLS: Record<string, string> = {
-  single: "/checkout",
-  pilot: "https://buy.stripe.com/cinematic-pilot",
-  pro: "https://buy.stripe.com/cinematic-pro",
-  elite: "https://buy.stripe.com/cinematic-elite",
+const DURATION_PRODUCT_NAME: Record<number, string> = {
+  15: "GROWTH PROTOCOL 15S",
+  20: "GROWTH PROTOCOL 20S",
+  30: "GROWTH PROTOCOL 30S",
+  60: "GROWTH PROTOCOL 60S",
 };
+
+const SEEDANCE_DIRECTIVE = `SYSTEM COMMAND: Seedance 2.0 API Payload. Generate a cinematic commercial based on the provided Director's Brief. Strictly adhere to the Global Wardrobe constraints for character consistency. Apply the requested atmospheric lighting (Luxury/Fast-Paced/Corporate). Lock @Image1 as primary character face, @Image2 as environment reference, and @Image3 as outro logo overlay.`;
 
 interface FormData {
   name?: string;
@@ -138,6 +132,84 @@ function SectionWrapper({
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+const ADS_STEPS = [
+  { n: 1, label: "Campaign Scope" },
+  { n: 2, label: "Contact Details" },
+  { n: 3, label: "Director's Brief" },
+  { n: 4, label: "AI Receptionist Add-On" },
+  { n: 5, label: "Pricing Summary" },
+];
+
+function AdsStepIndicator() {
+  return (
+    <div
+      style={{
+        marginBottom: "8px",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "0",
+          marginBottom: "12px",
+        }}
+      >
+        {ADS_STEPS.map((s, i) => (
+          <div key={s.n} style={{ display: "flex", alignItems: "center" }}>
+            <div
+              style={{
+                width: "34px",
+                height: "34px",
+                borderRadius: "50%",
+                background:
+                  s.n === 1
+                    ? "rgba(94,240,138,0.15)"
+                    : "rgba(255,255,255,0.04)",
+                border:
+                  s.n === 1
+                    ? "2px solid #5EF08A"
+                    : "2px solid rgba(255,255,255,0.1)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: s.n === 1 ? "#5EF08A" : "#4A4D60",
+                fontSize: "0.78rem",
+                fontWeight: "800",
+                flexShrink: 0,
+              }}
+            >
+              {s.n}
+            </div>
+            {i < ADS_STEPS.length - 1 && (
+              <div
+                style={{
+                  width: "40px",
+                  height: "2px",
+                  background: "rgba(255,255,255,0.07)",
+                }}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+      <p
+        style={{
+          textAlign: "center",
+          color: "rgba(200,205,220,0.55)",
+          fontSize: "0.75rem",
+          fontWeight: "600",
+          letterSpacing: "0.06em",
+          margin: 0,
+        }}
+      >
+        Complete all sections to proceed to checkout
+      </p>
+    </div>
+  );
+}
+
 export default function AdsBuilderPage() {
   const [purchaseType, setPurchaseType] = useState<"single" | "subscription">(
     "single",
@@ -147,17 +219,54 @@ export default function AdsBuilderPage() {
   const [addReceptionist, setAddReceptionist] = useState<boolean>(false);
   const [formData, setFormData] = useState<FormData>({});
   const { actor } = useActor();
+  const { addItem, openDrawer } = useCartStore();
+  const navigate = useNavigate();
+  const search = useSearch({ strict: false });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Query params: ?seconds and ?price from the Cinematic Ads slider on /services
+  const [selectedSeconds, setSelectedSeconds] = useState<number | null>(null);
+  const [selectedPrice, setSelectedPrice] = useState<number | null>(null);
+
+  // S1-H-6: Pre-select tier from URL query param passed by CinematicAdsPage.
+  // tierInitialized ref prevents this from re-running every time selectedPlan changes.
+  const tierInitialized = useRef(false);
+  useEffect(() => {
+    if (tierInitialized.current) return;
+    const params = search as Record<string, string | undefined>;
+    const tierParam = params.tier;
+    if (tierParam && !selectedPlan) {
+      setSelectedPlan(tierParam);
+    }
+    const secondsParam = params.seconds;
+    const priceParam = params.price;
+    if (secondsParam) {
+      const parsedSeconds = Number(secondsParam);
+      if (!Number.isNaN(parsedSeconds) && parsedSeconds > 0) {
+        setSelectedSeconds(parsedSeconds);
+        setDuration(parsedSeconds);
+      }
+    }
+    if (priceParam) {
+      const parsedPrice = Number(priceParam);
+      if (!Number.isNaN(parsedPrice) && parsedPrice > 0) {
+        setSelectedPrice(parsedPrice);
+      }
+    }
+    tierInitialized.current = true;
+  }, [search, selectedPlan]);
   const [submitError, setSubmitError] = useState("");
 
   const handleChange = (field: keyof FormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  const livePrice = PRICING_MAP[duration] ?? selectedPrice ?? 0;
+
   const calculateTotal = () => {
     const base =
       purchaseType === "single"
-        ? PRICING_SCALE[duration]
+        ? livePrice
         : selectedPlan === "The Pilot"
           ? 1049
           : selectedPlan === "The Pro"
@@ -166,14 +275,6 @@ export default function AdsBuilderPage() {
               ? 2499
               : 0;
     return { base, recurring: addReceptionist ? 199 : 0 };
-  };
-
-  const getStripeUrl = () => {
-    if (purchaseType === "single") return STRIPE_CHECKOUT_URLS.single;
-    if (selectedPlan === "The Pilot") return STRIPE_CHECKOUT_URLS.pilot;
-    if (selectedPlan === "The Pro") return STRIPE_CHECKOUT_URLS.pro;
-    if (selectedPlan === "The Elite") return STRIPE_CHECKOUT_URLS.elite;
-    return STRIPE_CHECKOUT_URLS.single;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -214,7 +315,7 @@ export default function AdsBuilderPage() {
           value:
             purchaseType === "subscription"
               ? selectedPlan
-              : `Single ${duration}s ($${PRICING_SCALE[duration]})`,
+              : `Single ${duration}s (${livePrice})`,
         },
         { label: "Face Photo URLs", value: formData.d_face_urls || "" },
         { label: "Wardrobe", value: formData.d_wardrobe || "" },
@@ -244,8 +345,34 @@ export default function AdsBuilderPage() {
         }
       ).submitQuestionnaire("CinematicAds", qaAnswers);
 
-      // Step 2: Only after backend confirms success, redirect to Stripe
-      window.location.href = getStripeUrl();
+      // Step 2: Only after backend confirms success, add to cart and open drawer
+      // NEW-H-1: Item names must match backend catalog names exactly for live price sync.
+      if (purchaseType === "single") {
+        addItem({
+          name: DURATION_PRODUCT_NAME[duration] ?? "GROWTH PROTOCOL",
+          price: `${livePrice}`,
+        });
+      } else {
+        // Map display plan names to exact backend catalog names
+        const PLAN_TO_CATALOG_NAME: Record<string, string> = {
+          "The Pilot": "THE PILOT",
+          "The Pro": "THE PRO",
+          "The Elite": "THE ELITE",
+        };
+        const planPrices: Record<string, number> = {
+          "The Pilot": 1049,
+          "The Pro": 1899,
+          "The Elite": 2499,
+        };
+        const catalogName = PLAN_TO_CATALOG_NAME[selectedPlan] ?? selectedPlan;
+        const planPrice = planPrices[selectedPlan] ?? 0;
+        addItem({
+          name: catalogName,
+          price: `${planPrice}`,
+        });
+      }
+      openDrawer();
+      navigate({ to: "/" });
     } catch (error) {
       setSubmitError(
         `Submission failed: ${(error as Error).message ?? "Unknown error"}. Please try again.`,
@@ -258,6 +385,40 @@ export default function AdsBuilderPage() {
     <>
       <div className="min-h-screen bg-[#0A0B14] text-[#EEF0F8] font-sans pb-32 pt-12">
         <div className="max-w-4xl mx-auto px-6">
+          {/* Back button + Step indicator */}
+          <div style={{ marginBottom: "32px" }}>
+            <button
+              type="button"
+              onClick={() => navigate({ to: "/services" })}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                background: "none",
+                border: "none",
+                padding: "0 0 16px 0",
+                color: "rgba(200,205,220,0.7)",
+                fontSize: "0.82rem",
+                fontWeight: "500",
+                cursor: "pointer",
+                letterSpacing: "0.02em",
+                transition: "color 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.color =
+                  "rgba(200,205,220,1)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.color =
+                  "rgba(200,205,220,0.7)";
+              }}
+              data-ocid="ads.back_button"
+            >
+              ← Back to Cinematic Ads
+            </button>
+            <AdsStepIndicator />
+          </div>
+
           <div className="mb-12 text-center">
             <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4 text-white">
               Cinematic <span className="text-[#5EF08A]">Ad Builder</span>
@@ -266,6 +427,13 @@ export default function AdsBuilderPage() {
               Broadcast-quality commercial video. Fractional cost. Powered by
               Seedance 2.0.
             </p>
+            {selectedSeconds !== null && selectedPrice !== null && (
+              <div className="inline-flex items-center gap-2 mt-4 px-5 py-2 rounded-full bg-[#5EF08A]/10 border border-[#5EF08A]/30">
+                <span className="text-[#5EF08A] font-bold text-sm">
+                  Ad Duration: {selectedSeconds}s — ${selectedPrice}
+                </span>
+              </div>
+            )}
           </div>
 
           <form onSubmit={handleSubmit}>
@@ -315,7 +483,7 @@ export default function AdsBuilderPage() {
                           Total Cost
                         </h3>
                         <div className="text-4xl font-extrabold text-[#5EF08A]">
-                          ${PRICING_SCALE[duration]}
+                          ${livePrice}
                         </div>
                       </div>
                     </div>

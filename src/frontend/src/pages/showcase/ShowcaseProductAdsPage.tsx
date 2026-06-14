@@ -7,6 +7,7 @@ import type { backendInterface } from "../../backend";
 import { EditableText } from "../../components/EditableText";
 import { Footer } from "../../components/Footer";
 import { Navbar } from "../../components/Navbar";
+import TypewriterText from "../../components/TypewriterText";
 import { VideoCard } from "../../components/VideoCard";
 import { createActorWithConfig } from "../../config";
 import { useSiteTextStore } from "../../store/useSiteTextStore";
@@ -57,19 +58,7 @@ export default function ShowcaseProductAdsPage() {
           sid = crypto.randomUUID();
           sessionStorage.setItem("_vis_sid", sid);
         }
-        let countryCode: string | null = null;
-        try {
-          const ctrl = new AbortController();
-          const timer = setTimeout(() => ctrl.abort(), 2000);
-          const res = await fetch("https://ipapi.co/country/", {
-            signal: ctrl.signal,
-          });
-          clearTimeout(timer);
-          const text = (await res.text()).trim();
-          if (/^[A-Z]{2}$/.test(text)) countryCode = text;
-        } catch {
-          // geolocation failed — use null
-        }
+        const countryCode: string | null = null;
         const publicActor = await createActorWithConfig(createActor);
         await (publicActor as backendInterface).recordVisit(
           "/showcase/product-ads",
@@ -78,7 +67,7 @@ export default function ShowcaseProductAdsPage() {
           countryCode,
         );
       } catch {
-        // silent
+        /* silent */
       }
     };
     track();
@@ -102,149 +91,182 @@ export default function ShowcaseProductAdsPage() {
   }, [fetchAllSiteText]);
 
   return (
-    <div style={{ background: "#0A0B14", minHeight: "100vh" }}>
-      <Navbar />
-      <div style={{ height: "68px" }} aria-hidden="true" />
-
-      {/* Hero */}
-      <section
+    <div
+      style={{
+        background: "#0A0B14",
+        minHeight: "100vh",
+        position: "relative",
+      }}
+    >
+      <div
+        aria-hidden="true"
         style={{
-          maxWidth: "1280px",
-          margin: "0 auto",
-          padding: "64px 24px 48px",
+          position: "fixed",
+          inset: 0,
+          pointerEvents: "none",
+          zIndex: 0,
+          backgroundImage:
+            "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(94,240,138,0.015) 2px, rgba(94,240,138,0.015) 4px)",
         }}
-      >
-        <motion.button
-          type="button"
-          onClick={() => navigate({ to: "/services" })}
-          whileHover={{ boxShadow: "0 0 16px rgba(94,240,138,0.35)" }}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "8px",
-            background: "transparent",
-            border: "1px solid #5EF08A",
-            color: "#5EF08A",
-            padding: "8px 20px",
-            borderRadius: "10px",
-            fontSize: "0.875rem",
-            fontWeight: "600",
-            cursor: "pointer",
-            marginBottom: "40px",
-            transition: "opacity 0.15s",
-          }}
-          data-ocid="showcase.product_ads.back_button"
-        >
-          <ArrowLeft size={16} />
-          <EditableText
-            textKey="showcase.back_to_products"
-            defaultText="Back to Services"
-          />
-        </motion.button>
+      />
+      <div style={{ position: "relative", zIndex: 1 }}>
+        <Navbar />
+        <div style={{ height: "68px" }} aria-hidden="true" />
 
-        <div style={{ marginBottom: "16px" }}>
-          <p
+        <section
+          style={{
+            maxWidth: "1280px",
+            margin: "0 auto",
+            padding: "64px 24px 48px",
+          }}
+        >
+          <motion.button
+            type="button"
+            onClick={() => navigate({ to: "/services" })}
+            whileHover={{
+              boxShadow: "0 0 20px rgba(94,240,138,0.45)",
+              scale: 1.03,
+            }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              background: "transparent",
+              border: "1px solid #5EF08A",
+              color: "#5EF08A",
+              padding: "8px 20px",
+              borderRadius: "10px",
+              fontSize: "0.875rem",
+              fontWeight: "600",
+              cursor: "pointer",
+              marginBottom: "40px",
+              transition: "opacity 0.15s",
+              fontFamily: "'Courier New', Courier, monospace",
+            }}
+            data-ocid="showcase.product_ads.back_button"
+          >
+            <ArrowLeft size={16} />
+            <EditableText
+              textKey="showcase.back_to_products"
+              defaultText="Back to Services"
+            />
+          </motion.button>
+
+          <div style={{ marginBottom: "16px" }}>
+            <TypewriterText
+              text="// IMPERIDOME IN ACTION"
+              as="p"
+              speed={40}
+              style={{
+                color: "#5EF08A",
+                fontSize: "0.85rem",
+                fontWeight: "700",
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                marginBottom: "12px",
+                fontFamily: "'Courier New', Courier, monospace",
+              }}
+            />
+            <TypewriterText
+              text="Product Ads"
+              as="h1"
+              speed={60}
+              className="matrix-glow-text"
+              style={{
+                color: "#EEF0F8",
+                fontSize: "clamp(2rem, 5vw, 3.25rem)",
+                fontWeight: "800",
+                letterSpacing: "-0.02em",
+                lineHeight: "1.1",
+                marginBottom: "16px",
+                fontFamily: "'Courier New', Courier, monospace",
+              }}
+            />
+            <TypewriterText
+              text="See our Product Ads in action"
+              as="p"
+              speed={35}
+              style={{
+                color: "#7A7D90",
+                fontSize: "1.125rem",
+                maxWidth: "520px",
+                lineHeight: "1.6",
+                fontFamily: "'Courier New', Courier, monospace",
+              }}
+            />
+          </div>
+        </section>
+
+        <section
+          style={{
+            maxWidth: "1280px",
+            margin: "0 auto",
+            padding: "0 24px 80px",
+          }}
+        >
+          <div
+            style={{
+              height: "1px",
+              background:
+                "linear-gradient(to right, transparent, #5EF08A30 30%, #5EF08A50 50%, #5EF08A30 70%, transparent)",
+              marginBottom: "48px",
+              boxShadow: "0 0 8px rgba(94,240,138,0.2)",
+            }}
+          />
+          <TypewriterText
+            text="> See It In Action_"
+            as="h2"
+            speed={45}
+            className="matrix-heading"
             style={{
               color: "#5EF08A",
-              fontSize: "0.85rem",
+              fontSize: "1.5rem",
               fontWeight: "700",
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              marginBottom: "12px",
+              marginBottom: "32px",
+              letterSpacing: "0.04em",
+              fontFamily: "'Courier New', Courier, monospace",
             }}
-          >
-            <EditableText
-              textKey="showcase.product_ads.eyebrow"
-              defaultText="Imperidome in Action"
-            />
-          </p>
-          <h1
-            style={{
-              color: "#EEF0F8",
-              fontSize: "clamp(2rem, 5vw, 3.25rem)",
-              fontWeight: "800",
-              letterSpacing: "-0.02em",
-              lineHeight: "1.1",
-              marginBottom: "16px",
-            }}
-          >
-            <EditableText
-              textKey="showcase.product_ads.hero_title"
-              defaultText="Product Ads"
-            />
-          </h1>
-          <p
-            style={{
-              color: "#7A7D90",
-              fontSize: "1.125rem",
-              maxWidth: "520px",
-              lineHeight: "1.6",
-            }}
-          >
-            <EditableText
-              textKey="showcase.product_ads.hero_tagline"
-              defaultText="See our Product Ads in action"
-            />
-          </p>
-        </div>
-      </section>
-
-      {/* Video grid section */}
-      <section
-        style={{ maxWidth: "1280px", margin: "0 auto", padding: "0 24px 80px" }}
-      >
-        <div
-          style={{
-            height: "1px",
-            background:
-              "linear-gradient(to right, transparent, #1C1F33 30%, #1C1F33 70%, transparent)",
-            marginBottom: "48px",
-          }}
-        />
-        <h2
-          style={{
-            color: "#EEF0F8",
-            fontSize: "1.5rem",
-            fontWeight: "700",
-            marginBottom: "32px",
-            letterSpacing: "-0.01em",
-          }}
-        >
-          <EditableText
-            textKey="showcase.product_ads.section_heading"
-            defaultText="See It In Action"
           />
-        </h2>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
-            gap: "24px",
-          }}
-          data-ocid="showcase.product_ads.list"
-        >
-          {PLACEHOLDER_CARDS.map((card, i) => {
-            const videoUrl = siteTextLoaded ? getText(card.videoKey, "") : "";
-            return (
-              <motion.div
-                key={card.title}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35, delay: i * 0.07 }}
-                data-ocid={`showcase.product_ads.item.${i + 1}`}
-              >
-                <VideoCard
-                  title={card.title}
-                  description={card.description}
-                  videoUrl={videoUrl || undefined}
-                />
-              </motion.div>
-            );
-          })}
-        </div>
-      </section>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+              gap: "24px",
+            }}
+            data-ocid="showcase.product_ads.list"
+          >
+            {PLACEHOLDER_CARDS.map((card, i) => {
+              const videoUrl = siteTextLoaded ? getText(card.videoKey, "") : "";
+              return (
+                <motion.div
+                  key={card.title}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.35, delay: i * 0.07 }}
+                  data-ocid={`showcase.product_ads.item.${i + 1}`}
+                  style={{
+                    border: "1px solid rgba(94,240,138,0.25)",
+                    borderRadius: "12px",
+                    boxShadow: "0 0 16px rgba(94,240,138,0.06)",
+                    overflow: "hidden",
+                    transition: "box-shadow 0.3s",
+                  }}
+                  whileHover={{ boxShadow: "0 0 28px rgba(94,240,138,0.18)" }}
+                >
+                  <VideoCard
+                    title={card.title}
+                    description={card.description}
+                    videoUrl={videoUrl || undefined}
+                  />
+                </motion.div>
+              );
+            })}
+          </div>
+        </section>
 
-      <Footer />
+        <Footer />
+      </div>
     </div>
   );
 }

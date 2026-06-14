@@ -66,19 +66,7 @@ export default function CinematicAdsDetail() {
           sid = crypto.randomUUID();
           sessionStorage.setItem("_vis_sid", sid);
         }
-        let countryCode: string | null = null;
-        try {
-          const ctrl = new AbortController();
-          const timer = setTimeout(() => ctrl.abort(), 2000);
-          const res = await fetch("https://ipapi.co/country/", {
-            signal: ctrl.signal,
-          });
-          clearTimeout(timer);
-          const text = (await res.text()).trim();
-          if (/^[A-Z]{2}$/.test(text)) countryCode = text;
-        } catch {
-          // geolocation failed — use null
-        }
+        const countryCode: string | null = null;
         const publicActor = await createActorWithConfig(createActor);
         await (publicActor as backendInterface).recordVisit(
           window.location.pathname,
@@ -208,7 +196,12 @@ export default function CinematicAdsDetail() {
                 </motion.div>
                 <button
                   type="button"
-                  onClick={() => navigate({ to: "/ads-builder" })}
+                  onClick={() =>
+                    navigate({
+                      to: "/ads-builder",
+                      search: { seconds: duration, price: currentPrice },
+                    })
+                  }
                   className="w-full bg-[#5EF08A] text-[#0A0B14] font-bold py-4 rounded-xl hover:shadow-[0_0_20px_rgba(94,240,138,0.4)] transition-all"
                   data-ocid="cinematic.primary_button"
                 >
